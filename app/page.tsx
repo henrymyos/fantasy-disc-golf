@@ -1,65 +1,164 @@
-import Image from "next/image";
+// @ts-nocheck
+"use client";
 
-export default function Home() {
+import { useState, useEffect } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { motion } from "framer-motion";
+
+// ✅ YOUR GOOGLE SHEET CSV LINK
+const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0cXnJ2EW3nbTb_cPDA4f1Nu8qhjfWPks-j-1UsQpcg3v1nNXEZShaDmAk3a3wjQ/pub?gid=576538322&single=true&output=csv";
+
+export default function FantasyDiscGolfApp(): JSX.Element {
+  const [page, setPage] = useState("dashboard");
+  const [teams, setTeams] = useState([
+    { name: "Isaac", roster: [], starters: [], score: 0 },
+    { name: "Ethan", roster: [], starters: [], score: 0 },
+  ]);
+  const [players, setPlayers] = useState([]);
+  const [freeAgents, setFreeAgents] = useState([]);
+
+  // 🔗 LOAD DATA
+  useEffect(() => {
+    fetch(SHEET_URL)
+      .then((res) => res.text())
+      .then((data) => {
+        const rows = data.split("\\n").slice(1);
+        const parsed = rows
+          .map((r) => {
+            const [name, division, points] = r.split(",");
+            return {
+              name: name?.trim(),
+              division: division?.trim(),
+              points: Number(points || 0),
+            };
+          })
+          .filter((p) => p.name);
+
+        setPlayers(parsed);
+        setFreeAgents(parsed);
+      })
+      .catch(() => {
+        // ⚠️ Fallback if internet access is blocked
+        const fallback = [
+          { name: "Calvin Heimburg", division: "MPO", points: 48 },
+          { name: "Paul McBeth", division: "MPO", points: 45 },
+          { name: "Kristin Tattar", division: "FPO", points: 40 },
+        ];
+        setPlayers(fallback);
+        setFreeAgents(fallback);
+      });
+  }, []);
+
+  const renderPage = () => {
+    switch (page) {
+      case "dashboard":
+        return <Dashboard teams={teams} />;
+      case "teams":
+        return <Teams teams={teams} />;
+      case "leaderboard":
+        return <Leaderboard teams={teams} />;
+      case "lineups":
+        return <Lineups teams={teams} setTeams={setTeams} />;
+      case "freeagency":
+        return <FreeAgency teams={teams} setTeams={setTeams} freeAgents={freeAgents} setFreeAgents={setFreeAgents} />;
+      default:
+        return <Dashboard teams={teams} />;
+    }
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen bg-gray-100 p-4">
+      <nav className="flex gap-2 mb-6 flex-wrap">
+        {["dashboard","teams","leaderboard","lineups","freeagency"].map((p) => (
+          <Button key={p} onClick={() => setPage(p)}>{p}</Button>
+        ))}
+      </nav>
+
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+        {renderPage()}
+      </motion.div>
+    </div>
+  );
+}
+
+function Dashboard({ teams }) {
+  const top = [...teams].sort((a,b)=>b.score-a.score)[0];
+  return (
+    <div className="grid md:grid-cols-3 gap-4">
+      <Card><CardContent className="p-4"><h2>Top Team</h2><p>{top?.name}</p></CardContent></Card>
+      <Card><CardContent className="p-4"><h2>Teams</h2><p>{teams.length}</p></CardContent></Card>
+      <Card><CardContent className="p-4"><h2>Status</h2><p>Live</p></CardContent></Card>
+    </div>
+  );
+}
+
+function Teams({ teams }) {
+  return (
+    <div className="grid gap-4">
+      {teams.map(t=> (
+        <Card key={t.name}><CardContent className="p-4">
+          <h2>{t.name}</h2>
+          <p>{t.score} pts</p>
+          {t.roster.map(p=> <div key={p.name}>{p.name}</div>)}
+        </CardContent></Card>
+      ))}
+    </div>
+  );
+}
+
+function Leaderboard({ teams }) {
+  const sorted=[...teams].sort((a,b)=>b.score-a.score);
+  return sorted.map((t,i)=> (
+    <Card key={t.name}><CardContent className="p-4 flex justify-between">
+      <span>#{i+1} {t.name}</span><span>{t.score}</span>
+    </CardContent></Card>
+  ));
+}
+
+function Lineups({ teams,setTeams }) {
+  const toggleStarter = (ti, player)=>{
+    const t=[...teams];
+    const starters=t[ti].starters;
+    const exists=starters.find(p=>p.name===player.name);
+
+    if(exists){
+      t[ti].starters=starters.filter(p=>p.name!==player.name);
+    } else {
+      t[ti].starters=[...starters, player];
+    }
+    setTeams(t);
+  };
+
+  return teams.map((t,i)=>(
+    <Card key={t.name}><CardContent className="p-4">
+      <h2>{t.name} Lineup</h2>
+      {t.roster.map(p=>(
+        <div key={p.name} className="flex justify-between">
+          {p.name}
+          <Button onClick={()=>toggleStarter(i,p)}>Toggle</Button>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+      ))}
+    </CardContent></Card>
+  ));
+}
+
+function FreeAgency({ teams,setTeams,freeAgents,setFreeAgents }) {
+  const addPlayer=(teamIndex,p)=>{
+    const t=[...teams];
+    t[teamIndex].roster.push(p);
+    setTeams(t);
+    setFreeAgents(freeAgents.filter(x=>x.name!==p.name));
+  };
+
+  return (
+    <div>
+      {freeAgents.map(p=>(
+        <Card key={p.name}><CardContent className="p-4 flex justify-between">
+          {p.name}
+          <Button onClick={()=>addPlayer(0,p)}>Add</Button>
+        </CardContent></Card>
+      ))}
     </div>
   );
 }
