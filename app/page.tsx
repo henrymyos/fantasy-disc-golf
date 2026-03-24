@@ -125,7 +125,7 @@ function Leaderboard({ teams }) {
   return (
     <div className="grid gap-3">
       {sorted.map((t,i)=> (
-        <Card key={t.name}><CardContent className="flex justify-between">
+        <Card key={t.name}><CardContent className="flex justify-between text-black">
           <span>#{i+1} {t.name}</span><span>{t.score}</span>
         </CardContent></Card>
       ))}
@@ -153,7 +153,7 @@ function Lineups({ teams,setTeams }) {
         <Card key={t.name}><CardContent>
           <h2 className="font-semibold">{t.name} Lineup</h2>
           {t.roster.map(p=>(
-            <div key={p.name} className="flex justify-between items-center">
+            <div key={p.name} className="flex justify-between items-center text-black">
               {p.name}
               <Button onClick={()=>toggleStarter(i,p)}>Toggle</Button>
             </div>
