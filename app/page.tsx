@@ -1,15 +1,24 @@
 // @ts-nocheck
 "use client";
-
 import { useState, useEffect } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { motion } from "framer-motion";
+
+// Simple built-in UI components (no external deps)
+const Card = ({ children }) => (
+  <div className="border rounded-2xl shadow-sm bg-white">{children}</div>
+);
+const CardContent = ({ children, className="" }) => (
+  <div className={"p-4 " + className}>{children}</div>
+);
+const Button = ({ children, onClick }) => (
+  <button onClick={onClick} className="px-3 py-1 rounded-xl bg-blue-600 text-white hover:bg-blue-700">
+    {children}
+  </button>
+);
 
 // ✅ YOUR GOOGLE SHEET CSV LINK
 const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0cXnJ2EW3nbTb_cPDA4f1Nu8qhjfWPks-j-1UsQpcg3v1nNXEZShaDmAk3a3wjQ/pub?gid=576538322&single=true&output=csv";
 
-export default function FantasyDiscGolfApp(): JSX.Element {
+export default function FantasyDiscGolfApp() {
   const [page, setPage] = useState("dashboard");
   const [teams, setTeams] = useState([
     { name: "Isaac", roster: [], starters: [], score: 0 },
@@ -23,7 +32,7 @@ export default function FantasyDiscGolfApp(): JSX.Element {
     fetch(SHEET_URL)
       .then((res) => res.text())
       .then((data) => {
-        const rows = data.split("\\n").slice(1);
+        const rows = data.split("\n").slice(1);
         const parsed = rows
           .map((r) => {
             const [name, division, points] = r.split(",");
@@ -75,9 +84,9 @@ export default function FantasyDiscGolfApp(): JSX.Element {
         ))}
       </nav>
 
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <div className="transition-opacity duration-300">
         {renderPage()}
-      </motion.div>
+      </div>
     </div>
   );
 }
@@ -86,9 +95,9 @@ function Dashboard({ teams }) {
   const top = [...teams].sort((a,b)=>b.score-a.score)[0];
   return (
     <div className="grid md:grid-cols-3 gap-4">
-      <Card><CardContent className="p-4"><h2>Top Team</h2><p>{top?.name}</p></CardContent></Card>
-      <Card><CardContent className="p-4"><h2>Teams</h2><p>{teams.length}</p></CardContent></Card>
-      <Card><CardContent className="p-4"><h2>Status</h2><p>Live</p></CardContent></Card>
+      <Card><CardContent><h2 className="font-semibold">Top Team</h2><p>{top?.name}</p></CardContent></Card>
+      <Card><CardContent><h2 className="font-semibold">Teams</h2><p>{teams.length}</p></CardContent></Card>
+      <Card><CardContent><h2 className="font-semibold">Status</h2><p>Live</p></CardContent></Card>
     </div>
   );
 }
@@ -97,8 +106,8 @@ function Teams({ teams }) {
   return (
     <div className="grid gap-4">
       {teams.map(t=> (
-        <Card key={t.name}><CardContent className="p-4">
-          <h2>{t.name}</h2>
+        <Card key={t.name}><CardContent>
+          <h2 className="font-semibold">{t.name}</h2>
           <p>{t.score} pts</p>
           {t.roster.map(p=> <div key={p.name}>{p.name}</div>)}
         </CardContent></Card>
@@ -109,11 +118,15 @@ function Teams({ teams }) {
 
 function Leaderboard({ teams }) {
   const sorted=[...teams].sort((a,b)=>b.score-a.score);
-  return sorted.map((t,i)=> (
-    <Card key={t.name}><CardContent className="p-4 flex justify-between">
-      <span>#{i+1} {t.name}</span><span>{t.score}</span>
-    </CardContent></Card>
-  ));
+  return (
+    <div className="grid gap-3">
+      {sorted.map((t,i)=> (
+        <Card key={t.name}><CardContent className="flex justify-between">
+          <span>#{i+1} {t.name}</span><span>{t.score}</span>
+        </CardContent></Card>
+      ))}
+    </div>
+  );
 }
 
 function Lineups({ teams,setTeams }) {
@@ -130,17 +143,21 @@ function Lineups({ teams,setTeams }) {
     setTeams(t);
   };
 
-  return teams.map((t,i)=>(
-    <Card key={t.name}><CardContent className="p-4">
-      <h2>{t.name} Lineup</h2>
-      {t.roster.map(p=>(
-        <div key={p.name} className="flex justify-between">
-          {p.name}
-          <Button onClick={()=>toggleStarter(i,p)}>Toggle</Button>
-        </div>
+  return (
+    <div className="grid gap-4">
+      {teams.map((t,i)=>(
+        <Card key={t.name}><CardContent>
+          <h2 className="font-semibold">{t.name} Lineup</h2>
+          {t.roster.map(p=>(
+            <div key={p.name} className="flex justify-between items-center">
+              {p.name}
+              <Button onClick={()=>toggleStarter(i,p)}>Toggle</Button>
+            </div>
+          ))}
+        </CardContent></Card>
       ))}
-    </CardContent></Card>
-  ));
+    </div>
+  );
 }
 
 function FreeAgency({ teams,setTeams,freeAgents,setFreeAgents }) {
@@ -152,10 +169,10 @@ function FreeAgency({ teams,setTeams,freeAgents,setFreeAgents }) {
   };
 
   return (
-    <div>
+    <div className="grid gap-3">
       {freeAgents.map(p=>(
-        <Card key={p.name}><CardContent className="p-4 flex justify-between">
-          {p.name}
+        <Card key={p.name}><CardContent className="flex justify-between items-center">
+          <span>{p.name}</span>
           <Button onClick={()=>addPlayer(0,p)}>Add</Button>
         </CardContent></Card>
       ))}
