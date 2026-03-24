@@ -164,21 +164,48 @@ function Lineups({ teams,setTeams }) {
   );
 }
 
-function FreeAgency({ teams,setTeams,freeAgents,setFreeAgents }) {
-  const addPlayer=(teamIndex,p)=>{
-    const t=[...teams];
-    t[teamIndex].roster.push(p);
-    setTeams(t);
-    setFreeAgents(freeAgents.filter(x=>x.name!==p.name));
+function FreeAgency({ teams, setTeams, freeAgents, setFreeAgents }) {
+  // Track selected team for each player
+  const [selectedTeamIndex, setSelectedTeamIndex] = useState(
+    teams.length > 0 ? 0 : -1
+  );
+
+  const addPlayer = (teamIndex, player) => {
+    if (teamIndex < 0 || teamIndex >= teams.length) return;
+
+    const updatedTeams = [...teams];
+    updatedTeams[teamIndex].roster.push(player);
+    setTeams(updatedTeams);
+
+    // Remove player from free agents
+    setFreeAgents(freeAgents.filter((x) => x.name !== player.name));
   };
 
   return (
     <div className="grid gap-3">
-      {freeAgents.map(p=>(
-        <Card key={p.name}><CardContent className="flex justify-between items-center">
-          <span>{p.name}</span>
-          <Button onClick={()=>addPlayer(0,p)}>Add</Button>
-        </CardContent></Card>
+      {freeAgents.map((p) => (
+        <Card key={p.name}>
+          <CardContent className="flex items-center gap-2 text-black">
+            {/* Team selector */}
+            <select
+              className="border rounded px-1 py-0.5"
+              value={selectedTeamIndex}
+              onChange={(e) => setSelectedTeamIndex(Number(e.target.value))}
+            >
+              {teams.map((t, i) => (
+                <option key={i} value={i}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+
+            {/* Add button */}
+            <Button onClick={() => addPlayer(selectedTeamIndex, p)}>Add</Button>
+
+            {/* Player name */}
+            <span>{p.name}</span>
+          </CardContent>
+        </Card>
       ))}
     </div>
   );
