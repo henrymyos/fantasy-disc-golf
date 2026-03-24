@@ -7,7 +7,7 @@ const Card = ({ children }) => (
   <div className="border rounded-2xl shadow-sm bg-white">{children}</div>
 );
 const CardContent = ({ children, className="" }) => (
-  <div className={"p-4 " + className}>{children}</div>
+  <div className={"p-4 text-black" + className}>{children}</div>
 );
 const Button = ({ children, onClick }) => (
   <button onClick={onClick} className="px-3 py-1 rounded-xl bg-blue-600 text-white hover:bg-blue-700">
