@@ -34,7 +34,6 @@ const SHEET_URL =
 // Main App
 // =====================
 export default function FantasyDiscGolfApp() {
-  const [page, setPage] = useState("dashboard");
   const [leagues, setLeagues] = useState([]);
   const [currentLeagueId, setCurrentLeagueId] = useState(null);
   const [allPlayers, setAllPlayers] = useState([]);
@@ -81,28 +80,32 @@ export default function FantasyDiscGolfApp() {
         { name: "Mom", roster: [], starters: [], score: 0 },
       ],
       freeAgents: allPlayers,
+      // For demo, weekly matchups is a list of arrays: [[teamA, teamB], ...]
+      weeklyMatchups: [
+        ["Henry", "Paige"],
+        ["Ethan", "Isaac"],
+        ["Dad", "Mom"],
+      ],
     };
     setLeagues([...leagues, newLeague]);
     setCurrentLeagueId(newLeague.id);
-    setPage("league");
   };
 
   const currentLeague = leagues.find((l) => l.id === currentLeagueId);
 
-  const renderPage = () => {
-    if (!currentLeague) {
-      return (
-        <MultiLeagueDashboard
-          leagues={leagues}
-          setCurrentLeagueId={setCurrentLeagueId}
-          createLeague={createLeague}
-        />
-      );
-    }
-    return <LeagueView league={currentLeague} leagues={leagues} setLeagues={setLeagues} />;
-  };
+  if (!currentLeague) {
+    // Multi-league dashboard
+    return (
+      <MultiLeagueDashboard
+        leagues={leagues}
+        setCurrentLeagueId={setCurrentLeagueId}
+        createLeague={createLeague}
+      />
+    );
+  }
 
-  return <div className="min-h-screen bg-gray-100 p-4">{renderPage()}</div>;
+  // League-specific view
+  return <LeagueView league={currentLeague} leagues={leagues} setLeagues={setLeagues} />;
 }
 
 // =====================
@@ -150,12 +153,15 @@ function LeagueView({ league, leagues, setLeagues }) {
     switch (page) {
       case "dashboard":
         return <DashboardLeague league={league} />;
-      case "teams":
-        return <Teams teams={league.teams} />;
-      case "leaderboard":
-        return <Leaderboard teams={league.teams} />;
+      case "matchups":
+        return <Matchups league={league} />;
       case "lineups":
-        return <Lineups teams={league.teams} setTeams={(teams) => updateLeague({ ...league, teams })} />;
+        return (
+          <Lineups
+            teams={league.teams}
+            setTeams={(teams) => updateLeague({ ...league, teams })}
+          />
+        );
       case "freeagency":
         return (
           <FreeAgency
@@ -173,7 +179,7 @@ function LeagueView({ league, leagues, setLeagues }) {
   return (
     <div>
       <nav className="flex justify-around bg-gray-200 p-2 rounded-full mb-4">
-        {["Dashboard","Teams","Leaderboard","Lineups","Free Agency"].map((p) => (
+        {["Dashboard","Matchups","Lineups","Free Agency"].map((p) => (
           <button
             key={p}
             className={`px-4 py-2 rounded-full font-semibold transition ${
@@ -191,24 +197,33 @@ function LeagueView({ league, leagues, setLeagues }) {
 }
 
 // =====================
-// Dashboard for Single League
+// League Dashboard - with Standings
 // =====================
 function DashboardLeague({ league }) {
-  const top = [...league.teams].sort((a, b) => b.score - a.score)[0];
+  const sortedTeams = [...league.teams].sort((a, b) => b.score - a.score);
   return (
     <div className="grid md:grid-cols-3 gap-4">
+      {/* Standings */}
+      <Card className="md:col-span-1">
+        <CardContent>
+          <h2 className="font-bold text-lg">Standings</h2>
+          {sortedTeams.map((t, i) => (
+            <div key={t.name} className="flex justify-between mt-2">
+              <span className="font-semibold text-gray-900">{i + 1}. {t.name}</span>
+              <span className="text-gray-700">{t.score}</span>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Other dashboard cards */}
       <Card>
         <CardContent>
           <h2 className="font-bold text-lg">Top Team</h2>
-          <p>{top?.name}</p>
+          <p>{sortedTeams[0]?.name}</p>
         </CardContent>
       </Card>
-      <Card>
-        <CardContent>
-          <h2 className="font-bold text-lg">Teams</h2>
-          <p>{league.teams.length}</p>
-        </CardContent>
-      </Card>
+
       <Card>
         <CardContent>
           <h2 className="font-bold text-lg">Status</h2>
@@ -220,40 +235,18 @@ function DashboardLeague({ league }) {
 }
 
 // =====================
-// Teams Page
+// Matchups Tab (was Teams)
 // =====================
-function Teams({ teams }) {
+function Matchups({ league }) {
   return (
     <div className="grid gap-4">
-      {teams.map((t) => (
-        <Card key={t.name}>
-          <CardContent>
-            <h2 className="font-bold text-lg">{t.name}</h2>
-            <p className="text-gray-700">{t.score} pts</p>
-            <div className="flex flex-wrap gap-1 mt-2">
-              {t.roster.map((p) => (
-                <span key={p.name} className="px-2 py-1 bg-gray-100 rounded-full text-gray-800">{p.name}</span>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
-}
-
-// =====================
-// Leaderboard Page
-// =====================
-function Leaderboard({ teams }) {
-  const sorted = [...teams].sort((a, b) => b.score - a.score);
-  return (
-    <div className="grid gap-2">
-      {sorted.map((t, i) => (
-        <Card key={t.name} className={i===0 ? "bg-yellow-100" : ""}>
+      <h2 className="font-bold text-lg text-black mb-2">This Week's Matchups</h2>
+      {league.weeklyMatchups.map(([teamA, teamB], idx) => (
+        <Card key={idx}>
           <CardContent className="flex justify-between items-center">
-            <span className="font-semibold text-gray-900">{i + 1}. {t.name}</span>
-            <span className="text-gray-700">{t.score}</span>
+            <span className="font-semibold text-gray-900">{teamA}</span>
+            <span className="text-gray-700">vs</span>
+            <span className="font-semibold text-gray-900">{teamB}</span>
           </CardContent>
         </Card>
       ))}
@@ -262,7 +255,7 @@ function Leaderboard({ teams }) {
 }
 
 // =====================
-// Lineups Page
+// Lineups Tab
 // =====================
 function Lineups({ teams, setTeams }) {
   const toggleStarter = (ti, player) => {
@@ -295,7 +288,7 @@ function Lineups({ teams, setTeams }) {
 }
 
 // =====================
-// Free Agency Page
+// Free Agency Tab
 // =====================
 function FreeAgency({ teams, setTeams, freeAgents, setFreeAgents }) {
   const [selectedTeamIndex, setSelectedTeamIndex] = useState(teams.length > 0 ? 0 : -1);
