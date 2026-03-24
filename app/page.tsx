@@ -2,35 +2,44 @@
 "use client";
 import { useState, useEffect } from "react";
 
-// Simple built-in UI components (no external deps)
-const Card = ({ children }) => (
-  <div className="border rounded-2xl shadow-sm bg-white">{children}</div>
+// =====================
+// UI Components
+// =====================
+const Card = ({ children, className = "" }) => (
+  <div className={`border rounded-2xl shadow-md bg-white hover:shadow-lg transition p-4 ${className}`}>
+    {children}
+  </div>
 );
 
 const CardContent = ({ children, className = "" }) => (
-  <div className={"p-4 text-black " + className}>{children}</div>
+  <div className={`text-black ${className}`}>{children}</div>
 );
 
-const Button = ({ children, onClick }) => (
+const Button = ({ children, onClick, className = "" }) => (
   <button
     onClick={onClick}
-    className="px-3 py-1 rounded-xl bg-blue-600 text-white hover:bg-blue-700"
+    className={`px-4 py-1 rounded-full bg-blue-600 text-white font-semibold hover:bg-blue-700 transition transform hover:scale-105 ${className}`}
   >
     {children}
   </button>
 );
 
-// ✅ YOUR GOOGLE SHEET CSV LINK
+// =====================
+// Google Sheet CSV Link
+// =====================
 const SHEET_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0cXnJ2EW3nbTb_cPDA4f1Nu8qhjfWPks-j-1UsQpcg3v1nNXEZShaDmAk3a3wjQ/pub?gid=576538322&single=true&output=csv";
 
+// =====================
+// Main App
+// =====================
 export default function FantasyDiscGolfApp() {
   const [page, setPage] = useState("dashboard");
   const [leagues, setLeagues] = useState([]);
   const [currentLeagueId, setCurrentLeagueId] = useState(null);
+  const [allPlayers, setAllPlayers] = useState([]);
 
   // Load players from Google Sheet
-  const [allPlayers, setAllPlayers] = useState([]);
   useEffect(() => {
     fetch(SHEET_URL)
       .then((res) => res.text())
@@ -81,7 +90,6 @@ export default function FantasyDiscGolfApp() {
   const currentLeague = leagues.find((l) => l.id === currentLeagueId);
 
   const renderPage = () => {
-    // If no league selected, show multi-league dashboard
     if (!currentLeague) {
       return (
         <MultiLeagueDashboard
@@ -91,36 +99,31 @@ export default function FantasyDiscGolfApp() {
         />
       );
     }
-
-    // League-specific pages
-    return (
-      <LeagueView
-        league={currentLeague}
-        setLeagues={setLeagues}
-        leagues={leagues}
-      />
-    );
+    return <LeagueView league={currentLeague} leagues={leagues} setLeagues={setLeagues} />;
   };
 
   return <div className="min-h-screen bg-gray-100 p-4">{renderPage()}</div>;
 }
 
-// =================== Multi-League Dashboard ===================
+// =====================
+// Multi-League Dashboard
+// =====================
 function MultiLeagueDashboard({ leagues, setCurrentLeagueId, createLeague }) {
   return (
     <div className="grid gap-4">
-      <h2 className="font-semibold text-black text-xl mb-2">Your Leagues</h2>
+      <h2 className="font-bold text-2xl text-black mb-2">Your Leagues</h2>
 
       {leagues.map((league) => (
         <Card key={league.id}>
-          <CardContent className="flex justify-between items-center text-black">
-            <span>{league.name}</span>
+          <CardContent className="flex justify-between items-center">
+            <span className="font-semibold text-gray-900">{league.name}</span>
             <Button onClick={() => setCurrentLeagueId(league.id)}>Enter</Button>
           </CardContent>
         </Card>
       ))}
 
       <Button
+        className="mt-4"
         onClick={() => {
           const name = prompt("Enter new league name:");
           if (name) createLeague(name);
@@ -132,14 +135,14 @@ function MultiLeagueDashboard({ leagues, setCurrentLeagueId, createLeague }) {
   );
 }
 
-// =================== League View ===================
-function LeagueView({ league, setLeagues, leagues }) {
+// =====================
+// League View
+// =====================
+function LeagueView({ league, leagues, setLeagues }) {
   const [page, setPage] = useState("dashboard");
 
   const updateLeague = (updatedLeague) => {
-    const updatedLeagues = leagues.map((l) =>
-      l.id === updatedLeague.id ? updatedLeague : l
-    );
+    const updatedLeagues = leagues.map((l) => (l.id === updatedLeague.id ? updatedLeague : l));
     setLeagues(updatedLeagues);
   };
 
@@ -152,12 +155,7 @@ function LeagueView({ league, setLeagues, leagues }) {
       case "leaderboard":
         return <Leaderboard teams={league.teams} />;
       case "lineups":
-        return (
-          <Lineups
-            teams={league.teams}
-            setTeams={(teams) => updateLeague({ ...league, teams })}
-          />
-        );
+        return <Lineups teams={league.teams} setTeams={(teams) => updateLeague({ ...league, teams })} />;
       case "freeagency":
         return (
           <FreeAgency
@@ -174,40 +172,46 @@ function LeagueView({ league, setLeagues, leagues }) {
 
   return (
     <div>
-      <nav className="flex gap-2 mb-6 flex-wrap">
-        {["dashboard", "teams", "leaderboard", "lineups", "freeagency"].map(
-          (p) => (
-            <Button key={p} onClick={() => setPage(p)}>
-              {p}
-            </Button>
-          )
-        )}
+      <nav className="flex justify-around bg-gray-200 p-2 rounded-full mb-4">
+        {["Dashboard","Teams","Leaderboard","Lineups","Free Agency"].map((p) => (
+          <button
+            key={p}
+            className={`px-4 py-2 rounded-full font-semibold transition ${
+              page === p.toLowerCase().replace(" ","") ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-300"
+            }`}
+            onClick={() => setPage(p.toLowerCase().replace(" ",""))}
+          >
+            {p}
+          </button>
+        ))}
       </nav>
       {renderLeaguePage()}
     </div>
   );
 }
 
-// =================== Dashboard for a single league ===================
+// =====================
+// Dashboard for Single League
+// =====================
 function DashboardLeague({ league }) {
   const top = [...league.teams].sort((a, b) => b.score - a.score)[0];
   return (
     <div className="grid md:grid-cols-3 gap-4">
       <Card>
         <CardContent>
-          <h2 className="font-semibold">Top Team</h2>
+          <h2 className="font-bold text-lg">Top Team</h2>
           <p>{top?.name}</p>
         </CardContent>
       </Card>
       <Card>
         <CardContent>
-          <h2 className="font-semibold">Teams</h2>
+          <h2 className="font-bold text-lg">Teams</h2>
           <p>{league.teams.length}</p>
         </CardContent>
       </Card>
       <Card>
         <CardContent>
-          <h2 className="font-semibold">Status</h2>
+          <h2 className="font-bold text-lg">Status</h2>
           <p>Live</p>
         </CardContent>
       </Card>
@@ -215,18 +219,22 @@ function DashboardLeague({ league }) {
   );
 }
 
-// =================== Teams ===================
+// =====================
+// Teams Page
+// =====================
 function Teams({ teams }) {
   return (
     <div className="grid gap-4">
       {teams.map((t) => (
         <Card key={t.name}>
           <CardContent>
-            <h2 className="font-semibold">{t.name}</h2>
-            <p>{t.score} pts</p>
-            {t.roster.map((p) => (
-              <div key={p.name}>{p.name}</div>
-            ))}
+            <h2 className="font-bold text-lg">{t.name}</h2>
+            <p className="text-gray-700">{t.score} pts</p>
+            <div className="flex flex-wrap gap-1 mt-2">
+              {t.roster.map((p) => (
+                <span key={p.name} className="px-2 py-1 bg-gray-100 rounded-full text-gray-800">{p.name}</span>
+              ))}
+            </div>
           </CardContent>
         </Card>
       ))}
@@ -234,18 +242,18 @@ function Teams({ teams }) {
   );
 }
 
-// =================== Leaderboard ===================
+// =====================
+// Leaderboard Page
+// =====================
 function Leaderboard({ teams }) {
   const sorted = [...teams].sort((a, b) => b.score - a.score);
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-2">
       {sorted.map((t, i) => (
-        <Card key={t.name}>
-          <CardContent className="flex justify-between text-black">
-            <span className="font-semibold">
-              #{i + 1} {t.name}
-            </span>
-            <span>{t.score}</span>
+        <Card key={t.name} className={i===0 ? "bg-yellow-100" : ""}>
+          <CardContent className="flex justify-between items-center">
+            <span className="font-semibold text-gray-900">{i + 1}. {t.name}</span>
+            <span className="text-gray-700">{t.score}</span>
           </CardContent>
         </Card>
       ))}
@@ -253,18 +261,15 @@ function Leaderboard({ teams }) {
   );
 }
 
-// =================== Lineups ===================
+// =====================
+// Lineups Page
+// =====================
 function Lineups({ teams, setTeams }) {
   const toggleStarter = (ti, player) => {
     const t = [...teams];
     const starters = t[ti].starters;
     const exists = starters.find((p) => p.name === player.name);
-
-    if (exists) {
-      t[ti].starters = starters.filter((p) => p.name !== player.name);
-    } else {
-      t[ti].starters = [...starters, player];
-    }
+    t[ti].starters = exists ? starters.filter((p) => p.name !== player.name) : [...starters, player];
     setTeams(t);
   };
 
@@ -273,16 +278,15 @@ function Lineups({ teams, setTeams }) {
       {teams.map((t, i) => (
         <Card key={t.name}>
           <CardContent>
-            <h2 className="font-semibold">{t.name} Lineup</h2>
-            {t.roster.map((p) => (
-              <div
-                key={p.name}
-                className="flex items-center gap-2 text-black"
-              >
-                <Button onClick={() => toggleStarter(i, p)}>Toggle</Button>
-                <span>{p.name}</span>
-              </div>
-            ))}
+            <h2 className="font-bold text-lg">{t.name} Lineup</h2>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {t.roster.map((p) => (
+                <div key={p.name} className="flex items-center gap-2">
+                  <Button onClick={() => toggleStarter(i, p)}>Toggle</Button>
+                  <span className="text-gray-900">{p.name}</span>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       ))}
@@ -290,19 +294,17 @@ function Lineups({ teams, setTeams }) {
   );
 }
 
-// =================== Free Agency ===================
+// =====================
+// Free Agency Page
+// =====================
 function FreeAgency({ teams, setTeams, freeAgents, setFreeAgents }) {
-  const [selectedTeamIndex, setSelectedTeamIndex] = useState(
-    teams.length > 0 ? 0 : -1
-  );
+  const [selectedTeamIndex, setSelectedTeamIndex] = useState(teams.length > 0 ? 0 : -1);
 
   const addPlayer = (teamIndex, player) => {
     if (teamIndex < 0 || teamIndex >= teams.length) return;
-
     const updatedTeams = [...teams];
     updatedTeams[teamIndex].roster.push(player);
     setTeams(updatedTeams);
-
     setFreeAgents(freeAgents.filter((x) => x.name !== player.name));
   };
 
@@ -310,21 +312,19 @@ function FreeAgency({ teams, setTeams, freeAgents, setFreeAgents }) {
     <div className="grid gap-3">
       {freeAgents.map((p) => (
         <Card key={p.name}>
-          <CardContent className="flex items-center gap-2 text-black">
+          <CardContent className="flex items-center gap-2">
             <select
-              className="border rounded px-1 py-0.5"
+              className="rounded-full border px-2 py-1 text-gray-700"
               value={selectedTeamIndex}
               onChange={(e) => setSelectedTeamIndex(Number(e.target.value))}
             >
               {teams.map((t, i) => (
-                <option key={i} value={i}>
-                  {t.name}
-                </option>
+                <option key={i} value={i}>{t.name}</option>
               ))}
             </select>
 
             <Button onClick={() => addPlayer(selectedTeamIndex, p)}>Add</Button>
-            <span>{p.name}</span>
+            <span className="text-gray-900">{p.name}</span>
           </CardContent>
         </Card>
       ))}
