@@ -46,10 +46,10 @@ export default function FantasyDiscGolfApp() {
         const rows = data.split("\n").slice(1);
         const parsed = rows
           .map((r) => {
-            const [team, name, points] = r.split(",");
+            const [name, division, points] = r.split(",");
             return {
-              team: team?.trim(),
               name: name?.trim(),
+              division: division?.trim(),
               points: Number(points || 0),
             };
           })
