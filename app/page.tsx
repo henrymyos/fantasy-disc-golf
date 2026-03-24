@@ -21,8 +21,12 @@ const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0cXnJ2EW3nb
 export default function FantasyDiscGolfApp() {
   const [page, setPage] = useState("dashboard");
   const [teams, setTeams] = useState([
-    { name: "Isaac", roster: [], starters: [], score: 0 },
+    { name: "Henry", roster: [], starters: [], score: 0 },
+    { name: "Paige", roster: [], starters: [], score: 0 },
     { name: "Ethan", roster: [], starters: [], score: 0 },
+    { name: "Isaac", roster: [], starters: [], score: 0 },
+    { name: "Dad", roster: [], starters: [], score: 0 },
+    { name: "Mom", roster: [], starters: [], score: 0 },
   ]);
   const [players, setPlayers] = useState([]);
   const [freeAgents, setFreeAgents] = useState([]);
