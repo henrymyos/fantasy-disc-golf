@@ -13,7 +13,6 @@ type Props = {
     maxTeams: number;
     rosterSize: number;
     startersCount: number;
-    scoringType: string;
   };
 };
 
@@ -86,18 +85,6 @@ export function LeagueSettingsForm({ leagueId, initial }: Props) {
             <p className="text-red-400 text-xs mt-1">{state.errors.startersCount[0]}</p>
           )}
         </div>
-      </div>
-
-      <div>
-        <label className="block text-sm text-gray-400 mb-1">Scoring Type</label>
-        <select
-          name="scoringType"
-          defaultValue={initial.scoringType}
-          className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#4B3DFF] transition"
-        >
-          <option value="placement">Placement (finish position)</option>
-          <option value="points">Points (raw score)</option>
-        </select>
       </div>
 
       {state?.message && !saved && (

@@ -16,7 +16,7 @@ export default async function LeagueSettingsPage({
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, name, commissioner_id, max_teams, roster_size, starters_count, scoring_type")
+    .select("id, name, commissioner_id, max_teams, roster_size, starters_count")
     .eq("id", id)
     .single();
 
@@ -35,7 +35,6 @@ export default async function LeagueSettingsPage({
               maxTeams: league.max_teams,
               rosterSize: league.roster_size,
               startersCount: league.starters_count,
-              scoringType: league.scoring_type,
             }}
           />
         </div>
