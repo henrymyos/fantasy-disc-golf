@@ -16,6 +16,16 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
 
   if (!league) notFound();
 
+  // Fetch division-specific starter counts (columns may not exist on older DBs)
+  const { data: divData } = await supabase
+    .from("leagues")
+    .select("mpo_starters, fpo_starters")
+    .eq("id", id)
+    .single();
+
+  const mpoSlots: number = (divData as any)?.mpo_starters ?? 4;
+  const fpoSlots: number = (divData as any)?.fpo_starters ?? 2;
+
   const { data: myMember } = await supabase
     .from("league_members")
     .select("id, team_name")
@@ -29,118 +39,201 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
     .from("rosters")
     .select("id, is_starter, player_id, players(id, name, division)")
     .eq("league_id", id)
-    .eq("team_id", myMember.id)
-    .order("is_starter", { ascending: false });
+    .eq("team_id", myMember.id);
 
-  const starters = (myRoster ?? []).filter((r) => r.is_starter);
-  const bench = (myRoster ?? []).filter((r) => !r.is_starter);
+  const roster = myRoster ?? [];
+
+  // Split starters by division, capped to slot count
+  const mpoStarters = roster
+    .filter((r) => r.is_starter && (r.players as any)?.division === "MPO")
+    .slice(0, mpoSlots);
+  const fpoStarters = roster
+    .filter((r) => r.is_starter && (r.players as any)?.division === "FPO")
+    .slice(0, fpoSlots);
+
+  // Bench = everyone not in the above starter slots
+  const starterIds = new Set([...mpoStarters, ...fpoStarters].map((r) => r.id));
+  const bench = roster.filter((r) => !starterIds.has(r.id));
+
+  const totalFilledStarters = mpoStarters.length + fpoStarters.length;
+  const totalSlots = mpoSlots + fpoSlots;
 
   return (
     <div className="max-w-2xl space-y-6">
-      {/* My lineup */}
       <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-bold text-white">{myMember.team_name}</h2>
-          <span className="text-gray-500 text-sm">{starters.length}/{league.starters_count} starters</span>
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="font-bold text-white text-lg">{myMember.team_name}</h2>
+          <span className="text-gray-500 text-sm">{totalFilledStarters}/{totalSlots} starters</span>
         </div>
 
-        {(myRoster ?? []).length === 0 ? (
-          <p className="text-gray-600 text-sm text-center py-6">
-            No players on your roster. Add players in Free Agency.
-          </p>
-        ) : (
-          <div className="space-y-4">
-            <section>
-              <h3 className="text-xs text-[#36D7B7] font-semibold uppercase tracking-wide mb-2">
-                Starters ({starters.length}/{league.starters_count})
-              </h3>
-              <div className="space-y-2">
-                {starters.map((spot) => (
-                  <PlayerRow
-                    key={spot.id}
-                    spot={spot}
-                    isStarter
-                    leagueId={Number(id)}
-                    maxStarters={league.starters_count}
-                    currentStarters={starters.length}
-                  />
-                ))}
-                {starters.length === 0 && (
-                  <p className="text-gray-600 text-sm py-2">No starters set — click "Start" on bench players</p>
-                )}
-              </div>
-            </section>
+        {/* Starter slots */}
+        <div className="space-y-2 mb-6">
+          {/* MPO slots */}
+          {Array.from({ length: mpoSlots }, (_, i) => {
+            const spot = mpoStarters[i];
+            return (
+              <SlotRow
+                key={`mpo-${i}`}
+                division="MPO"
+                spot={spot ?? null}
+                leagueId={Number(id)}
+              />
+            );
+          })}
+          {/* FPO slots */}
+          {Array.from({ length: fpoSlots }, (_, i) => {
+            const spot = fpoStarters[i];
+            return (
+              <SlotRow
+                key={`fpo-${i}`}
+                division="FPO"
+                spot={spot ?? null}
+                leagueId={Number(id)}
+              />
+            );
+          })}
+        </div>
 
-            <section>
-              <h3 className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Bench</h3>
-              <div className="space-y-2">
-                {bench.map((spot) => (
-                  <PlayerRow
+        {/* Bench */}
+        {bench.length > 0 && (
+          <>
+            <h3 className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Bench</h3>
+            <div className="space-y-2">
+              {bench.map((spot) => {
+                const player = (spot as any).players;
+                const div: "MPO" | "FPO" = player?.division ?? "MPO";
+                const slotsFull = div === "MPO"
+                  ? mpoStarters.length >= mpoSlots
+                  : fpoStarters.length >= fpoSlots;
+                return (
+                  <BenchRow
                     key={spot.id}
                     spot={spot}
-                    isStarter={false}
                     leagueId={Number(id)}
-                    maxStarters={league.starters_count}
-                    currentStarters={starters.length}
+                    slotsFull={slotsFull}
                   />
-                ))}
-                {bench.length === 0 && (
-                  <p className="text-gray-600 text-sm py-2">Bench is empty</p>
-                )}
-              </div>
-            </section>
-          </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {roster.length === 0 && (
+          <p className="text-gray-600 text-sm text-center py-4">
+            No players on your roster yet. Add players in Free Agency.
+          </p>
         )}
       </div>
     </div>
   );
 }
 
-function PlayerRow({
+function SlotRow({
+  division,
   spot,
-  isStarter,
   leagueId,
-  maxStarters,
-  currentStarters,
 }: {
-  spot: any;
-  isStarter: boolean;
+  division: "MPO" | "FPO";
+  spot: any | null;
   leagueId: number;
-  maxStarters: number;
-  currentStarters: number;
 }) {
-  const player = spot.players;
-  const canStart = !isStarter && currentStarters < maxStarters;
+  const isMpo = division === "MPO";
+  const color = isMpo ? "#4B3DFF" : "#36D7B7";
+  const bgColor = isMpo ? "rgba(75,61,255,0.12)" : "rgba(54,215,183,0.10)";
+  const player = spot?.players;
 
   return (
-    <div className="flex items-center justify-between p-3 rounded-xl bg-[#0f1117] border border-white/5 group">
-      <div className="flex items-center gap-3">
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-          isStarter ? "bg-[#36D7B7] text-black" : "bg-white/10 text-white"
-        }`}>
-          {player?.name?.[0]?.toUpperCase()}
-        </div>
-        <div>
-          <p className="text-white text-sm font-medium">{player?.name}</p>
-          <p className={`text-xs font-semibold ${(player?.division ?? "MPO") === "MPO" ? "text-[#4B3DFF]" : "text-[#36D7B7]"}`}>{player?.division ?? "MPO"}</p>
-        </div>
+    <div
+      className="flex items-center gap-3 p-3 rounded-xl border"
+      style={{
+        background: spot ? bgColor : "rgba(255,255,255,0.02)",
+        borderColor: spot ? `${color}30` : "rgba(255,255,255,0.06)",
+      }}
+    >
+      {/* Division badge */}
+      <div
+        className="w-12 shrink-0 text-center text-xs font-bold uppercase tracking-wide py-1 rounded-lg"
+        style={{ color, background: `${color}20` }}
+      >
+        {division}
       </div>
-      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition">
-        {isStarter ? (
+
+      {/* Player or empty */}
+      {player ? (
+        <div className="flex-1 min-w-0">
+          <p className="text-white text-sm font-medium truncate">{player.name}</p>
+        </div>
+      ) : (
+        <p className="flex-1 text-gray-600 text-sm italic">Empty</p>
+      )}
+
+      {/* Actions */}
+      {spot && (
+        <div className="flex items-center gap-2 shrink-0">
           <form action={toggleStarter.bind(null, leagueId, spot.id, false)}>
-            <button type="submit" className="text-xs text-gray-400 hover:text-white border border-white/10 hover:border-white/30 px-3 py-1 rounded-full transition">
+            <button
+              type="submit"
+              className="text-xs text-gray-400 hover:text-white border border-white/10 hover:border-white/30 px-3 py-1 rounded-full transition"
+            >
               Bench
             </button>
           </form>
-        ) : canStart ? (
+          <form action={dropPlayer.bind(null, leagueId, spot.player_id)}>
+            <button
+              type="submit"
+              className="text-xs text-red-400 hover:text-red-300 border border-red-400/20 hover:border-red-400/40 px-3 py-1 rounded-full transition"
+            >
+              Drop
+            </button>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BenchRow({
+  spot,
+  leagueId,
+  slotsFull,
+}: {
+  spot: any;
+  leagueId: number;
+  slotsFull: boolean;
+}) {
+  const player = spot.players;
+  const div: "MPO" | "FPO" = player?.division ?? "MPO";
+  const isMpo = div === "MPO";
+  const color = isMpo ? "#4B3DFF" : "#36D7B7";
+
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-xl bg-[#0f1117] border border-white/5 group">
+      <div
+        className="w-12 shrink-0 text-center text-xs font-bold uppercase tracking-wide py-1 rounded-lg"
+        style={{ color, background: `${color}20` }}
+      >
+        {div}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-white text-sm font-medium truncate">{player?.name}</p>
+      </div>
+      <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition">
+        {!slotsFull && (
           <form action={toggleStarter.bind(null, leagueId, spot.id, true)}>
-            <button type="submit" className="text-xs text-[#36D7B7] border border-[#36D7B7]/40 hover:border-[#36D7B7] px-3 py-1 rounded-full transition">
+            <button
+              type="submit"
+              className="text-xs font-semibold px-3 py-1 rounded-full border transition"
+              style={{ color, borderColor: `${color}50` }}
+            >
               Start
             </button>
           </form>
-        ) : null}
+        )}
         <form action={dropPlayer.bind(null, leagueId, spot.player_id)}>
-          <button type="submit" className="text-xs text-red-400 hover:text-red-300 border border-red-400/20 hover:border-red-400/40 px-3 py-1 rounded-full transition">
+          <button
+            type="submit"
+            className="text-xs text-red-400 hover:text-red-300 border border-red-400/20 hover:border-red-400/40 px-3 py-1 rounded-full transition"
+          >
             Drop
           </button>
         </form>
