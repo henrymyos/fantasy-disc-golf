@@ -86,7 +86,7 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
 
   // Corner cell
   gridCells.push(
-    <div key="corner" className="bg-[#0f1117] p-2 sticky left-0 z-10" />
+    <div key="corner" className="bg-[#0f1117] rounded-lg p-2 sticky left-0 z-10" />
   );
 
   // Team header cells
@@ -96,7 +96,7 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
     gridCells.push(
       <div
         key={`h-${m.id}`}
-        className={`px-2 py-3 text-center ${isOnClock ? "bg-[#36D7B7]/15" : "bg-[#0f1117]"}`}
+        className={`px-2 py-3 text-center rounded-lg ${isOnClock ? "bg-[#36D7B7]/15" : "bg-[#0f1117]"}`}
       >
         <p className={`text-xs font-bold truncate leading-tight ${isMe ? "text-white" : "text-gray-300"}`}>
           {m.teamName}
@@ -117,7 +117,7 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
     gridCells.push(
       <div
         key={`round-${round}`}
-        className={`bg-[#0f1117] flex items-center justify-center sticky left-0 z-10 ${isCurrentRound ? "text-white font-bold" : "text-gray-600"}`}
+        className={`bg-[#0f1117] rounded-lg flex items-center justify-center sticky left-0 z-10 ${isCurrentRound ? "text-white font-bold" : "text-gray-600"}`}
       >
         <span className="text-xs font-mono">R{round}</span>
       </div>
@@ -137,7 +137,7 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
           <div
             key={`${round}-${m.id}`}
             style={{ background: divBg(pick.playerDivision) }}
-            className="flex flex-col p-2 min-h-[80px]"
+            className="flex flex-col p-2 min-h-[80px] rounded-lg overflow-hidden"
           >
             <div className="flex justify-between items-center">
               <span className="text-white/50 text-[10px] font-semibold">{pick.playerDivision}</span>
@@ -153,7 +153,7 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
         gridCells.push(
           <div
             key={`${round}-${m.id}`}
-            className="flex flex-col items-center justify-center p-2 min-h-[80px] bg-[#36D7B7]/10 ring-2 ring-[#36D7B7] ring-inset"
+            className="flex flex-col items-center justify-center p-2 min-h-[80px] rounded-lg bg-[#36D7B7]/10 ring-2 ring-[#36D7B7] ring-inset"
           >
             <span className="text-[#36D7B7] text-[10px] font-mono">{pickLabel}</span>
             <span className="text-[#36D7B7] text-xs font-semibold animate-pulse mt-1">on the clock</span>
@@ -163,7 +163,7 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
         gridCells.push(
           <div
             key={`${round}-${m.id}`}
-            className="flex flex-col p-2 min-h-[80px] bg-[#1a1d23]"
+            className="flex flex-col p-2 min-h-[80px] rounded-lg bg-[#1a1d23]"
           >
             <div className="flex justify-end">
               <span className="text-white/20 text-[10px] font-mono">{pickLabel}</span>
@@ -233,10 +233,9 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: `44px repeat(${N}, minmax(130px, 1fr))`,
-              gap: "1px",
-              backgroundColor: "rgba(255,255,255,0.05)",
-              minWidth: `${44 + N * 130}px`,
+              gridTemplateColumns: `44px repeat(${N}, minmax(130px, 180px))`,
+              gap: "4px",
+              minWidth: `${44 + N * 134}px`,
             }}
           >
             {gridCells}
