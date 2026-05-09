@@ -5,6 +5,12 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+export const BONUS_POINTS = {
+  hotRound: 10,      // best score in a single round
+  bogeyFree: 5,      // per round with no bogeys
+  ace: 20,           // hole-in-one
+} as const;
+
 // Calibrated so 6 starters in an 8-team snake-draft league average ~150 pts/tournament.
 // Sum of positions 1-48 = 1207, giving 25.1 pts/starter avg.
 const PLACEMENT_POINTS: Record<number, number> = {
@@ -37,10 +43,18 @@ export async function createTournament(leagueId: number, name: string, week: num
   revalidatePath(`/league/${leagueId}/scoring`);
 }
 
+export type PlayerBonus = {
+  playerId: number;
+  hotRoundCount: number;
+  bogeyFreeCount: number;
+  aceCount: number;
+};
+
 export async function enterResults(
   leagueId: number,
   tournamentId: number,
-  results: { playerId: number; position: number }[]
+  results: { playerId: number; position: number }[],
+  bonuses: PlayerBonus[] = []
 ): Promise<void> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -65,12 +79,27 @@ export async function enterResults(
     playerIds.forEach((id) => tiedPoints.set(id, Math.round(avg * 10) / 10));
   });
 
-  const rows = results.map((r) => ({
-    tournament_id: tournamentId,
-    player_id: r.playerId,
-    finishing_position: r.position,
-    fantasy_points: tiedPoints.get(r.playerId) ?? getPoints(r.position),
-  }));
+  const bonusMap = new Map<number, PlayerBonus>();
+  bonuses.forEach((b) => bonusMap.set(b.playerId, b));
+
+  const rows = results.map((r) => {
+    const placementPts = tiedPoints.get(r.playerId) ?? getPoints(r.position);
+    const b = bonusMap.get(r.playerId);
+    const bonusPts = b
+      ? b.hotRoundCount * BONUS_POINTS.hotRound +
+        b.bogeyFreeCount * BONUS_POINTS.bogeyFree +
+        b.aceCount * BONUS_POINTS.ace
+      : 0;
+    return {
+      tournament_id: tournamentId,
+      player_id: r.playerId,
+      finishing_position: r.position,
+      hot_round_count: b?.hotRoundCount ?? 0,
+      bogey_free_count: b?.bogeyFreeCount ?? 0,
+      ace_count: b?.aceCount ?? 0,
+      fantasy_points: Math.round((placementPts + bonusPts) * 10) / 10,
+    };
+  });
 
   await admin.from("tournament_results").upsert(rows, { onConflict: "tournament_id,player_id" });
   revalidatePath(`/league/${leagueId}/scoring`);

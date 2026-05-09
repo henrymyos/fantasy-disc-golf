@@ -385,3 +385,10 @@ insert into players (name, division) values
   ('Valerie Mandujano', 'FPO'),
   ('Heather Young', 'FPO')
 on conflict do nothing;
+
+-- Migration: add bonus point columns to tournament_results
+alter table tournament_results add column if not exists hot_round_count int default 0;
+alter table tournament_results add column if not exists bogey_free_count int default 0;
+alter table tournament_results add column if not exists ace_count int default 0;
+-- Also widen fantasy_points to decimal for tie averaging
+alter table tournament_results alter column fantasy_points type decimal(6,1);

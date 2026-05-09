@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { deleteLeague } from "@/actions/leagues";
 import { LeagueSettingsForm } from "@/components/league-settings-form";
+import { ScoringRules } from "@/components/scoring-rules";
 
 export default async function LeagueSettingsPage({
   params,
@@ -37,6 +38,13 @@ export default async function LeagueSettingsPage({
               scoringType: league.scoring_type,
             }}
           />
+        </div>
+      </div>
+
+      <div>
+        <h2 className="text-white font-bold text-lg mb-5">Scoring</h2>
+        <div className="bg-[#1a1d23] rounded-2xl p-6 border border-white/5">
+          <ScoringRules />
         </div>
       </div>
 
