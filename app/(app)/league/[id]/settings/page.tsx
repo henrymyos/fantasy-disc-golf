@@ -16,15 +16,22 @@ export default async function LeagueSettingsPage({
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, name, commissioner_id, max_teams, roster_size, starters_count, mpo_starters, fpo_starters")
+    .select("id, name, commissioner_id, max_teams, roster_size, starters_count")
     .eq("id", id)
     .single();
 
   if (!league) notFound();
   if (league.commissioner_id !== user.id) redirect(`/league/${id}`);
 
-  const mpoStarters = league.mpo_starters ?? 4;
-  const fpoStarters = league.fpo_starters ?? 2;
+  // Fetch division-specific starter counts separately so a missing column doesn't break the page
+  const { data: divData } = await supabase
+    .from("leagues")
+    .select("mpo_starters, fpo_starters")
+    .eq("id", id)
+    .single();
+
+  const mpoStarters: number = (divData as any)?.mpo_starters ?? 4;
+  const fpoStarters: number = (divData as any)?.fpo_starters ?? 2;
 
   return (
     <div className="max-w-xl space-y-8">
