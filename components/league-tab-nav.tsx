@@ -12,12 +12,17 @@ const NAV_TABS = [
   { label: "Trades", href: "/trades" },
 ];
 
-export function LeagueTabNav({ base }: { base: string }) {
+export function LeagueTabNav({ base, isCommissioner }: { base: string; isCommissioner: boolean }) {
   const pathname = usePathname();
+
+  const tabs = [
+    ...NAV_TABS,
+    ...(isCommissioner ? [{ label: "Settings", href: "/settings" }] : []),
+  ];
 
   return (
     <nav className="flex gap-1 mb-6 border-b border-white/5 pb-0 -mx-0 overflow-x-auto">
-      {NAV_TABS.map((tab) => {
+      {tabs.map((tab) => {
         const href = `${base}${tab.href}`;
         const isActive = pathname === href;
         return (

@@ -144,3 +144,26 @@ export async function joinLeague(
   revalidatePath("/dashboard");
   redirect(`/league/${league.id}`);
 }
+
+export async function deleteLeague(leagueId: string): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const admin = createAdminClient();
+
+  const { data: league } = await admin
+    .from("leagues")
+    .select("commissioner_id")
+    .eq("id", leagueId)
+    .single();
+
+  if (!league || league.commissioner_id !== user.id) {
+    throw new Error("Not authorized");
+  }
+
+  await admin.from("leagues").delete().eq("id", leagueId);
+
+  revalidatePath("/dashboard");
+  redirect("/dashboard");
+}

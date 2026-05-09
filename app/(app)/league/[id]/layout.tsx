@@ -64,7 +64,7 @@ export default async function LeagueLayout({
       </div>
 
       {/* Tab nav */}
-      <LeagueTabNav base={base} />
+      <LeagueTabNav base={base} isCommissioner={!!membership.is_commissioner} />
 
       {children}
     </div>
