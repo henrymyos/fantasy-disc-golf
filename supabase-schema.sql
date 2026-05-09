@@ -392,3 +392,6 @@ alter table tournament_results add column if not exists bogey_free_count int def
 alter table tournament_results add column if not exists ace_count int default 0;
 -- Also widen fantasy_points to decimal for tie averaging
 alter table tournament_results alter column fantasy_points type decimal(6,1);
+
+-- Migration: add world ranking to players
+alter table players add column if not exists world_ranking int;
