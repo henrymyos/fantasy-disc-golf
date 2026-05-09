@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/henrymyos/Desktop/fantasy-disc-golf log --oneline)",
+      "Bash(git -C /Users/henrymyos/Desktop/fantasy-disc-golf status)",
+      "Bash(git -C /Users/henrymyos/Desktop/fantasy-disc-golf log --oneline --all)",
+      "Bash(mkdir -p /Users/henrymyos/Desktop/fantasy-disc-golf/app/\\\\\\(app\\\\\\)/dashboard /Users/henrymyos/Desktop/fantasy-disc-golf/app/\\\\\\(app\\\\\\)/league/new /Users/henrymyos/Desktop/fantasy-disc-golf/app/\\\\\\(app\\\\\\)/league/join /Users/henrymyos/Desktop/fantasy-disc-golf/app/\\\\\\(app\\\\\\)/league/\\\\[id\\\\]/matchups /Users/henrymyos/Desktop/fantasy-disc-golf/app/\\\\\\(app\\\\\\)/league/\\\\[id\\\\]/lineups /Users/henrymyos/Desktop/fantasy-disc-golf/app/\\\\\\(app\\\\\\)/league/\\\\[id\\\\]/free-agency /Users/henrymyos/Desktop/fantasy-disc-golf/app/\\\\\\(app\\\\\\)/league/\\\\[id\\\\]/draft /Users/henrymyos/Desktop/fantasy-disc-golf/app/\\\\\\(app\\\\\\)/league/\\\\[id\\\\]/trades /Users/henrymyos/Desktop/fantasy-disc-golf/app/\\\\\\(app\\\\\\)/league/\\\\[id\\\\]/scoring)",
+      "Bash(npm run *)",
+      "WebSearch",
+      "WebFetch(domain:www.pdga.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:statmando.com)"
+    ],
+    "additionalDirectories": [
+      "/Users/henrymyos/Desktop/fantasy-disc-golf/app/(app)/league/[id]"
+    ]
+  }
+}

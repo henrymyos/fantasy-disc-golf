@@ -1,0 +1,95 @@
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+
+const NAV_TABS = [
+  { label: "Dashboard", href: "" },
+  { label: "Matchups", href: "/matchups" },
+  { label: "Lineups", href: "/lineups" },
+  { label: "Free Agency", href: "/free-agency" },
+  { label: "Draft", href: "/draft" },
+  { label: "Trades", href: "/trades" },
+];
+
+export default async function LeagueLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode;
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: league } = await supabase
+    .from("leagues")
+    .select("id, name, current_week, commissioner_id, invite_code")
+    .eq("id", id)
+    .single();
+
+  if (!league) notFound();
+
+  const { data: membership } = await supabase
+    .from("league_members")
+    .select("id, is_commissioner")
+    .eq("league_id", id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (!membership) {
+    redirect("/dashboard");
+  }
+
+  const base = `/league/${id}`;
+
+  return (
+    <div>
+      {/* League header */}
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard" className="text-gray-600 hover:text-gray-400 transition text-sm">
+            ← Leagues
+          </Link>
+          <span className="text-gray-700">/</span>
+          <h1 className="text-white font-bold text-xl">{league.name}</h1>
+        </div>
+        <div className="flex items-center gap-3 text-xs text-gray-500">
+          <span>Week {league.current_week}</span>
+          <span className="border border-white/10 rounded px-2 py-0.5 font-mono text-gray-400">
+            {league.invite_code}
+          </span>
+          {membership.is_commissioner && (
+            <Link
+              href={`${base}/scoring`}
+              className="bg-[#36D7B7]/20 text-[#36D7B7] px-3 py-1 rounded-full hover:bg-[#36D7B7]/30 transition"
+            >
+              ⚙ Scoring
+            </Link>
+          )}
+        </div>
+      </div>
+
+      {/* Tab nav */}
+      <nav className="flex gap-1 mb-6 border-b border-white/5 pb-0 -mx-0 overflow-x-auto">
+        {NAV_TABS.map((tab) => (
+          <TabLink key={tab.href} href={`${base}${tab.href}`} label={tab.label} />
+        ))}
+      </nav>
+
+      {children}
+    </div>
+  );
+}
+
+function TabLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="px-4 py-2.5 text-sm font-medium text-gray-400 hover:text-white border-b-2 border-transparent hover:border-[#4B3DFF] transition whitespace-nowrap -mb-px"
+    >
+      {label}
+    </Link>
+  );
+}
