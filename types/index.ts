@@ -23,7 +23,7 @@ export type League = {
   starters_count: number;
   season_year: number;
   current_week: number;
-  draft_status: "pending" | "in_progress" | "complete";
+  draft_status: "pending" | "in_progress" | "paused" | "complete";
   scoring_type: "placement" | "points";
   created_at: string;
 };
