@@ -34,6 +34,43 @@ export async function toggleStarter(leagueId: number, rosterSpotId: number, isSt
   revalidatePath(`/league/${leagueId}/lineups`);
 }
 
+export async function swapStarter(
+  leagueId: number,
+  newStarterSpotId: number,
+  displacedSpotId?: number,
+): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const admin = createAdminClient();
+
+  const { data: member } = await admin
+    .from("league_members")
+    .select("id")
+    .eq("league_id", leagueId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (!member) return;
+
+  // Verify ownership of both spots
+  const ids = [newStarterSpotId, ...(displacedSpotId ? [displacedSpotId] : [])];
+  const { data: spots } = await admin
+    .from("rosters")
+    .select("id, team_id")
+    .in("id", ids);
+
+  if (!spots || spots.some((s) => s.team_id !== member.id)) return;
+
+  if (displacedSpotId) {
+    await admin.from("rosters").update({ is_starter: false }).eq("id", displacedSpotId);
+  }
+  await admin.from("rosters").update({ is_starter: true }).eq("id", newStarterSpotId);
+
+  revalidatePath(`/league/${leagueId}/lineups`);
+}
+
 export async function addFreeAgent(leagueId: number, playerId: number, dropPlayerId?: number): Promise<void> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
