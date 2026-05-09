@@ -403,3 +403,7 @@ alter table drafts add constraint drafts_status_check
 
 -- Migration: add overall draft ranking (MPO+FPO interleaved by draft value)
 alter table players add column if not exists overall_rank int;
+
+-- Migration: add per-division starter counts
+alter table leagues add column if not exists mpo_starters int not null default 4;
+alter table leagues add column if not exists fpo_starters int not null default 2;

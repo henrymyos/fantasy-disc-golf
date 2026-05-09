@@ -15,7 +15,11 @@ const CreateLeagueSchema = z.object({
   teamName: z.string().min(1, "Team name is required").max(30).trim(),
   maxTeams: z.coerce.number().int().min(2).max(20).default(12),
   rosterSize: z.coerce.number().int().min(5).max(20).default(10),
-  startersCount: z.coerce.number().int().min(1).max(10).default(6),
+  mpoStarters: z.coerce.number().int().min(1).max(10).default(4),
+  fpoStarters: z.coerce.number().int().min(1).max(10).default(2),
+}).refine((d) => d.mpoStarters + d.fpoStarters <= d.rosterSize, {
+  message: "Total starters cannot exceed roster size",
+  path: ["fpoStarters"],
 });
 
 const JoinLeagueSchema = z.object({
@@ -41,14 +45,16 @@ export async function createLeague(
     teamName: formData.get("teamName"),
     maxTeams: formData.get("maxTeams") || 12,
     rosterSize: formData.get("rosterSize") || 10,
-    startersCount: formData.get("startersCount") || 5,
+    mpoStarters: formData.get("mpoStarters") || 4,
+    fpoStarters: formData.get("fpoStarters") || 2,
   });
 
   if (!result.success) {
     return { errors: result.error.flatten().fieldErrors };
   }
 
-  const { name, teamName, maxTeams, rosterSize, startersCount } = result.data;
+  const { name, teamName, maxTeams, rosterSize, mpoStarters, fpoStarters } = result.data;
+  const startersCount = mpoStarters + fpoStarters;
   const admin = createAdminClient();
 
   const { data: league, error: leagueError } = await admin
@@ -60,6 +66,8 @@ export async function createLeague(
       max_teams: maxTeams,
       roster_size: rosterSize,
       starters_count: startersCount,
+      mpo_starters: mpoStarters,
+      fpo_starters: fpoStarters,
     })
     .select()
     .single();
@@ -149,10 +157,11 @@ const UpdateLeagueSchema = z.object({
   name: z.string().min(3).max(50).trim(),
   maxTeams: z.coerce.number().int().min(2).max(20),
   rosterSize: z.coerce.number().int().min(5).max(20),
-  startersCount: z.coerce.number().int().min(1).max(20),
-}).refine((d) => d.startersCount <= d.rosterSize, {
-  message: "Starters cannot exceed roster size",
-  path: ["startersCount"],
+  mpoStarters: z.coerce.number().int().min(1).max(20),
+  fpoStarters: z.coerce.number().int().min(1).max(20),
+}).refine((d) => d.mpoStarters + d.fpoStarters <= d.rosterSize, {
+  message: "Total starters cannot exceed roster size",
+  path: ["fpoStarters"],
 });
 
 export async function updateLeague(
@@ -168,14 +177,16 @@ export async function updateLeague(
     name: formData.get("name"),
     maxTeams: formData.get("maxTeams"),
     rosterSize: formData.get("rosterSize"),
-    startersCount: formData.get("startersCount"),
+    mpoStarters: formData.get("mpoStarters"),
+    fpoStarters: formData.get("fpoStarters"),
   });
 
   if (!result.success) {
     return { errors: result.error.flatten().fieldErrors };
   }
 
-  const { name, maxTeams, rosterSize, startersCount } = result.data;
+  const { name, maxTeams, rosterSize, mpoStarters, fpoStarters } = result.data;
+  const startersCount = mpoStarters + fpoStarters;
   const admin = createAdminClient();
 
   const { data: league } = await admin
@@ -190,7 +201,7 @@ export async function updateLeague(
 
   const { error } = await admin
     .from("leagues")
-    .update({ name, max_teams: maxTeams, roster_size: rosterSize, starters_count: startersCount })
+    .update({ name, max_teams: maxTeams, roster_size: rosterSize, starters_count: startersCount, mpo_starters: mpoStarters, fpo_starters: fpoStarters })
     .eq("id", leagueId);
 
   if (error) return { message: error.message };

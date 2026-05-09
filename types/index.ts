@@ -21,6 +21,8 @@ export type League = {
   max_teams: number;
   roster_size: number;
   starters_count: number;
+  mpo_starters: number;
+  fpo_starters: number;
   season_year: number;
   current_week: number;
   draft_status: "pending" | "in_progress" | "paused" | "complete";

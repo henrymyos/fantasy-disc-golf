@@ -16,12 +16,15 @@ export default async function LeagueSettingsPage({
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, name, commissioner_id, max_teams, roster_size, starters_count")
+    .select("id, name, commissioner_id, max_teams, roster_size, starters_count, mpo_starters, fpo_starters")
     .eq("id", id)
     .single();
 
   if (!league) notFound();
   if (league.commissioner_id !== user.id) redirect(`/league/${id}`);
+
+  const mpoStarters = league.mpo_starters ?? 4;
+  const fpoStarters = league.fpo_starters ?? 2;
 
   return (
     <div className="max-w-xl space-y-8">
@@ -34,7 +37,8 @@ export default async function LeagueSettingsPage({
               name: league.name,
               maxTeams: league.max_teams,
               rosterSize: league.roster_size,
-              startersCount: league.starters_count,
+              mpoStarters,
+              fpoStarters,
             }}
           />
         </div>
@@ -43,7 +47,7 @@ export default async function LeagueSettingsPage({
       <div>
         <h2 className="text-white font-bold text-lg mb-5">Scoring</h2>
         <div className="bg-[#1a1d23] rounded-2xl p-6 border border-white/5">
-          <ScoringRules />
+          <ScoringRules mpoStarters={mpoStarters} fpoStarters={fpoStarters} />
         </div>
       </div>
 

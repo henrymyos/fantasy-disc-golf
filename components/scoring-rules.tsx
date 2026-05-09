@@ -55,7 +55,8 @@ const FPO_TABLE = [
   { pos: "46th+",     pts: 2  },
 ];
 
-export function ScoringRules() {
+export function ScoringRules({ mpoStarters = 4, fpoStarters = 2 }: { mpoStarters?: number; fpoStarters?: number }) {
+  const total = mpoStarters + fpoStarters;
   return (
     <div className="space-y-6">
       {/* Lineup structure */}
@@ -63,15 +64,18 @@ export function ScoringRules() {
         <p className="text-sm text-gray-300 font-medium mb-2">Lineup Structure</p>
         <div className="flex gap-4">
           <div className="flex items-center gap-2">
-            <span className="w-8 h-8 rounded-lg bg-[#4B3DFF]/20 border border-[#4B3DFF]/30 flex items-center justify-center text-sm font-bold text-[#4B3DFF]">4</span>
+            <span className="w-8 h-8 rounded-lg bg-[#4B3DFF]/20 border border-[#4B3DFF]/30 flex items-center justify-center text-sm font-bold text-[#4B3DFF]">{mpoStarters}</span>
             <span className="text-[#4B3DFF] text-sm font-semibold">MPO starters</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-8 h-8 rounded-lg bg-[#36D7B7]/20 border border-[#36D7B7]/30 flex items-center justify-center text-sm font-bold text-[#36D7B7]">2</span>
+            <span className="w-8 h-8 rounded-lg bg-[#36D7B7]/20 border border-[#36D7B7]/30 flex items-center justify-center text-sm font-bold text-[#36D7B7]">{fpoStarters}</span>
             <span className="text-[#36D7B7] text-sm font-semibold">FPO starters</span>
           </div>
+          <div className="flex items-center gap-2 ml-2 pl-2 border-l border-white/10">
+            <span className="text-gray-400 text-sm">{total} total starters</span>
+          </div>
         </div>
-        <p className="text-gray-600 text-xs mt-2">Both divisions calibrated to ~25 pts/starter avg → ~150 pts/team per tournament.</p>
+        <p className="text-gray-600 text-xs mt-2">Both divisions calibrated to ~25 pts/starter avg → ~{total * 25} pts/team per tournament.</p>
       </div>
 
       {/* Bonus points */}

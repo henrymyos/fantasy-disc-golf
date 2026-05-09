@@ -9,7 +9,13 @@
       "WebSearch",
       "WebFetch(domain:www.pdga.com)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:statmando.com)"
+      "WebFetch(domain:statmando.com)",
+      "Bash(git *)",
+      "Bash(awk '/-- Leagues/,/enable row level/' /Users/henrymyos/Desktop/fantasy-disc-golf/supabase-schema.sql)",
+      "WebFetch(domain:www.dgpt.com)",
+      "Bash(npm install *)",
+      "Bash(npx tsx *)",
+      "Bash(npx tsc *)"
     ],
     "additionalDirectories": [
       "/Users/henrymyos/Desktop/fantasy-disc-golf/app/(app)/league/[id]"
