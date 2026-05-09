@@ -1,8 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { toggleStarter } from "@/actions/rosters";
-import { ConfirmDropButton } from "@/components/confirm-drop-button";
-import { LineupSlot } from "@/components/lineup-slot";
+import { LineupSlot, BenchSlot } from "@/components/lineup-slot";
 
 export default async function LineupsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -57,6 +55,10 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
   const mpoBench = bench.filter((r) => (r.players as any)?.division === "MPO");
   const fpoBench = bench.filter((r) => (r.players as any)?.division === "FPO");
 
+  // Slot arrays used by BenchSlot picker: length = N slots, null = empty
+  const mpoSlotArray = Array.from({ length: mpoSlots }, (_, i) => (mpoStarters[i] ?? null) as any);
+  const fpoSlotArray = Array.from({ length: fpoSlots }, (_, i) => (fpoStarters[i] ?? null) as any);
+
   const totalFilledStarters = mpoStarters.length + fpoStarters.length;
   const totalSlots = mpoSlots + fpoSlots;
 
@@ -70,24 +72,26 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
 
         {/* Starter slots */}
         <div className="space-y-2 mb-6">
-          {Array.from({ length: mpoSlots }, (_, i) => (
+          {mpoSlotArray.map((occupant: any, i: number) => (
             <LineupSlot
               key={`mpo-${i}`}
               leagueId={Number(id)}
               division="MPO"
               slotIndex={i + 1}
-              occupant={(mpoStarters[i] ?? null) as any}
+              occupant={occupant}
               benchPlayers={mpoBench as any}
+              otherStarters={mpoStarters.filter((_, j) => j !== i) as any}
             />
           ))}
-          {Array.from({ length: fpoSlots }, (_, i) => (
+          {fpoSlotArray.map((occupant: any, i: number) => (
             <LineupSlot
               key={`fpo-${i}`}
               leagueId={Number(id)}
               division="FPO"
               slotIndex={i + 1}
-              occupant={(fpoStarters[i] ?? null) as any}
+              occupant={occupant}
               benchPlayers={fpoBench as any}
+              otherStarters={fpoStarters.filter((_, j) => j !== i) as any}
             />
           ))}
         </div>
@@ -98,17 +102,13 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
             <h3 className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Bench</h3>
             <div className="space-y-2">
               {bench.map((spot) => {
-                const player = (spot as any).players;
-                const div: "MPO" | "FPO" = player?.division ?? "MPO";
-                const slotsFull = div === "MPO"
-                  ? mpoStarters.length >= mpoSlots
-                  : fpoStarters.length >= fpoSlots;
+                const div = (spot.players as any)?.division ?? "MPO";
                 return (
-                  <BenchRow
+                  <BenchSlot
                     key={spot.id}
-                    spot={spot}
                     leagueId={Number(id)}
-                    slotsFull={slotsFull}
+                    benchSpot={spot as any}
+                    starterSlots={div === "MPO" ? mpoSlotArray : fpoSlotArray}
                   />
                 );
               })}
@@ -121,53 +121,6 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
             No players on your roster yet. Add players in Free Agency.
           </p>
         )}
-      </div>
-    </div>
-  );
-}
-
-function BenchRow({
-  spot,
-  leagueId,
-  slotsFull,
-}: {
-  spot: any;
-  leagueId: number;
-  slotsFull: boolean;
-}) {
-  const player = spot.players;
-  const div: "MPO" | "FPO" = player?.division ?? "MPO";
-  const isMpo = div === "MPO";
-  const color = isMpo ? "#4B3DFF" : "#36D7B7";
-
-  return (
-    <div className="flex items-center gap-3 p-3 rounded-xl bg-[#0f1117] border border-white/5 group">
-      <div
-        className="w-12 shrink-0 text-center text-xs font-bold uppercase tracking-wide py-1 rounded-lg"
-        style={{ color, background: `${color}20` }}
-      >
-        {div}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-white text-sm font-medium truncate">{player?.name}</p>
-      </div>
-      <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition">
-        {!slotsFull && (
-          <form action={toggleStarter.bind(null, leagueId, spot.id, true)}>
-            <button
-              type="submit"
-              className="text-xs font-semibold px-3 py-1 rounded-full border transition"
-              style={{ color, borderColor: `${color}50` }}
-            >
-              Start
-            </button>
-          </form>
-        )}
-        <ConfirmDropButton
-          leagueId={leagueId}
-          playerId={spot.player_id}
-          playerName={player?.name ?? "Player"}
-        />
       </div>
     </div>
   );
