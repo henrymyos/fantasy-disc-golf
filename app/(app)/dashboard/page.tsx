@@ -18,7 +18,65 @@ export default async function DashboardPage() {
     ...m.leagues as unknown as League,
     myTeamName: m.team_name,
     isCommissioner: m.is_commissioner,
+    membershipId: m.league_id,
   }));
+
+  const activeLeagueIds = leagues
+    .filter((l) => l.draft_status === "in_progress" || l.draft_status === "paused")
+    .map((l) => l.id);
+
+  type ActiveDraft = {
+    leagueId: number;
+    leagueName: string;
+    status: string;
+    currentPick: number;
+    totalPicks: number;
+    currentRound: number;
+    onTheClock: string | null;
+    isMyPick: boolean;
+  };
+
+  let activeDrafts: ActiveDraft[] = [];
+
+  if (activeLeagueIds.length > 0) {
+    const [{ data: draftRows }, { data: memberRows }] = await Promise.all([
+      supabase
+        .from("drafts")
+        .select("id, league_id, status, current_pick, total_rounds")
+        .in("status", ["in_progress", "paused"])
+        .in("league_id", activeLeagueIds),
+      supabase
+        .from("league_members")
+        .select("id, team_name, draft_position, user_id, league_id")
+        .in("league_id", activeLeagueIds)
+        .not("draft_position", "is", null),
+    ]);
+
+    activeDrafts = (draftRows ?? []).map((draft) => {
+      const members = (memberRows ?? []).filter((m) => m.league_id === draft.league_id);
+      const numTeams = members.length;
+      const league = leagues.find((l) => l.id === draft.league_id);
+      const myMember = members.find((m) => m.user_id === user.id);
+
+      const pick = draft.current_pick;
+      const round = Math.ceil(pick / numTeams);
+      const posInRound = pick - (round - 1) * numTeams;
+      const isReversed = round % 2 === 0;
+      const draftSlot = isReversed ? numTeams - posInRound + 1 : posInRound;
+      const onClockMember = members.find((m) => m.draft_position === draftSlot);
+
+      return {
+        leagueId: draft.league_id,
+        leagueName: league?.name ?? "",
+        status: draft.status,
+        currentPick: pick,
+        totalPicks: numTeams * draft.total_rounds,
+        currentRound: round,
+        onTheClock: onClockMember?.team_name ?? null,
+        isMyPick: draft.status === "in_progress" && !!myMember && onClockMember?.id === myMember.id,
+      };
+    });
+  }
 
   return (
     <div className="max-w-3xl">
@@ -39,6 +97,60 @@ export default async function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {activeDrafts.length > 0 && (
+        <div className="mb-6 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+            </span>
+            <h2 className="text-white font-semibold text-sm uppercase tracking-wider">Live Draft</h2>
+          </div>
+          {activeDrafts.map((d) => (
+            <Link
+              key={d.leagueId}
+              href={`/league/${d.leagueId}/draft`}
+              className={`block rounded-2xl p-5 border transition group ${
+                d.isMyPick
+                  ? "bg-[#36D7B7]/10 border-[#36D7B7]/40 hover:border-[#36D7B7]/70"
+                  : "bg-[#1a1d23] border-white/5 hover:border-[#4B3DFF]/40"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="text-white font-semibold">{d.leagueName}</h3>
+                    {d.status === "paused" ? (
+                      <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full font-medium">Paused</span>
+                    ) : (
+                      <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full font-medium">Live</span>
+                    )}
+                  </div>
+                  <p className="text-gray-400 text-sm">
+                    Round {d.currentRound} · Pick {d.currentPick} of {d.totalPicks}
+                    {d.status !== "paused" && (
+                      <>
+                        {" · "}
+                        {d.isMyPick ? (
+                          <span className="text-[#36D7B7] font-semibold">YOUR PICK!</span>
+                        ) : (
+                          <span>On the clock: <span className="text-gray-300">{d.onTheClock}</span></span>
+                        )}
+                      </>
+                    )}
+                  </p>
+                </div>
+                <span className={`text-sm font-semibold transition ${
+                  d.isMyPick ? "text-[#36D7B7] group-hover:text-white" : "text-[#4B3DFF] group-hover:text-white"
+                }`}>
+                  {d.isMyPick ? "Pick Now →" : "View Draft →"}
+                </span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
 
       {leagues.length === 0 ? (
         <div className="bg-[#1a1d23] rounded-2xl p-12 border border-white/5 text-center">

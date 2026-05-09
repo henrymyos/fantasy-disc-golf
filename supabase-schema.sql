@@ -400,3 +400,6 @@ alter table players add column if not exists world_ranking int;
 alter table drafts drop constraint if exists drafts_status_check;
 alter table drafts add constraint drafts_status_check
   check (status in ('pending','in_progress','paused','complete'));
+
+-- Migration: add overall draft ranking (MPO+FPO interleaved by draft value)
+alter table players add column if not exists overall_rank int;

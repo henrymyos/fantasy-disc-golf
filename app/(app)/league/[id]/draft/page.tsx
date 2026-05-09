@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { startDraft, pauseDraft, resumeDraft, makeDraftPick } from "@/actions/drafts";
+import { startDraft, pauseDraft, resumeDraft } from "@/actions/drafts";
+import { DraftPlayerList } from "@/components/draft-player-list";
 
 export default async function DraftPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -53,19 +54,9 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
 
   const { data: availablePlayers } = await supabase
     .from("players")
-    .select("id, name, division, world_ranking");
+    .select("id, name, division, world_ranking, overall_rank");
 
-  const available = (availablePlayers ?? [])
-    .filter((p) => !draftedIds.has(p.id))
-    .sort((a, b) => {
-      if (a.division !== b.division) return a.division === "MPO" ? -1 : 1;
-      if (a.world_ranking !== b.world_ranking) {
-        if (a.world_ranking == null) return 1;
-        if (b.world_ranking == null) return -1;
-        return a.world_ranking - b.world_ranking;
-      }
-      return a.name.localeCompare(b.name);
-    });
+  const available = (availablePlayers ?? []).filter((p) => !draftedIds.has(p.id));
 
   const numTeams = members?.length ?? 0;
   let currentPickTeamId: number | null = null;
@@ -153,37 +144,11 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Available players */}
         {(draft?.status === "in_progress" || draft?.status === "paused") && (
-          <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
-            <h3 className="font-semibold text-white mb-4">Available Players ({available.length})</h3>
-            <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-              {available.map((player) => (
-                <div key={player.id} className="flex items-center justify-between p-3 rounded-xl bg-[#0f1117] border border-white/5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-600 text-xs font-mono w-6 text-right shrink-0">
-                      {player.world_ranking != null ? `#${player.world_ranking}` : ""}
-                    </span>
-                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white text-xs font-bold shrink-0">
-                      {player.name[0]?.toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="text-white text-sm font-medium">{player.name}</p>
-                      <p className="text-gray-600 text-xs">{player.division ?? "MPO"}</p>
-                    </div>
-                  </div>
-                  {isMyPick && (
-                    <form action={makeDraftPick.bind(null, Number(id), player.id)}>
-                      <button
-                        type="submit"
-                        className="text-xs bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white px-3 py-1.5 rounded-full transition"
-                      >
-                        Draft
-                      </button>
-                    </form>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
+          <DraftPlayerList
+            leagueId={Number(id)}
+            players={available}
+            isMyPick={isMyPick}
+          />
         )}
 
         {/* Draft board / picks */}
@@ -204,7 +169,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
                       <p className="text-white text-sm font-medium">{pick.players?.name}</p>
                       <p className="text-gray-500 text-xs">{team?.team_name}</p>
                     </div>
-                    <span className="text-gray-600 text-xs">{pick.players?.division}</span>
+                    <span className={`text-xs font-semibold ${pick.players?.division === "MPO" ? "text-[#4B3DFF]" : "text-[#36D7B7]"}`}>{pick.players?.division}</span>
                   </div>
                 );
               })}

@@ -83,7 +83,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
         <div className="grid grid-cols-2 gap-4">
           {[{ label: "MPO", players: mpo }, { label: "FPO", players: fpo }].map(({ label, players }) => (
             <div key={label}>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-1 mb-2">{label}</p>
+              <p className={`text-xs font-semibold uppercase tracking-wider px-1 mb-2 ${label === "MPO" ? "text-[#4B3DFF]" : "text-[#36D7B7]"}`}>{label}</p>
               <div className="space-y-1">
                 {players.map((player) => (
                   <div

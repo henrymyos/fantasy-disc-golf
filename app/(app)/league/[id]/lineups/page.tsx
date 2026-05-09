@@ -122,7 +122,7 @@ function PlayerRow({
         </div>
         <div>
           <p className="text-white text-sm font-medium">{player?.name}</p>
-          <p className="text-gray-600 text-xs">{player?.division ?? "MPO"}</p>
+          <p className={`text-xs font-semibold ${(player?.division ?? "MPO") === "MPO" ? "text-[#4B3DFF]" : "text-[#36D7B7]"}`}>{player?.division ?? "MPO"}</p>
         </div>
       </div>
       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition">

@@ -64,11 +64,11 @@ export function ScoringRules() {
         <div className="flex gap-4">
           <div className="flex items-center gap-2">
             <span className="w-8 h-8 rounded-lg bg-[#4B3DFF]/20 border border-[#4B3DFF]/30 flex items-center justify-center text-sm font-bold text-[#4B3DFF]">4</span>
-            <span className="text-gray-400 text-sm">MPO starters</span>
+            <span className="text-[#4B3DFF] text-sm font-semibold">MPO starters</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-8 h-8 rounded-lg bg-[#36D7B7]/20 border border-[#36D7B7]/30 flex items-center justify-center text-sm font-bold text-[#36D7B7]">2</span>
-            <span className="text-gray-400 text-sm">FPO starters</span>
+            <span className="text-[#36D7B7] text-sm font-semibold">FPO starters</span>
           </div>
         </div>
         <p className="text-gray-600 text-xs mt-2">Both divisions calibrated to ~25 pts/starter avg → ~150 pts/team per tournament.</p>
@@ -103,7 +103,7 @@ export function ScoringRules() {
       {/* Placement tables side by side */}
       <div className="grid grid-cols-2 gap-6">
         <div>
-          <p className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+          <p className="text-sm font-medium text-[#4B3DFF] mb-3 flex items-center gap-2">
             MPO Placement
             <span className="text-xs text-gray-600 font-normal">4 starters</span>
           </p>
