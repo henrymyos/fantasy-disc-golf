@@ -126,7 +126,9 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
     // Pick cells for each team
     members.forEach((m) => {
       const pickNum = getPickNumber(round, m.draftPosition, N);
-      const pickLabel = `${round}.${m.draftPosition}`;
+      const isReversed = round % 2 === 0;
+      const posInRound = isReversed ? N - m.draftPosition + 1 : m.draftPosition;
+      const pickLabel = `${round}.${posInRound}`;
       const pick = pickMap.get(pickNum);
       const isCurrent =
         pickNum === currentPick && (draft?.status === "in_progress" || draft?.status === "paused");
