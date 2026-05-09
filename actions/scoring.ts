@@ -5,15 +5,23 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+// Calibrated so 6 starters in an 8-team snake-draft league average ~150 pts/tournament.
+// Sum of positions 1-48 = 1207, giving 25.1 pts/starter avg.
 const PLACEMENT_POINTS: Record<number, number> = {
-  1: 100, 2: 88, 3: 78, 4: 70, 5: 63, 6: 57, 7: 52,
-  8: 47, 9: 43, 10: 39, 11: 36, 12: 33, 13: 30, 14: 28, 15: 26,
-  16: 24, 17: 22, 18: 20, 19: 18, 20: 16, 21: 15, 22: 14, 23: 13,
-  24: 12, 25: 11, 26: 10, 27: 9, 28: 8, 29: 7, 30: 6,
+  1: 110, 2: 92,  3: 78,  4: 68,  5: 60,  6: 54,  7: 49,  8: 45,  9: 41, 10: 38,
+  11: 35, 12: 32, 13: 30, 14: 28, 15: 26, 16: 24, 17: 23, 18: 21, 19: 20, 20: 19,
+  21: 18, 22: 17, 23: 16, 24: 16, 25: 15, 26: 14, 27: 14, 28: 13, 29: 13, 30: 12,
+  31: 11, 32: 11, 33: 11, 34: 11, 35: 11,
+  36: 10, 37: 10, 38: 10, 39: 10, 40: 10,
+  41: 8,  42: 8,  43: 8,  44: 8,  45: 8,
+  46: 7,  47: 7,  48: 7,  49: 7,  50: 7,
 };
 
 function getPoints(position: number): number {
-  return PLACEMENT_POINTS[position] ?? Math.max(1, 5 - Math.floor((position - 30) / 5));
+  if (position <= 50) return PLACEMENT_POINTS[position];
+  if (position <= 60) return 5;
+  if (position <= 70) return 3;
+  return 2;
 }
 
 export async function createTournament(leagueId: number, name: string, week: number): Promise<void> {
@@ -42,11 +50,26 @@ export async function enterResults(
   const { data: league } = await admin.from("leagues").select("commissioner_id").eq("id", leagueId).single();
   if (!league || league.commissioner_id !== user.id) return;
 
+  // Average points across tied positions so tied players score fairly.
+  const tieGroups = new Map<number, number[]>();
+  results.forEach((r) => {
+    const group = tieGroups.get(r.position) ?? [];
+    group.push(r.playerId);
+    tieGroups.set(r.position, group);
+  });
+
+  const tiedPoints = new Map<number, number>();
+  tieGroups.forEach((playerIds, position) => {
+    const avg =
+      playerIds.reduce((sum, _, i) => sum + getPoints(position + i), 0) / playerIds.length;
+    playerIds.forEach((id) => tiedPoints.set(id, Math.round(avg * 10) / 10));
+  });
+
   const rows = results.map((r) => ({
     tournament_id: tournamentId,
     player_id: r.playerId,
     finishing_position: r.position,
-    fantasy_points: getPoints(r.position),
+    fantasy_points: tiedPoints.get(r.playerId) ?? getPoints(r.position),
   }));
 
   await admin.from("tournament_results").upsert(rows, { onConflict: "tournament_id,player_id" });
