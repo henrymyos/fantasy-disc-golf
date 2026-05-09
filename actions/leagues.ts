@@ -145,6 +145,62 @@ export async function joinLeague(
   redirect(`/league/${league.id}`);
 }
 
+const UpdateLeagueSchema = z.object({
+  name: z.string().min(3).max(50).trim(),
+  maxTeams: z.coerce.number().int().min(2).max(20),
+  rosterSize: z.coerce.number().int().min(5).max(20),
+  startersCount: z.coerce.number().int().min(1).max(20),
+  scoringType: z.enum(["placement", "points"]),
+}).refine((d) => d.startersCount <= d.rosterSize, {
+  message: "Starters cannot exceed roster size",
+  path: ["startersCount"],
+});
+
+export async function updateLeague(
+  leagueId: string,
+  _state: LeagueActionState,
+  formData: FormData
+): Promise<LeagueActionState> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const result = UpdateLeagueSchema.safeParse({
+    name: formData.get("name"),
+    maxTeams: formData.get("maxTeams"),
+    rosterSize: formData.get("rosterSize"),
+    startersCount: formData.get("startersCount"),
+    scoringType: formData.get("scoringType"),
+  });
+
+  if (!result.success) {
+    return { errors: result.error.flatten().fieldErrors };
+  }
+
+  const { name, maxTeams, rosterSize, startersCount, scoringType } = result.data;
+  const admin = createAdminClient();
+
+  const { data: league } = await admin
+    .from("leagues")
+    .select("commissioner_id")
+    .eq("id", leagueId)
+    .single();
+
+  if (!league || league.commissioner_id !== user.id) {
+    return { message: "Not authorized" };
+  }
+
+  const { error } = await admin
+    .from("leagues")
+    .update({ name, max_teams: maxTeams, roster_size: rosterSize, starters_count: startersCount, scoring_type: scoringType })
+    .eq("id", leagueId);
+
+  if (error) return { message: error.message };
+
+  revalidatePath(`/league/${leagueId}`);
+  return { message: "saved" };
+}
+
 export async function deleteLeague(leagueId: string): Promise<void> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
