@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { toggleStarter, dropPlayer } from "@/actions/rosters";
+import { toggleStarter } from "@/actions/rosters";
+import { ConfirmDropButton } from "@/components/confirm-drop-button";
 
 export default async function LineupsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -178,14 +179,11 @@ function SlotRow({
               Bench
             </button>
           </form>
-          <form action={dropPlayer.bind(null, leagueId, spot.player_id)}>
-            <button
-              type="submit"
-              className="text-xs text-red-400 hover:text-red-300 border border-red-400/20 hover:border-red-400/40 px-3 py-1 rounded-full transition"
-            >
-              Drop
-            </button>
-          </form>
+          <ConfirmDropButton
+            leagueId={leagueId}
+            playerId={spot.player_id}
+            playerName={player?.name ?? "Player"}
+          />
         </div>
       )}
     </div>
@@ -229,14 +227,11 @@ function BenchRow({
             </button>
           </form>
         )}
-        <form action={dropPlayer.bind(null, leagueId, spot.player_id)}>
-          <button
-            type="submit"
-            className="text-xs text-red-400 hover:text-red-300 border border-red-400/20 hover:border-red-400/40 px-3 py-1 rounded-full transition"
-          >
-            Drop
-          </button>
-        </form>
+        <ConfirmDropButton
+          leagueId={leagueId}
+          playerId={spot.player_id}
+          playerName={player?.name ?? "Player"}
+        />
       </div>
     </div>
   );
