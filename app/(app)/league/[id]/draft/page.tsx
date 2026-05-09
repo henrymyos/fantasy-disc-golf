@@ -53,10 +53,19 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
 
   const { data: availablePlayers } = await supabase
     .from("players")
-    .select("id, name, division")
-    .order("name");
+    .select("id, name, division, world_ranking");
 
-  const available = (availablePlayers ?? []).filter((p) => !draftedIds.has(p.id));
+  const available = (availablePlayers ?? [])
+    .filter((p) => !draftedIds.has(p.id))
+    .sort((a, b) => {
+      if (a.division !== b.division) return a.division === "MPO" ? -1 : 1;
+      if (a.world_ranking !== b.world_ranking) {
+        if (a.world_ranking == null) return 1;
+        if (b.world_ranking == null) return -1;
+        return a.world_ranking - b.world_ranking;
+      }
+      return a.name.localeCompare(b.name);
+    });
 
   const numTeams = members?.length ?? 0;
   let currentPickTeamId: number | null = null;
@@ -133,7 +142,10 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
               {available.map((player) => (
                 <div key={player.id} className="flex items-center justify-between p-3 rounded-xl bg-[#0f1117] border border-white/5">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white text-xs font-bold">
+                    <span className="text-gray-600 text-xs font-mono w-6 text-right shrink-0">
+                      {player.world_ranking != null ? `#${player.world_ranking}` : ""}
+                    </span>
+                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white text-xs font-bold shrink-0">
                       {player.name[0]?.toUpperCase()}
                     </div>
                     <div>
