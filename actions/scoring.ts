@@ -4,26 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { BONUS_POINTS } from "@/lib/scoring-constants";
-
-// Calibrated so 6 starters in an 8-team snake-draft league average ~150 pts/tournament.
-// Sum of positions 1-48 = 1207, giving 25.1 pts/starter avg.
-const PLACEMENT_POINTS: Record<number, number> = {
-  1: 110, 2: 92,  3: 78,  4: 68,  5: 60,  6: 54,  7: 49,  8: 45,  9: 41, 10: 38,
-  11: 35, 12: 32, 13: 30, 14: 28, 15: 26, 16: 24, 17: 23, 18: 21, 19: 20, 20: 19,
-  21: 18, 22: 17, 23: 16, 24: 16, 25: 15, 26: 14, 27: 14, 28: 13, 29: 13, 30: 12,
-  31: 11, 32: 11, 33: 11, 34: 11, 35: 11,
-  36: 10, 37: 10, 38: 10, 39: 10, 40: 10,
-  41: 8,  42: 8,  43: 8,  44: 8,  45: 8,
-  46: 7,  47: 7,  48: 7,  49: 7,  50: 7,
-};
-
-function getPoints(position: number): number {
-  if (position <= 50) return PLACEMENT_POINTS[position];
-  if (position <= 60) return 5;
-  if (position <= 70) return 3;
-  return 2;
-}
+import { BONUS_POINTS, getPointsForDivision } from "@/lib/scoring-constants";
 
 export async function createTournament(leagueId: number, name: string, week: number): Promise<void> {
   const supabase = await createClient();
@@ -59,26 +40,42 @@ export async function enterResults(
   const { data: league } = await admin.from("leagues").select("commissioner_id").eq("id", leagueId).single();
   if (!league || league.commissioner_id !== user.id) return;
 
-  // Average points across tied positions so tied players score fairly.
-  const tieGroups = new Map<number, number[]>();
+  // Look up each player's division so we use the correct scoring table.
+  const playerIds = results.map((r) => r.playerId);
+  const { data: playerRows } = await admin
+    .from("players")
+    .select("id, division")
+    .in("id", playerIds);
+  const divisionMap = new Map<number, string>(
+    (playerRows ?? []).map((p) => [p.id, p.division ?? "MPO"])
+  );
+
+  // Average points across tied positions within the same division.
+  type TieKey = string; // `${division}:${position}`
+  const tieGroups = new Map<TieKey, number[]>();
   results.forEach((r) => {
-    const group = tieGroups.get(r.position) ?? [];
+    const div = divisionMap.get(r.playerId) ?? "MPO";
+    const key: TieKey = `${div}:${r.position}`;
+    const group = tieGroups.get(key) ?? [];
     group.push(r.playerId);
-    tieGroups.set(r.position, group);
+    tieGroups.set(key, group);
   });
 
   const tiedPoints = new Map<number, number>();
-  tieGroups.forEach((playerIds, position) => {
+  tieGroups.forEach((ids, key) => {
+    const [div, posStr] = key.split(":");
+    const pos = Number(posStr);
     const avg =
-      playerIds.reduce((sum, _, i) => sum + getPoints(position + i), 0) / playerIds.length;
-    playerIds.forEach((id) => tiedPoints.set(id, Math.round(avg * 10) / 10));
+      ids.reduce((sum, _, i) => sum + getPointsForDivision(pos + i, div), 0) / ids.length;
+    ids.forEach((id) => tiedPoints.set(id, Math.round(avg * 10) / 10));
   });
 
   const bonusMap = new Map<number, PlayerBonus>();
   bonuses.forEach((b) => bonusMap.set(b.playerId, b));
 
   const rows = results.map((r) => {
-    const placementPts = tiedPoints.get(r.playerId) ?? getPoints(r.position);
+    const div = divisionMap.get(r.playerId) ?? "MPO";
+    const placementPts = tiedPoints.get(r.playerId) ?? getPointsForDivision(r.position, div);
     const b = bonusMap.get(r.playerId);
     const bonusPts = b
       ? b.hotRoundCount * BONUS_POINTS.hotRound +
