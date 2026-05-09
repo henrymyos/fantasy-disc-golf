@@ -1,4 +1,4 @@
-import { BONUS_POINTS } from "@/actions/scoring";
+import { BONUS_POINTS } from "@/lib/scoring-constants";
 
 const PLACEMENT_TABLE = [
   { pos: "1st",     pts: 110 },

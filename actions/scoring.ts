@@ -4,12 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-
-export const BONUS_POINTS = {
-  hotRound: 10,      // best score in a single round
-  bogeyFree: 5,      // per round with no bogeys
-  ace: 20,           // hole-in-one
-} as const;
+import { BONUS_POINTS } from "@/lib/scoring-constants";
 
 // Calibrated so 6 starters in an 8-team snake-draft league average ~150 pts/tournament.
 // Sum of positions 1-48 = 1207, giving 25.1 pts/starter avg.

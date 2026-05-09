@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { enterResults, BONUS_POINTS } from "@/actions/scoring";
+import { enterResults } from "@/actions/scoring";
+import { BONUS_POINTS } from "@/lib/scoring-constants";
 import type { Player } from "@/types";
 
 type ResultRow = { playerId: number; position: number };
