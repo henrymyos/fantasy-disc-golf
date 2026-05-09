@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { addFreeAgent } from "@/actions/rosters";
+import { AddWithDropModal } from "@/components/add-with-drop-modal";
 
 export default async function FreeAgencyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -57,7 +58,8 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
     .from("rosters")
     .select("player_id, players(id, name, division)")
     .eq("league_id", id)
-    .eq("team_id", myMember.id);
+    .eq("team_id", myMember.id)
+    .order("player_id");
 
   const rosterFull = (myRoster ?? []).length >= league.roster_size;
 
@@ -101,9 +103,9 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
                     </div>
 
                     {rosterFull ? (
-                      <AddWithDropForm
+                      <AddWithDropModal
                         leagueId={Number(id)}
-                        playerId={player.id}
+                        addPlayer={player}
                         myRoster={(myRoster ?? []) as any}
                       />
                     ) : (
@@ -127,42 +129,3 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
   );
 }
 
-function AddWithDropForm({
-  leagueId,
-  playerId,
-  myRoster,
-}: {
-  leagueId: number;
-  playerId: number;
-  myRoster: { player_id: number; players: { id: number; name: string } | null }[];
-}) {
-  return (
-    <form
-      action={async (formData: FormData): Promise<void> => {
-        "use server";
-        const dropId = Number(formData.get("dropPlayerId"));
-        await addFreeAgent(leagueId, playerId, dropId || undefined);
-      }}
-      className="flex items-center gap-2"
-    >
-      <select
-        name="dropPlayerId"
-        required
-        className="bg-[#0f1117] border border-white/10 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none focus:border-[#4B3DFF]"
-      >
-        <option value="">Drop player...</option>
-        {myRoster.map((spot) => (
-          <option key={spot.player_id} value={spot.player_id}>
-            {spot.players?.name}
-          </option>
-        ))}
-      </select>
-      <button
-        type="submit"
-        className="text-xs bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white px-3 py-1.5 rounded-full font-medium transition"
-      >
-        Add / Drop
-      </button>
-    </form>
-  );
-}
