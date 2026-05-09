@@ -61,8 +61,11 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
 
   const rosterFull = (myRoster ?? []).length >= league.roster_size;
 
+  const mpo = freeAgents.filter((p) => p.division === "MPO");
+  const fpo = freeAgents.filter((p) => p.division !== "MPO");
+
   return (
-    <div className="max-w-2xl space-y-4">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-white font-bold">Free Agents ({freeAgents.length})</h2>
         {rosterFull && (
@@ -77,50 +80,47 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
           <p className="text-gray-600 text-sm">All players have been drafted. Check back after trades.</p>
         </div>
       ) : (
-        <div className="space-y-1">
-          {freeAgents.map((player, i) => {
-            const prevDivision = i > 0 ? freeAgents[i - 1].division : null;
-            const showDivider = player.division !== prevDivision;
-            return (
-              <div key={player.id}>
-                {showDivider && (
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-1 pt-3 pb-1">
-                    {player.division}
-                  </p>
-                )}
-                <div className="bg-[#1a1d23] border border-white/5 rounded-xl p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-7 text-right shrink-0">
-                      {player.world_ranking != null ? (
-                        <span className="text-gray-600 text-xs font-mono">#{player.world_ranking}</span>
-                      ) : null}
+        <div className="grid grid-cols-2 gap-4">
+          {[{ label: "MPO", players: mpo }, { label: "FPO", players: fpo }].map(({ label, players }) => (
+            <div key={label}>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-1 mb-2">{label}</p>
+              <div className="space-y-1">
+                {players.map((player) => (
+                  <div
+                    key={player.id}
+                    className="bg-[#1a1d23] border border-white/5 rounded-xl px-3 py-3 flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-gray-600 text-xs font-mono w-6 text-right shrink-0">
+                        {player.world_ranking != null ? `#${player.world_ranking}` : ""}
+                      </span>
+                      <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                        {player.name[0]?.toUpperCase()}
+                      </div>
+                      <p className="text-white font-medium text-sm truncate">{player.name}</p>
                     </div>
-                    <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white text-sm font-bold shrink-0">
-                      {player.name[0]?.toUpperCase()}
-                    </div>
-                    <p className="text-white font-medium text-sm">{player.name}</p>
-                  </div>
 
-                  {rosterFull ? (
-                    <AddWithDropForm
-                      leagueId={Number(id)}
-                      playerId={player.id}
-                      myRoster={(myRoster ?? []) as any}
-                    />
-                  ) : (
-                    <form action={addFreeAgent.bind(null, Number(id), player.id, undefined)}>
-                      <button
-                        type="submit"
-                        className="text-sm bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white px-4 py-1.5 rounded-full font-medium transition"
-                      >
-                        Add
-                      </button>
-                    </form>
-                  )}
-                </div>
+                    {rosterFull ? (
+                      <AddWithDropForm
+                        leagueId={Number(id)}
+                        playerId={player.id}
+                        myRoster={(myRoster ?? []) as any}
+                      />
+                    ) : (
+                      <form action={addFreeAgent.bind(null, Number(id), player.id, undefined)}>
+                        <button
+                          type="submit"
+                          className="text-xs bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white px-3 py-1.5 rounded-full font-medium transition shrink-0 ml-2"
+                        >
+                          Add
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                ))}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       )}
     </div>
