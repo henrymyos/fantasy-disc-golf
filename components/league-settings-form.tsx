@@ -5,16 +5,43 @@ import { updateLeague, type LeagueActionState } from "@/actions/leagues";
 
 const ROSTER_OPTIONS = [6, 8, 10, 12, 15];
 
-const PRESETS = [
-  { mpo: 1, fpo: 1 },
-  { mpo: 2, fpo: 1 },
-  { mpo: 3, fpo: 1 },
-  { mpo: 3, fpo: 2 },
-  { mpo: 4, fpo: 2 },
-  { mpo: 5, fpo: 2 },
-  { mpo: 5, fpo: 3 },
-  { mpo: 6, fpo: 3 },
-];
+function StarterCounter({
+  label,
+  color,
+  name,
+  value,
+  onChange,
+}: {
+  label: string;
+  color: string;
+  name: string;
+  value: number;
+  onChange: (n: number) => void;
+}) {
+  return (
+    <div>
+      <p className={`text-xs font-bold uppercase tracking-wide mb-2`} style={{ color }}>{label}</p>
+      <div className="flex items-center bg-[#0f1117] border border-white/10 rounded-xl px-4 py-3 gap-4">
+        <button
+          type="button"
+          onClick={() => onChange(Math.max(1, value - 1))}
+          className="text-gray-400 hover:text-white text-xl font-bold w-6 text-center transition select-none"
+        >
+          −
+        </button>
+        <span className="text-white text-2xl font-bold flex-1 text-center tabular-nums">{value}</span>
+        <button
+          type="button"
+          onClick={() => onChange(Math.min(10, value + 1))}
+          className="text-gray-400 hover:text-white text-xl font-bold w-6 text-center transition select-none"
+        >
+          +
+        </button>
+      </div>
+      <input type="hidden" name={name} value={value} />
+    </div>
+  );
+}
 
 type Props = {
   leagueId: string;
@@ -80,69 +107,29 @@ export function LeagueSettingsForm({ leagueId, initial }: Props) {
         </div>
       </div>
 
-      {/* Lineup split */}
-      <div>
-        <label className="block text-sm text-gray-400 mb-2">Lineup Split</label>
-        <div className="flex flex-wrap gap-2 mb-3">
-          {PRESETS.map((p) => {
-            const active = p.mpo === mpoStarters && p.fpo === fpoStarters;
-            const recommended = p.mpo === 4 && p.fpo === 2;
-            return (
-              <button
-                key={`${p.mpo}+${p.fpo}`}
-                type="button"
-                onClick={() => { setMpoStarters(p.mpo); setFpoStarters(p.fpo); }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
-                  active
-                    ? "bg-[#4B3DFF] border-[#4B3DFF] text-white"
-                    : "bg-white/5 border-white/10 text-gray-400 hover:text-white hover:border-white/30"
-                }`}
-              >
-                <span className={active ? "text-white" : "text-[#4B3DFF]"}>{p.mpo} MPO</span>
-                <span className="text-gray-500 mx-1">+</span>
-                <span className={active ? "text-white" : "text-[#36D7B7]"}>{p.fpo} FPO</span>
-                {recommended && <span className="ml-1 text-yellow-400">★</span>}
-              </button>
-            );
-          })}
-        </div>
-        <div className="grid grid-cols-3 gap-3 items-end">
-          <div>
-            <label className="block text-xs text-[#4B3DFF] font-semibold mb-1">MPO Starters</label>
-            <input
-              type="number"
-              name="mpoStarters"
-              value={mpoStarters}
-              min={1}
-              max={10}
-              onChange={(e) => setMpoStarters(Math.max(1, Number(e.target.value)))}
-              className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#4B3DFF] transition"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-[#36D7B7] font-semibold mb-1">FPO Starters</label>
-            <input
-              type="number"
-              name="fpoStarters"
-              value={fpoStarters}
-              min={1}
-              max={10}
-              onChange={(e) => setFpoStarters(Math.max(1, Number(e.target.value)))}
-              className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#36D7B7] transition"
-            />
-          </div>
-          <div className="pb-2 text-center">
-            <p className="text-xs text-gray-500 mb-1">Total</p>
-            <p className={`text-lg font-bold ${overRoster ? "text-red-400" : "text-white"}`}>{total}</p>
-          </div>
-        </div>
-        {overRoster && (
-          <p className="text-red-400 text-xs mt-1">Total starters ({total}) exceeds roster size ({rosterSize})</p>
-        )}
-        {state?.errors?.fpoStarters && (
-          <p className="text-red-400 text-xs mt-1">{state.errors.fpoStarters[0]}</p>
-        )}
+      {/* Starters */}
+      <div className="grid grid-cols-2 gap-4">
+        <StarterCounter
+          label="MPO Starters"
+          color="#4B3DFF"
+          name="mpoStarters"
+          value={mpoStarters}
+          onChange={setMpoStarters}
+        />
+        <StarterCounter
+          label="FPO Starters"
+          color="#36D7B7"
+          name="fpoStarters"
+          value={fpoStarters}
+          onChange={setFpoStarters}
+        />
       </div>
+      {overRoster && (
+        <p className="text-red-400 text-xs -mt-2">Total starters ({total}) exceeds roster size ({rosterSize})</p>
+      )}
+      {state?.errors?.fpoStarters && (
+        <p className="text-red-400 text-xs">{state.errors.fpoStarters[0]}</p>
+      )}
 
       {state?.message && !saved && (
         <p className="text-red-400 text-sm bg-red-400/10 rounded-lg px-3 py-2">{state.message}</p>
