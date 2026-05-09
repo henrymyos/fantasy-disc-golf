@@ -395,3 +395,8 @@ alter table tournament_results alter column fantasy_points type decimal(6,1);
 
 -- Migration: add world ranking to players
 alter table players add column if not exists world_ranking int;
+
+-- Migration: allow 'paused' draft status
+alter table drafts drop constraint if exists drafts_status_check;
+alter table drafts add constraint drafts_status_check
+  check (status in ('pending','in_progress','paused','complete'));

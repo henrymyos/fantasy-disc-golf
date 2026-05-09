@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { startDraft, makeDraftPick } from "@/actions/drafts";
+import { startDraft, pauseDraft, resumeDraft, makeDraftPick } from "@/actions/drafts";
 
 export default async function DraftPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -81,7 +81,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
     currentPickTeamId = current?.id ?? null;
   }
 
-  const isMyPick = currentPickTeamId !== null && currentPickTeamId === myMember?.id;
+  const isMyPick = currentPickTeamId !== null && currentPickTeamId === myMember?.id && draft?.status === "in_progress";
 
   return (
     <div className="space-y-6">
@@ -92,6 +92,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
             <h2 className="font-bold text-white text-lg">
               {draft?.status === "pending" && "Draft Not Started"}
               {draft?.status === "in_progress" && `Round ${currentRound} — Pick ${draft.current_pick}`}
+              {draft?.status === "paused" && `Paused — Round ${currentRound}, Pick ${draft?.current_pick}`}
               {draft?.status === "complete" && "Draft Complete"}
             </h2>
             {draft?.status === "in_progress" && (
@@ -101,17 +102,33 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
                   : `On the clock: ${members?.find((m) => m.id === currentPickTeamId)?.team_name}`}
               </p>
             )}
+            {draft?.status === "paused" && (
+              <p className="text-yellow-400 text-sm mt-0.5">Draft is paused by the commissioner</p>
+            )}
           </div>
-          {isCommissioner && draft?.status === "pending" && (
-            <form action={startDraft.bind(null, Number(id))}>
-              <button
-                type="submit"
-                className="bg-[#36D7B7] hover:bg-[#2bc4a6] text-black font-bold px-6 py-2 rounded-lg transition"
-              >
-                Start Draft
-              </button>
-            </form>
-          )}
+          <div className="flex gap-2">
+            {isCommissioner && draft?.status === "pending" && (
+              <form action={startDraft.bind(null, Number(id))}>
+                <button type="submit" className="bg-[#36D7B7] hover:bg-[#2bc4a6] text-black font-bold px-6 py-2 rounded-lg transition">
+                  Start Draft
+                </button>
+              </form>
+            )}
+            {isCommissioner && draft?.status === "in_progress" && (
+              <form action={pauseDraft.bind(null, Number(id))}>
+                <button type="submit" className="border border-yellow-500/40 text-yellow-400 hover:bg-yellow-400/10 font-semibold px-4 py-2 rounded-lg transition text-sm">
+                  Pause Draft
+                </button>
+              </form>
+            )}
+            {isCommissioner && draft?.status === "paused" && (
+              <form action={resumeDraft.bind(null, Number(id))}>
+                <button type="submit" className="bg-[#36D7B7] hover:bg-[#2bc4a6] text-black font-bold px-6 py-2 rounded-lg transition">
+                  Resume Draft
+                </button>
+              </form>
+            )}
+          </div>
         </div>
 
         {/* Draft order */}
@@ -135,7 +152,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Available players */}
-        {draft?.status === "in_progress" && (
+        {(draft?.status === "in_progress" || draft?.status === "paused") && (
           <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
             <h3 className="font-semibold text-white mb-4">Available Players ({available.length})</h3>
             <div className="space-y-2 max-h-96 overflow-y-auto pr-1">

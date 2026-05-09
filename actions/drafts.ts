@@ -45,6 +45,32 @@ export async function startDraft(leagueId: number): Promise<void> {
   revalidatePath(`/league/${leagueId}/draft`);
 }
 
+export async function pauseDraft(leagueId: number): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const admin = createAdminClient();
+  const { data: league } = await admin.from("leagues").select("commissioner_id").eq("id", leagueId).single();
+  if (!league || league.commissioner_id !== user.id) return;
+
+  await admin.from("drafts").update({ status: "paused" }).eq("league_id", leagueId);
+  revalidatePath(`/league/${leagueId}/draft`);
+}
+
+export async function resumeDraft(leagueId: number): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const admin = createAdminClient();
+  const { data: league } = await admin.from("leagues").select("commissioner_id").eq("id", leagueId).single();
+  if (!league || league.commissioner_id !== user.id) return;
+
+  await admin.from("drafts").update({ status: "in_progress" }).eq("league_id", leagueId);
+  revalidatePath(`/league/${leagueId}/draft`);
+}
+
 export async function makeDraftPick(leagueId: number, playerId: number): Promise<void> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
