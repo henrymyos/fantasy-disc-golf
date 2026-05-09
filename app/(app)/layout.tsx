@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/actions/auth";
+import { SidebarNav } from "@/components/sidebar-nav";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -24,32 +25,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </h1>
         </Link>
 
-        <nav className="flex-1 space-y-1">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition text-sm font-medium"
-          >
-            <span className="text-lg">🏠</span> My Leagues
-          </Link>
-          <Link
-            href="/league/new"
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition text-sm font-medium"
-          >
-            <span className="text-lg">+</span> Create League
-          </Link>
-          <Link
-            href="/league/join"
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition text-sm font-medium"
-          >
-            <span className="text-lg">🔗</span> Join League
-          </Link>
-          <Link
-            href="/pro-tour"
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition text-sm font-medium"
-          >
-            <span className="text-lg">🥏</span> Pro Tour
-          </Link>
-        </nav>
+        <SidebarNav />
 
         <div className="border-t border-white/5 pt-4 mt-4">
           <div className="flex items-center gap-3 px-3 py-2 mb-2">

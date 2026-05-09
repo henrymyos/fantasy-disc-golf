@@ -1,15 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-
-const NAV_TABS = [
-  { label: "Dashboard", href: "" },
-  { label: "Matchups", href: "/matchups" },
-  { label: "Lineups", href: "/lineups" },
-  { label: "Free Agency", href: "/free-agency" },
-  { label: "Draft", href: "/draft" },
-  { label: "Trades", href: "/trades" },
-];
+import { LeagueTabNav } from "@/components/league-tab-nav";
 
 export default async function LeagueLayout({
   children,
@@ -72,24 +64,10 @@ export default async function LeagueLayout({
       </div>
 
       {/* Tab nav */}
-      <nav className="flex gap-1 mb-6 border-b border-white/5 pb-0 -mx-0 overflow-x-auto">
-        {NAV_TABS.map((tab) => (
-          <TabLink key={tab.href} href={`${base}${tab.href}`} label={tab.label} />
-        ))}
-      </nav>
+      <LeagueTabNav base={base} />
 
       {children}
     </div>
   );
 }
 
-function TabLink({ href, label }: { href: string; label: string }) {
-  return (
-    <Link
-      href={href}
-      className="px-4 py-2.5 text-sm font-medium text-gray-400 hover:text-white border-b-2 border-transparent hover:border-[#4B3DFF] transition whitespace-nowrap -mb-px"
-    >
-      {label}
-    </Link>
-  );
-}
