@@ -15,7 +15,7 @@ const CreateLeagueSchema = z.object({
   teamName: z.string().min(1, "Team name is required").max(30).trim(),
   maxTeams: z.coerce.number().int().min(2).max(20).default(12),
   rosterSize: z.coerce.number().int().min(5).max(20).default(10),
-  startersCount: z.coerce.number().int().min(1).max(10).default(5),
+  startersCount: z.coerce.number().int().min(1).max(10).default(6),
 });
 
 const JoinLeagueSchema = z.object({

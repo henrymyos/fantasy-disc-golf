@@ -1,11 +1,21 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
 import { createLeague, type LeagueActionState } from "@/actions/leagues";
 
+const ROSTER_OPTIONS = [6, 8, 10, 12, 15];
+const STARTER_OPTIONS = [3, 4, 5, 6, 7, 8, 9, 10];
+
 export default function NewLeaguePage() {
   const [state, action, pending] = useActionState<LeagueActionState, FormData>(createLeague, null);
+  const [rosterSize, setRosterSize] = useState(10);
+  const [startersCount, setStartersCount] = useState(6);
+
+  function handleRosterChange(val: number) {
+    setRosterSize(val);
+    if (startersCount > val) setStartersCount(val);
+  }
 
   return (
     <div className="max-w-lg">
@@ -26,19 +36,35 @@ export default function NewLeaguePage() {
             <div>
               <label className="block text-sm text-gray-400 mb-1">Max Teams</label>
               <select name="maxTeams" defaultValue="8" className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#4B3DFF] transition">
-                {[4,6,8,10,12,14,16].map(n => <option key={n} value={n}>{n}</option>)}
+                {[4,6,8,10,12,14,16].map(n => (
+                  <option key={n} value={n}>{n}{n === 8 ? " ★" : ""}</option>
+                ))}
               </select>
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">Roster Size</label>
-              <select name="rosterSize" defaultValue="10" className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#4B3DFF] transition">
-                {[6,8,10,12,15].map(n => <option key={n} value={n}>{n}</option>)}
+              <select
+                name="rosterSize"
+                value={rosterSize}
+                onChange={(e) => handleRosterChange(Number(e.target.value))}
+                className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#4B3DFF] transition"
+              >
+                {ROSTER_OPTIONS.map(n => (
+                  <option key={n} value={n}>{n}{n === 10 ? " ★" : ""}</option>
+                ))}
               </select>
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">Starters</label>
-              <select name="startersCount" defaultValue="5" className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#4B3DFF] transition">
-                {[3,4,5,6,7].map(n => <option key={n} value={n}>{n}</option>)}
+              <select
+                name="startersCount"
+                value={startersCount}
+                onChange={(e) => setStartersCount(Number(e.target.value))}
+                className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#4B3DFF] transition"
+              >
+                {STARTER_OPTIONS.filter(n => n <= rosterSize).map(n => (
+                  <option key={n} value={n}>{n}{n === 6 ? " ★" : ""}</option>
+                ))}
               </select>
             </div>
           </div>
