@@ -29,6 +29,16 @@ function divColor(division: string) {
   return division === "MPO" ? "text-[#4B3DFF]" : "text-[#36D7B7]";
 }
 
+function divBg(division: string): string {
+  return division === "MPO" ? "rgba(75,61,255,0.32)" : "rgba(54,215,183,0.22)";
+}
+
+function splitName(full: string): { first: string; last: string } {
+  const parts = full.trim().split(" ");
+  if (parts.length === 1) return { first: "", last: parts[0] };
+  return { first: parts.slice(0, -1).join(" "), last: parts[parts.length - 1] };
+}
+
 export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, myMemberId, isCommissioner }: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("all");
@@ -86,14 +96,14 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
     gridCells.push(
       <div
         key={`h-${m.id}`}
-        className={`bg-[#0f1117] px-2 py-2.5 text-center border-b-2 ${isOnClock ? "border-[#36D7B7]" : "border-transparent"}`}
+        className={`px-2 py-3 text-center ${isOnClock ? "bg-[#36D7B7]/15" : "bg-[#0f1117]"}`}
       >
-        <p className={`text-xs font-bold truncate ${isMe ? "text-white" : "text-gray-400"}`}>
-          {m.draftPosition}. {m.teamName}
-          {isMe && <span className="text-gray-600 font-normal"> (you)</span>}
+        <p className={`text-xs font-bold truncate leading-tight ${isMe ? "text-white" : "text-gray-300"}`}>
+          {m.teamName}
         </p>
+        <p className="text-gray-600 text-[10px] mt-0.5">#{m.draftPosition}</p>
         {isOnClock && (
-          <p className="text-[10px] text-[#36D7B7] font-semibold animate-pulse mt-0.5">ON THE CLOCK</p>
+          <p className="text-[10px] text-[#36D7B7] font-semibold animate-pulse mt-1">ON THE CLOCK</p>
         )}
       </div>
     );
@@ -116,38 +126,51 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
     // Pick cells for each team
     members.forEach((m) => {
       const pickNum = getPickNumber(round, m.draftPosition, N);
+      const pickLabel = `${round}.${m.draftPosition}`;
       const pick = pickMap.get(pickNum);
       const isCurrent =
         pickNum === currentPick && (draft?.status === "in_progress" || draft?.status === "paused");
-      const isPast = pickNum < currentPick && draft?.status !== "pending";
 
-      gridCells.push(
-        <div
-          key={`${round}-${m.id}`}
-          className={`relative flex flex-col justify-center px-2 py-2 min-h-[56px] transition-colors ${
-            isCurrent
-              ? "bg-[#36D7B7]/10 ring-2 ring-[#36D7B7] ring-inset"
-              : isPast && !pick
-              ? "bg-[#0f1117]/60"
-              : "bg-[#1a1d23]"
-          }`}
-        >
-          {pick ? (
-            <>
-              <span className={`text-[10px] font-bold ${divColor(pick.playerDivision)}`}>
-                {pick.playerDivision}
-              </span>
-              <span className="text-white text-xs font-medium leading-tight mt-0.5 truncate">
-                {pick.playerName}
-              </span>
-            </>
-          ) : isCurrent ? (
-            <span className="text-[#36D7B7] text-xs text-center animate-pulse">⏳</span>
-          ) : (
-            <span className="text-gray-700 text-[10px] text-center font-mono">{pickNum}</span>
-          )}
-        </div>
-      );
+      if (pick) {
+        const { first, last } = splitName(pick.playerName);
+        gridCells.push(
+          <div
+            key={`${round}-${m.id}`}
+            style={{ background: divBg(pick.playerDivision) }}
+            className="flex flex-col p-2 min-h-[80px]"
+          >
+            <div className="flex justify-between items-center">
+              <span className="text-white/50 text-[10px] font-semibold">{pick.playerDivision}</span>
+              <span className="text-white/40 text-[10px] font-mono">{pickLabel}</span>
+            </div>
+            <div className="flex-1 flex flex-col justify-end mt-1">
+              {first && <p className="text-white/70 text-[11px] leading-tight truncate">{first}</p>}
+              <p className="text-white font-bold text-sm leading-tight truncate">{last}</p>
+            </div>
+          </div>
+        );
+      } else if (isCurrent) {
+        gridCells.push(
+          <div
+            key={`${round}-${m.id}`}
+            className="flex flex-col items-center justify-center p-2 min-h-[80px] bg-[#36D7B7]/10 ring-2 ring-[#36D7B7] ring-inset"
+          >
+            <span className="text-[#36D7B7] text-[10px] font-mono">{pickLabel}</span>
+            <span className="text-[#36D7B7] text-xs font-semibold animate-pulse mt-1">on the clock</span>
+          </div>
+        );
+      } else {
+        gridCells.push(
+          <div
+            key={`${round}-${m.id}`}
+            className="flex flex-col p-2 min-h-[80px] bg-[#1a1d23]"
+          >
+            <div className="flex justify-end">
+              <span className="text-white/20 text-[10px] font-mono">{pickLabel}</span>
+            </div>
+          </div>
+        );
+      }
     });
   }
 
