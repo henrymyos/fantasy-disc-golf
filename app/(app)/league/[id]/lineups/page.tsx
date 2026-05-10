@@ -62,11 +62,11 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
   const mpoSlotArray = Array.from({ length: mpoSlots }, (_, i) => (mpoStarters[i] ?? null) as any);
   const fpoSlotArray = Array.from({ length: fpoSlots }, (_, i) => (fpoStarters[i] ?? null) as any);
 
-  // Other starters for each slot: { spot, slotIndex }[] excluding the slot being edited
-  function otherStartersFor(slotArray: any[], skipIdx: number) {
+  // All other slots for a given index: includes filled starters AND empty slots (null)
+  function otherSlotsFor(slotArray: any[], skipIdx: number) {
     return slotArray
-      .map((spot: any, i: number) => ({ spot, slotIndex: i + 1 }))
-      .filter(({ spot, slotIndex: si }) => spot !== null && si !== skipIdx + 1);
+      .map((spot: any, i: number) => ({ spot: spot as any | null, slotIndex: i + 1 }))
+      .filter(({ slotIndex: si }) => si !== skipIdx + 1);
   }
 
   const totalFilledStarters = mpoStarters.length + fpoStarters.length;
@@ -89,7 +89,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
               slotIndex={i + 1}
               occupant={occupant}
               benchPlayers={mpoBench as any}
-              otherStarters={otherStartersFor(mpoSlotArray, i)}
+              otherStarters={otherSlotsFor(mpoSlotArray, i)}
             />
           ))}
           {fpoSlotArray.map((occupant: any, i: number) => (
@@ -100,7 +100,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
               slotIndex={i + 1}
               occupant={occupant}
               benchPlayers={fpoBench as any}
-              otherStarters={otherStartersFor(fpoSlotArray, i)}
+              otherStarters={otherSlotsFor(fpoSlotArray, i)}
             />
           ))}
         </div>

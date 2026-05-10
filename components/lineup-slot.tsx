@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { swapStarter, swapStarterPositions, toggleStarter } from "@/actions/rosters";
+import { swapStarter, swapStarterPositions, moveStarterToSlot, toggleStarter } from "@/actions/rosters";
 import { ConfirmDropButton } from "@/components/confirm-drop-button";
 
 type RosterSpot = {
@@ -10,7 +10,8 @@ type RosterSpot = {
   players: { name: string; division: string } | null;
 };
 
-type StarterEntry = { spot: RosterSpot; slotIndex: number };
+// spot is null when the slot is empty
+type SlotEntry = { spot: RosterSpot | null; slotIndex: number };
 
 function divColor(div: string) {
   return div === "MPO" ? "#4B3DFF" : "#36D7B7";
@@ -31,7 +32,7 @@ export function LineupSlot({
   slotIndex: number;
   occupant: RosterSpot | null;
   benchPlayers: RosterSpot[];
-  otherStarters: StarterEntry[];
+  otherStarters: SlotEntry[];
 }) {
   const [open, setOpen] = useState(false);
   const color = divColor(division);
@@ -113,34 +114,50 @@ function StarterPickerModal({
   slotIndex: number;
   occupant: RosterSpot | null;
   benchPlayers: RosterSpot[];
-  otherStarters: StarterEntry[];
+  otherStarters: SlotEntry[];
   color: string;
   onClose: () => void;
 }) {
   const [pending, startTransition] = useTransition();
-  const [loadingId, setLoadingId] = useState<number | null>(null);
+  const [loadingKey, setLoadingKey] = useState<string | null>(null);
 
-  function pickStarter(entry: StarterEntry) {
-    // Both are already starters — swap their slot positions, no one gets benched
-    if (!occupant) return;
-    setLoadingId(entry.spot.id);
+  const filledOthers = otherStarters.filter((e) => e.spot !== null) as { spot: RosterSpot; slotIndex: number }[];
+  const emptyOthers  = otherStarters.filter((e) => e.spot === null);
+
+  function pickFilledStarter(entry: { spot: RosterSpot; slotIndex: number }) {
+    setLoadingKey(`s-${entry.spot.id}`);
     startTransition(async () => {
-      await swapStarterPositions(leagueId, occupant.id, slotIndex, entry.spot.id, entry.slotIndex);
+      if (occupant) {
+        // Both filled — swap positions, no one benched
+        await swapStarterPositions(leagueId, occupant.id, slotIndex, entry.spot.id, entry.slotIndex);
+      } else {
+        // Current slot is empty — move the other starter here
+        await moveStarterToSlot(leagueId, entry.spot.id, slotIndex);
+      }
+      onClose();
+    });
+  }
+
+  function pickEmptySlot(targetSlotIndex: number) {
+    if (!occupant) return;
+    setLoadingKey(`e-${targetSlotIndex}`);
+    startTransition(async () => {
+      await moveStarterToSlot(leagueId, occupant.id, targetSlotIndex);
       onClose();
     });
   }
 
   function pickBench(spot: RosterSpot) {
-    // Bench player moves to this slot; current occupant (if any) goes to bench
-    setLoadingId(spot.id);
+    setLoadingKey(`b-${spot.id}`);
     startTransition(async () => {
       await swapStarter(leagueId, spot.id, occupant?.id, slotIndex);
       onClose();
     });
   }
 
-  const hasBench = benchPlayers.length > 0;
-  const hasOtherStarters = otherStarters.length > 0;
+  const hasBench        = benchPlayers.length > 0;
+  const hasFilledOthers = filledOthers.length > 0;
+  const hasEmptyOthers  = emptyOthers.length > 0 && occupant !== null;
 
   return (
     <div
@@ -153,51 +170,74 @@ function StarterPickerModal({
       >
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-white/5">
           <div className="flex items-center gap-2">
-            <span
-              className="text-xs font-bold uppercase px-2 py-0.5 rounded"
-              style={{ color, background: `${color}20` }}
-            >
+            <span className="text-xs font-bold uppercase px-2 py-0.5 rounded" style={{ color, background: `${color}20` }}>
               {division}
             </span>
             <span className="text-white font-bold">Slot {slotIndex}</span>
-            {occupant?.players && (
-              <span className="text-gray-500 text-xs">· {occupant.players.name}</span>
-            )}
+            {occupant?.players && <span className="text-gray-500 text-xs">· {occupant.players.name}</span>}
           </div>
           <button type="button" onClick={onClose} className="text-gray-500 hover:text-white text-xl leading-none transition ml-3">×</button>
         </div>
 
         <div className="px-3 pt-3 pb-4 space-y-4 max-h-[70vh] overflow-y-auto">
-          {/* Other starters — swapping keeps both in the lineup */}
-          {hasOtherStarters && occupant && (
+          {/* Other filled starters */}
+          {hasFilledOthers && (
             <section>
-              <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold px-1 mb-1.5">Swap with starter</p>
+              <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold px-1 mb-1.5">
+                {occupant ? "Swap with starter" : "Move to this slot"}
+              </p>
               <div className="space-y-1.5">
-                {otherStarters.map(({ spot, slotIndex: otherIdx }) => (
+                {filledOthers.map(({ spot, slotIndex: otherIdx }) => (
                   <button
                     key={spot.id}
                     type="button"
-                    onClick={() => pickStarter({ spot, slotIndex: otherIdx })}
+                    onClick={() => pickFilledStarter({ spot, slotIndex: otherIdx })}
                     disabled={pending}
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-[#0f1117] border-white/5 hover:border-white/20 hover:bg-white/5 transition disabled:opacity-50 text-left"
                   >
-                    <span
-                      className="text-xs font-bold uppercase w-10 shrink-0 text-center py-0.5 rounded"
-                      style={{ color, background: `${color}20` }}
-                    >
+                    <span className="text-xs font-bold uppercase w-10 shrink-0 text-center py-0.5 rounded" style={{ color, background: `${color}20` }}>
                       {division}
                     </span>
                     <span className="flex-1 text-sm font-medium text-white truncate">
-                      {loadingId === spot.id ? "Swapping..." : spot.players?.name}
+                      {loadingKey === `s-${spot.id}` ? "Moving..." : spot.players?.name}
                     </span>
-                    <span className="text-xs text-gray-500 shrink-0">Slot {otherIdx} ⇄ {slotIndex}</span>
+                    <span className="text-xs text-gray-500 shrink-0">
+                      {occupant ? `${otherIdx} ⇄ ${slotIndex}` : `Slot ${otherIdx} → ${slotIndex}`}
+                    </span>
                   </button>
                 ))}
               </div>
             </section>
           )}
 
-          {/* Bench players — moving up replaces the current occupant */}
+          {/* Empty slots (only shown when current slot has an occupant to move) */}
+          {hasEmptyOthers && (
+            <section>
+              <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold px-1 mb-1.5">Move to empty slot</p>
+              <div className="space-y-1.5">
+                {emptyOthers.map(({ slotIndex: otherIdx }) => (
+                  <button
+                    key={otherIdx}
+                    type="button"
+                    onClick={() => pickEmptySlot(otherIdx)}
+                    disabled={pending}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-dashed hover:bg-white/5 transition disabled:opacity-50 text-left"
+                    style={{ borderColor: `${color}40` }}
+                  >
+                    <span className="text-xs font-bold uppercase w-10 shrink-0 text-center py-0.5 rounded" style={{ color, background: `${color}20` }}>
+                      {division}
+                    </span>
+                    <span className="flex-1 text-sm italic truncate" style={{ color }}>
+                      {loadingKey === `e-${otherIdx}` ? "Moving..." : "Empty slot"}
+                    </span>
+                    <span className="text-xs text-gray-500 shrink-0">Slot {otherIdx}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Bench players */}
           {hasBench && (
             <section>
               <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold px-1 mb-1.5">
@@ -212,14 +252,11 @@ function StarterPickerModal({
                     disabled={pending}
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-[#0f1117] border-white/5 hover:border-white/20 hover:bg-white/5 transition disabled:opacity-50 text-left"
                   >
-                    <span
-                      className="text-xs font-bold uppercase w-10 shrink-0 text-center py-0.5 rounded"
-                      style={{ color, background: `${color}20` }}
-                    >
+                    <span className="text-xs font-bold uppercase w-10 shrink-0 text-center py-0.5 rounded" style={{ color, background: `${color}20` }}>
                       {division}
                     </span>
                     <span className="flex-1 text-sm font-medium text-white truncate">
-                      {loadingId === spot.id ? "Moving..." : spot.players?.name}
+                      {loadingKey === `b-${spot.id}` ? "Moving..." : spot.players?.name}
                     </span>
                     <span className="text-xs text-gray-500 shrink-0">→ Slot {slotIndex}</span>
                   </button>
@@ -228,7 +265,7 @@ function StarterPickerModal({
             </section>
           )}
 
-          {!hasBench && !hasOtherStarters && (
+          {!hasBench && !hasFilledOthers && !hasEmptyOthers && (
             <p className="text-gray-600 text-sm text-center py-4">
               No {division} players available — visit Free Agency to add more.
             </p>

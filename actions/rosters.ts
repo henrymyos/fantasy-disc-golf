@@ -119,6 +119,41 @@ export async function swapStarterPositions(
   revalidatePath(`/league/${leagueId}/lineups`);
 }
 
+// Move a starter to a different slot (empty or occupied by another starter).
+// Just updates lineup_order — is_starter stays true for this player.
+export async function moveStarterToSlot(
+  leagueId: number,
+  spotId: number,
+  newOrder: number,
+): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const admin = createAdminClient();
+
+  const { data: member } = await admin
+    .from("league_members")
+    .select("id")
+    .eq("league_id", leagueId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (!member) return;
+
+  const { data: spot } = await admin
+    .from("rosters")
+    .select("id, team_id")
+    .eq("id", spotId)
+    .single();
+
+  if (!spot || spot.team_id !== member.id) return;
+
+  await admin.from("rosters").update({ lineup_order: newOrder }).eq("id", spotId);
+
+  revalidatePath(`/league/${leagueId}/lineups`);
+}
+
 export async function addFreeAgent(leagueId: number, playerId: number, dropPlayerId?: number): Promise<void> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
