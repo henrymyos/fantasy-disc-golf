@@ -4,12 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV_TABS = [
-  { label: "Dashboard", href: "" },
-  { label: "Matchups", href: "/matchups" },
+  { label: "League", href: "" },
   { label: "Team", href: "/lineups" },
   { label: "Free Agency", href: "/free-agency" },
   { label: "Draft", href: "/draft" },
-  { label: "Settings", href: "/settings" },
 ];
 
 export function LeagueTabNav({ base, isCommissioner, draftComplete }: { base: string; isCommissioner: boolean; draftComplete?: boolean }) {

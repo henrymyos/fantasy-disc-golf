@@ -28,7 +28,7 @@ export function SidebarNav() {
             }`}
           >
             <span className="w-5 text-base flex items-center justify-center shrink-0">{icon}</span>
-            {label}
+            <span className="hidden lg:block">{label}</span>
           </Link>
         );
       })}

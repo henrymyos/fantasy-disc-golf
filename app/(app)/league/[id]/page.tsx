@@ -114,7 +114,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
         {/* Members */}
         <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
           <h2 className="font-bold text-white mb-4">Teams ({(members ?? []).length})</h2>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {(members ?? []).map((m) => (
               <div key={m.id} className="flex items-center gap-2 py-2 px-3 rounded-lg hover:bg-white/3">
                 <div className="w-7 h-7 rounded-full bg-[#4B3DFF]/40 flex items-center justify-center text-white text-xs font-bold">

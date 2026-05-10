@@ -117,7 +117,7 @@ export default async function ProTourPage() {
             Full rankings →
           </a>
         </div>
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <RankingsList division="MPO" players={MPO_TOP_10} />
           <RankingsList division="FPO" players={FPO_TOP_10} />
         </div>

@@ -17,7 +17,7 @@ export default async function LeagueSettingsPage({
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, name, commissioner_id, max_teams, roster_size, starters_count")
+    .select("id, name, commissioner_id, max_teams, roster_size, starters_count, invite_code")
     .eq("id", id)
     .single();
 
@@ -51,8 +51,21 @@ export default async function LeagueSettingsPage({
     .eq("status", "complete")
     .order("started_at", { ascending: false });
 
+  const inviteCode = (league as any).invite_code as string | null;
+
   return (
     <div className="max-w-xl space-y-8">
+      {inviteCode && (
+        <div>
+          <h2 className="text-white font-bold text-lg mb-5">Invite Code</h2>
+          <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5 flex items-center justify-between gap-4">
+            <span className="text-gray-400 text-sm">Share this code to invite players</span>
+            <span className="font-mono text-white font-bold text-base tracking-widest border border-white/10 rounded-lg px-4 py-2 bg-white/5 select-all">
+              {inviteCode}
+            </span>
+          </div>
+        </div>
+      )}
       <div>
         <h2 className="text-white font-bold text-lg mb-5">League Settings</h2>
         <div className="bg-[#1a1d23] rounded-2xl p-6 border border-white/5">
@@ -81,7 +94,7 @@ export default async function LeagueSettingsPage({
 
       <div>
         <h2 className="text-white font-bold text-lg mb-5">Scoring</h2>
-        <div className="bg-[#1a1d23] rounded-2xl p-6 border border-white/5">
+        <div className="bg-[#1a1d23] rounded-2xl p-4 sm:p-6 border border-white/5">
           <ScoringRules mpoStarters={mpoStarters} fpoStarters={fpoStarters} />
         </div>
       </div>

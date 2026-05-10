@@ -80,7 +80,7 @@ export function ScoringRules({ mpoStarters = 4, fpoStarters = 2 }: { mpoStarters
       {/* Bonus points */}
       <div>
         <p className="text-sm font-medium text-gray-300 mb-3">Bonus Points</p>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 sm:grid-cols-3 gap-2 sm:gap-3">
           <div className="bg-[#0f1117] rounded-xl p-4 border border-white/5 text-center">
             <div className="text-2xl mb-1">🔥</div>
             <div className="text-white font-bold text-xl">+{BONUS_POINTS.hotRound}</div>
@@ -104,31 +104,31 @@ export function ScoringRules({ mpoStarters = 4, fpoStarters = 2 }: { mpoStarters
       </div>
 
       {/* Placement tables side by side */}
-      <div className="grid grid-cols-2 gap-6">
-        <div>
+      <div style={{ display: "flex", flexDirection: "row", gap: "16px" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <p className="text-sm font-medium text-[#4B3DFF] mb-3 flex items-center gap-2">
             MPO Placement
-            <span className="text-xs text-gray-600 font-normal">4 starters</span>
+            <span className="text-xs text-gray-600 font-normal">{mpoStarters} starters</span>
           </p>
           <div className="space-y-0">
             {MPO_TABLE.map(({ pos, pts }) => (
               <div key={pos} className="flex justify-between py-1.5 border-b border-white/5 last:border-0">
-                <span className="text-gray-400 text-sm">{pos}</span>
-                <span className="text-white font-medium text-sm tabular-nums">{pts}</span>
+                <span className="text-gray-400 text-xs">{pos}</span>
+                <span className="text-white font-medium text-xs tabular-nums">{pts}</span>
               </div>
             ))}
           </div>
         </div>
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <p className="text-sm font-medium text-[#36D7B7] mb-3 flex items-center gap-2">
             FPO Placement
-            <span className="text-xs text-gray-600 font-normal">2 starters</span>
+            <span className="text-xs text-gray-600 font-normal">{fpoStarters} starters</span>
           </p>
           <div className="space-y-0">
             {FPO_TABLE.map(({ pos, pts }) => (
               <div key={pos} className="flex justify-between py-1.5 border-b border-white/5 last:border-0">
-                <span className="text-gray-400 text-sm">{pos}</span>
-                <span className="text-[#36D7B7] font-medium text-sm tabular-nums">{pts}</span>
+                <span className="text-gray-400 text-xs">{pos}</span>
+                <span className="text-[#36D7B7] font-medium text-xs tabular-nums">{pts}</span>
               </div>
             ))}
           </div>
