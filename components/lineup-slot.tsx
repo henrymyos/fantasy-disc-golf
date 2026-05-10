@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { swapStarter, swapStarterPositions, moveStarterToSlot, toggleStarter } from "@/actions/rosters";
 import { ConfirmDropButton } from "@/components/confirm-drop-button";
 
@@ -62,7 +63,13 @@ export function LineupSlot({
         </button>
 
         {occupant?.players ? (
-          <p className="flex-1 text-white text-sm font-medium truncate">{occupant.players.name}</p>
+          <Link
+            href={`/league/${leagueId}/player/${occupant.player_id}`}
+            className="flex-1 text-white text-sm font-medium truncate hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {occupant.players.name}
+          </Link>
         ) : (
           <p className="flex-1 text-gray-600 text-sm italic">Empty</p>
         )}
@@ -311,7 +318,13 @@ export function BenchSlot({
           {div}
         </button>
         <div className="flex-1 min-w-0">
-          <p className="text-white text-sm font-medium truncate">{player?.name}</p>
+          <Link
+            href={`/league/${leagueId}/player/${benchSpot.player_id}`}
+            className="text-white text-sm font-medium truncate hover:underline block"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {player?.name}
+          </Link>
         </div>
         <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition">
           {!slotsFull && !locked && (

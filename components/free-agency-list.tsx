@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { AddWithDropModal } from "@/components/add-with-drop-modal";
 
 type Player = {
@@ -99,7 +100,12 @@ export function FreeAgencyList({ leagueId, freeAgents, myRoster, openSpots, over
                 </span>
 
                 {/* Name */}
-                <p className="text-white font-medium text-sm flex-1 min-w-0 truncate">{player.name}</p>
+                <Link
+                  href={`/league/${leagueId}/player/${player.id}`}
+                  className="text-white font-medium text-sm flex-1 min-w-0 truncate hover:underline"
+                >
+                  {player.name}
+                </Link>
 
                 {/* Division badge */}
                 <span
