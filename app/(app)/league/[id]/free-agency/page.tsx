@@ -61,16 +61,30 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
     .eq("team_id", myMember.id)
     .order("player_id");
 
-  const rosterFull = (myRoster ?? []).length >= league.roster_size;
+  const rosterCount = (myRoster ?? []).length;
+  const overLimit = rosterCount > league.roster_size;
+  const rosterFull = rosterCount >= league.roster_size;
 
   const mpo = freeAgents.filter((p) => p.division === "MPO");
   const fpo = freeAgents.filter((p) => p.division !== "MPO");
 
   return (
     <div className="space-y-4">
+      {overLimit && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex items-start gap-3">
+          <span className="text-red-400 text-lg leading-none mt-0.5">⚠</span>
+          <div>
+            <p className="text-red-400 font-semibold text-sm">Roster over limit</p>
+            <p className="text-red-300/80 text-xs mt-0.5">
+              You have {rosterCount} players but the max is {league.roster_size}.
+              Drop {rosterCount - league.roster_size} player{rosterCount - league.roster_size !== 1 ? "s" : ""} before adding anyone new.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <h2 className="text-white font-bold">Free Agents ({freeAgents.length})</h2>
-        {rosterFull && (
+        {rosterFull && !overLimit && (
           <span className="text-yellow-400 text-xs bg-yellow-400/10 px-3 py-1 rounded-full">
             Roster full — pick a player to drop when adding
           </span>
@@ -102,7 +116,9 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
                       <p className="text-white font-medium text-sm truncate">{player.name}</p>
                     </div>
 
-                    {rosterFull ? (
+                    {overLimit ? (
+                      <span className="text-xs text-gray-600 px-3 py-1.5 shrink-0 ml-2">Add</span>
+                    ) : rosterFull ? (
                       <AddWithDropModal
                         leagueId={Number(id)}
                         addPlayer={player}
