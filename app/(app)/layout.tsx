@@ -21,7 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen bg-[#0f1117]">
       {/* Mobile top bar (hidden md+) */}
-      <MobileTopBar username={username} />
+      <MobileTopBar username={username} logoutAction={logout} />
 
       {/* Sidebar (hidden below md) */}
       <aside className="hidden md:flex md:w-14 lg:w-56 bg-[#13151c] border-r border-white/5 flex-col py-6 px-2 lg:px-4 fixed top-0 h-full z-20">
@@ -48,9 +48,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <form action={logout}>
             <button
               type="submit"
-              className="w-full text-left px-1 lg:px-3 py-2 text-sm text-gray-500 hover:text-gray-300 transition rounded-lg hover:bg-white/5 flex items-center gap-3"
+              className="w-full text-left px-1 lg:px-3 py-2 text-sm text-red-400/70 hover:text-red-400 transition rounded-lg hover:bg-red-500/10 flex items-center gap-3"
             >
-              <span className="w-5 text-base flex items-center justify-center shrink-0">↩</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
               <span className="hidden lg:block">Sign out</span>
             </button>
           </form>

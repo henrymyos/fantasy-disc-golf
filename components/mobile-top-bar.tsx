@@ -5,12 +5,10 @@ import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
   { href: "/dashboard", icon: "🏠", label: "Leagues" },
-  { href: "/league/new", icon: "+", label: "Create" },
-  { href: "/league/join", icon: "🔗", label: "Join" },
   { href: "/pro-tour", icon: "🥏", label: "Pro Tour" },
 ];
 
-export function MobileTopBar({ username }: { username: string }) {
+export function MobileTopBar({ username, logoutAction }: { username: string; logoutAction: () => Promise<void> }) {
   const pathname = usePathname();
   return (
     <header className="md:hidden bg-[#13151c] border-b border-white/5 px-4 py-3 flex items-center gap-3 sticky top-0 z-30">
@@ -34,8 +32,18 @@ export function MobileTopBar({ username }: { username: string }) {
           </Link>
         ))}
       </div>
-      <div className="w-7 h-7 rounded-full bg-[#4B3DFF] flex items-center justify-center text-white text-xs font-bold shrink-0">
-        {username?.[0]?.toUpperCase() ?? "?"}
+      <div className="flex items-center gap-2 shrink-0">
+        <div className="w-7 h-7 rounded-full bg-[#4B3DFF] flex items-center justify-center text-white text-xs font-bold">
+          {username?.[0]?.toUpperCase() ?? "?"}
+        </div>
+        <form action={logoutAction}>
+          <button
+            type="submit"
+            className="text-xs text-gray-400 hover:text-white font-medium px-2.5 py-1.5 rounded-lg hover:bg-white/10 transition whitespace-nowrap"
+          >
+            Sign out
+          </button>
+        </form>
       </div>
     </header>
   );
