@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { proposeTrade, respondToTrade, cancelTrade } from "@/actions/trades";
 
@@ -146,7 +147,14 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
         )}
 
         <div>
-          <h2 className="text-white font-bold mb-4">Propose a Trade</h2>
+          <div className="flex items-center gap-3 mb-4">
+            {leagueId && (
+              <Link href={`/league/${leagueId}/lineups`} className="text-gray-400 hover:text-white text-sm transition">
+                ← Back
+              </Link>
+            )}
+            <h2 className="text-white font-bold">Propose a Trade</h2>
+          </div>
           {otherTeams.length === 0 ? (
             <div className="bg-[#1a1d23] rounded-2xl p-12 border border-white/5 text-center">
               <p className="text-gray-600 text-sm">No other teams in this league yet.</p>
