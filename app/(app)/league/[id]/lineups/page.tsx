@@ -34,11 +34,14 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
 
   if (!myMember) redirect("/dashboard");
 
+  // Sort by lineup_order (starters keep their assigned slot), then by id as stable fallback
   const { data: myRoster } = await supabase
     .from("rosters")
-    .select("id, is_starter, player_id, players(id, name, division)")
+    .select("id, is_starter, player_id, lineup_order, players(id, name, division)")
     .eq("league_id", id)
-    .eq("team_id", myMember.id);
+    .eq("team_id", myMember.id)
+    .order("lineup_order", { ascending: true, nullsFirst: false })
+    .order("id", { ascending: true });
 
   const roster = myRoster ?? [];
 
@@ -55,9 +58,16 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
   const mpoBench = bench.filter((r) => (r.players as any)?.division === "MPO");
   const fpoBench = bench.filter((r) => (r.players as any)?.division === "FPO");
 
-  // Slot arrays used by BenchSlot picker: length = N slots, null = empty
+  // Slot arrays: length = N, null = empty slot
   const mpoSlotArray = Array.from({ length: mpoSlots }, (_, i) => (mpoStarters[i] ?? null) as any);
   const fpoSlotArray = Array.from({ length: fpoSlots }, (_, i) => (fpoStarters[i] ?? null) as any);
+
+  // Other starters for each slot: { spot, slotIndex }[] excluding the slot being edited
+  function otherStartersFor(slotArray: any[], skipIdx: number) {
+    return slotArray
+      .map((spot: any, i: number) => ({ spot, slotIndex: i + 1 }))
+      .filter(({ spot, slotIndex: si }) => spot !== null && si !== skipIdx + 1);
+  }
 
   const totalFilledStarters = mpoStarters.length + fpoStarters.length;
   const totalSlots = mpoSlots + fpoSlots;
@@ -70,7 +80,6 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
           <span className="text-gray-500 text-sm">{totalFilledStarters}/{totalSlots} starters</span>
         </div>
 
-        {/* Starter slots */}
         <div className="space-y-2 mb-6">
           {mpoSlotArray.map((occupant: any, i: number) => (
             <LineupSlot
@@ -80,7 +89,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
               slotIndex={i + 1}
               occupant={occupant}
               benchPlayers={mpoBench as any}
-              otherStarters={mpoStarters.filter((_, j) => j !== i) as any}
+              otherStarters={otherStartersFor(mpoSlotArray, i)}
             />
           ))}
           {fpoSlotArray.map((occupant: any, i: number) => (
@@ -91,12 +100,11 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
               slotIndex={i + 1}
               occupant={occupant}
               benchPlayers={fpoBench as any}
-              otherStarters={fpoStarters.filter((_, j) => j !== i) as any}
+              otherStarters={otherStartersFor(fpoSlotArray, i)}
             />
           ))}
         </div>
 
-        {/* Bench */}
         {bench.length > 0 && (
           <>
             <h3 className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Bench</h3>

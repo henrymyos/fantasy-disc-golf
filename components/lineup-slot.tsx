@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { swapStarter, toggleStarter } from "@/actions/rosters";
+import { swapStarter, swapStarterPositions, toggleStarter } from "@/actions/rosters";
 import { ConfirmDropButton } from "@/components/confirm-drop-button";
 
 type RosterSpot = {
@@ -9,6 +9,8 @@ type RosterSpot = {
   player_id: number;
   players: { name: string; division: string } | null;
 };
+
+type StarterEntry = { spot: RosterSpot; slotIndex: number };
 
 function divColor(div: string) {
   return div === "MPO" ? "#4B3DFF" : "#36D7B7";
@@ -29,7 +31,7 @@ export function LineupSlot({
   slotIndex: number;
   occupant: RosterSpot | null;
   benchPlayers: RosterSpot[];
-  otherStarters: RosterSpot[];
+  otherStarters: StarterEntry[];
 }) {
   const [open, setOpen] = useState(false);
   const color = divColor(division);
@@ -111,19 +113,28 @@ function StarterPickerModal({
   slotIndex: number;
   occupant: RosterSpot | null;
   benchPlayers: RosterSpot[];
-  otherStarters: RosterSpot[];
+  otherStarters: StarterEntry[];
   color: string;
   onClose: () => void;
 }) {
   const [pending, startTransition] = useTransition();
   const [loadingId, setLoadingId] = useState<number | null>(null);
 
-  function pick(spot: RosterSpot) {
+  function pickStarter(entry: StarterEntry) {
+    // Both are already starters — swap their slot positions, no one gets benched
+    if (!occupant) return;
+    setLoadingId(entry.spot.id);
+    startTransition(async () => {
+      await swapStarterPositions(leagueId, occupant.id, slotIndex, entry.spot.id, entry.slotIndex);
+      onClose();
+    });
+  }
+
+  function pickBench(spot: RosterSpot) {
+    // Bench player moves to this slot; current occupant (if any) goes to bench
     setLoadingId(spot.id);
     startTransition(async () => {
-      // For bench→slot: bench the occupant, start the bench player
-      // For starter→slot: bench the occupant only (the other starter stays starter)
-      await swapStarter(leagueId, spot.id, occupant?.id);
+      await swapStarter(leagueId, spot.id, occupant?.id, slotIndex);
       onClose();
     });
   }
@@ -140,7 +151,6 @@ function StarterPickerModal({
         className="bg-[#1a1d23] border border-white/10 rounded-2xl w-full max-w-sm shadow-xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-white/5">
           <div className="flex items-center gap-2">
             <span
@@ -158,16 +168,16 @@ function StarterPickerModal({
         </div>
 
         <div className="px-3 pt-3 pb-4 space-y-4 max-h-[70vh] overflow-y-auto">
-          {/* Other starters of same division */}
-          {hasOtherStarters && (
+          {/* Other starters — swapping keeps both in the lineup */}
+          {hasOtherStarters && occupant && (
             <section>
-              <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold px-1 mb-1.5">Starting</p>
+              <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold px-1 mb-1.5">Swap with starter</p>
               <div className="space-y-1.5">
-                {otherStarters.map((spot, i) => (
+                {otherStarters.map(({ spot, slotIndex: otherIdx }) => (
                   <button
                     key={spot.id}
                     type="button"
-                    onClick={() => pick(spot)}
+                    onClick={() => pickStarter({ spot, slotIndex: otherIdx })}
                     disabled={pending}
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-[#0f1117] border-white/5 hover:border-white/20 hover:bg-white/5 transition disabled:opacity-50 text-left"
                   >
@@ -178,25 +188,27 @@ function StarterPickerModal({
                       {division}
                     </span>
                     <span className="flex-1 text-sm font-medium text-white truncate">
-                      {loadingId === spot.id ? "Moving..." : spot.players?.name}
+                      {loadingId === spot.id ? "Swapping..." : spot.players?.name}
                     </span>
-                    <span className="text-xs text-gray-500 shrink-0">Slot {slotIndex <= i + 1 ? i + 2 : i + 1}</span>
+                    <span className="text-xs text-gray-500 shrink-0">Slot {otherIdx} ⇄ {slotIndex}</span>
                   </button>
                 ))}
               </div>
             </section>
           )}
 
-          {/* Bench players */}
-          {hasBench ? (
+          {/* Bench players — moving up replaces the current occupant */}
+          {hasBench && (
             <section>
-              <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold px-1 mb-1.5">Bench</p>
+              <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold px-1 mb-1.5">
+                {occupant ? "Move from bench" : "Available"}
+              </p>
               <div className="space-y-1.5">
                 {benchPlayers.map((spot) => (
                   <button
                     key={spot.id}
                     type="button"
-                    onClick={() => pick(spot)}
+                    onClick={() => pickBench(spot)}
                     disabled={pending}
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-[#0f1117] border-white/5 hover:border-white/20 hover:bg-white/5 transition disabled:opacity-50 text-left"
                   >
@@ -214,11 +226,13 @@ function StarterPickerModal({
                 ))}
               </div>
             </section>
-          ) : !hasOtherStarters ? (
+          )}
+
+          {!hasBench && !hasOtherStarters && (
             <p className="text-gray-600 text-sm text-center py-4">
               No {division} players available — visit Free Agency to add more.
             </p>
-          ) : null}
+          )}
         </div>
       </div>
     </div>
@@ -310,7 +324,8 @@ function BenchPickerModal({
   function pickSlot(slotIdx: number, occupant: RosterSpot | null) {
     setLoadingIdx(slotIdx);
     startTransition(async () => {
-      await swapStarter(leagueId, benchSpot.id, occupant?.id ?? undefined);
+      // slotIdx is 0-based here; pass 1-based as newOrder
+      await swapStarter(leagueId, benchSpot.id, occupant?.id ?? undefined, slotIdx + 1);
       onClose();
     });
   }
@@ -324,7 +339,6 @@ function BenchPickerModal({
         className="bg-[#1a1d23] border border-white/10 rounded-2xl w-full max-w-sm shadow-xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header — show who's being moved */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-white/5">
           <div>
             <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-1">Moving to lineup</p>
@@ -341,7 +355,6 @@ function BenchPickerModal({
           <button type="button" onClick={onClose} className="text-gray-500 hover:text-white text-xl leading-none transition ml-3">×</button>
         </div>
 
-        {/* Starter slots */}
         <div className="px-3 pt-3 pb-4 space-y-1.5 max-h-72 overflow-y-auto">
           <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold px-1 mb-1.5">Choose a slot</p>
           {starterSlots.map((occupant, i) => {
@@ -366,7 +379,7 @@ function BenchPickerModal({
                   {div}
                 </span>
                 <span className="flex-1 text-sm font-medium truncate" style={{ color: occupant ? undefined : color }}>
-                  {isLoading ? "Moving..." : occupant ? occupant.players?.name : "Empty slot"}
+                  {isLoading ? "Moving..." : occupant ? (occupant as any).players?.name : "Empty slot"}
                 </span>
                 <span className="text-xs text-gray-500 shrink-0">Slot {i + 1}</span>
               </button>

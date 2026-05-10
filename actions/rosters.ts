@@ -29,15 +29,21 @@ export async function toggleStarter(leagueId: number, rosterSpotId: number, isSt
 
   if (!spot || spot.team_id !== member.id) return;
 
-  await admin.from("rosters").update({ is_starter: isStarter }).eq("id", rosterSpotId);
+  await admin
+    .from("rosters")
+    .update({ is_starter: isStarter, lineup_order: isStarter ? null : null })
+    .eq("id", rosterSpotId);
 
   revalidatePath(`/league/${leagueId}/lineups`);
 }
 
+// Move a bench player into a starter slot, optionally displacing the current occupant.
+// newOrder: the 1-based slot index the new starter is taking.
 export async function swapStarter(
   leagueId: number,
   newStarterSpotId: number,
   displacedSpotId?: number,
+  newOrder?: number,
 ): Promise<void> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -54,7 +60,6 @@ export async function swapStarter(
 
   if (!member) return;
 
-  // Verify ownership of both spots
   const ids = [newStarterSpotId, ...(displacedSpotId ? [displacedSpotId] : [])];
   const { data: spots } = await admin
     .from("rosters")
@@ -64,9 +69,52 @@ export async function swapStarter(
   if (!spots || spots.some((s) => s.team_id !== member.id)) return;
 
   if (displacedSpotId) {
-    await admin.from("rosters").update({ is_starter: false }).eq("id", displacedSpotId);
+    await admin
+      .from("rosters")
+      .update({ is_starter: false, lineup_order: null })
+      .eq("id", displacedSpotId);
   }
-  await admin.from("rosters").update({ is_starter: true }).eq("id", newStarterSpotId);
+  await admin
+    .from("rosters")
+    .update({ is_starter: true, lineup_order: newOrder ?? null })
+    .eq("id", newStarterSpotId);
+
+  revalidatePath(`/league/${leagueId}/lineups`);
+}
+
+// Swap the slot positions of two existing starters — neither is benched.
+export async function swapStarterPositions(
+  leagueId: number,
+  spotAId: number,
+  orderA: number,
+  spotBId: number,
+  orderB: number,
+): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const admin = createAdminClient();
+
+  const { data: member } = await admin
+    .from("league_members")
+    .select("id")
+    .eq("league_id", leagueId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (!member) return;
+
+  const { data: spots } = await admin
+    .from("rosters")
+    .select("id, team_id")
+    .in("id", [spotAId, spotBId]);
+
+  if (!spots || spots.some((s) => s.team_id !== member.id)) return;
+
+  // Exchange lineup_order — both stay as starters
+  await admin.from("rosters").update({ lineup_order: orderB }).eq("id", spotAId);
+  await admin.from("rosters").update({ lineup_order: orderA }).eq("id", spotBId);
 
   revalidatePath(`/league/${leagueId}/lineups`);
 }
