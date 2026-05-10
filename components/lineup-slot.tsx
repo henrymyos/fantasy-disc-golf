@@ -26,6 +26,7 @@ export function LineupSlot({
   occupant,
   benchPlayers,
   otherStarters,
+  locked = false,
 }: {
   leagueId: number;
   division: "MPO" | "FPO";
@@ -33,6 +34,7 @@ export function LineupSlot({
   occupant: RosterSpot | null;
   benchPlayers: RosterSpot[];
   otherStarters: SlotEntry[];
+  locked?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const color = divColor(division);
@@ -51,8 +53,9 @@ export function LineupSlot({
       >
         <button
           type="button"
-          onClick={() => setOpen(true)}
-          className="w-12 shrink-0 text-center text-xs font-bold uppercase tracking-wide py-1 rounded-lg transition hover:opacity-80 active:scale-95"
+          onClick={() => !locked && setOpen(true)}
+          disabled={locked}
+          className="w-12 shrink-0 text-center text-xs font-bold uppercase tracking-wide py-1 rounded-lg transition hover:opacity-80 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ color, background: `${color}20` }}
         >
           {division}
@@ -282,10 +285,12 @@ export function BenchSlot({
   leagueId,
   benchSpot,
   starterSlots,
+  locked = false,
 }: {
   leagueId: number;
   benchSpot: RosterSpot;
   starterSlots: (RosterSpot | null)[];
+  locked?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const player = benchSpot.players;
@@ -298,8 +303,9 @@ export function BenchSlot({
       <div className="flex items-center gap-3 p-3 rounded-xl bg-[#0f1117] border border-white/5 group">
         <button
           type="button"
-          onClick={() => setOpen(true)}
-          className="w-12 shrink-0 text-center text-xs font-bold uppercase tracking-wide py-1 rounded-lg transition hover:opacity-80 active:scale-95"
+          onClick={() => !locked && setOpen(true)}
+          disabled={locked}
+          className="w-12 shrink-0 text-center text-xs font-bold uppercase tracking-wide py-1 rounded-lg transition hover:opacity-80 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ color, background: `${color}20` }}
         >
           {div}
@@ -308,7 +314,7 @@ export function BenchSlot({
           <p className="text-white text-sm font-medium truncate">{player?.name}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition">
-          {!slotsFull && (
+          {!slotsFull && !locked && (
             <form action={toggleStarter.bind(null, leagueId, benchSpot.id, true)}>
               <button
                 type="submit"

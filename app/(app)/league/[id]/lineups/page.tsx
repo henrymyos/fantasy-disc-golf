@@ -86,9 +86,24 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
 
   const totalFilledStarters = mpoSlotArray.filter(Boolean).length + fpoSlotArray.filter(Boolean).length;
   const totalSlots = mpoSlots + fpoSlots;
+  const overRoster = roster.length > league.roster_size;
+  const toDrop = roster.length - league.roster_size;
 
   return (
     <div className="max-w-2xl space-y-6">
+      {overRoster && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex items-start gap-3">
+          <span className="text-red-400 text-lg leading-none mt-0.5">⚠</span>
+          <div>
+            <p className="text-red-400 font-semibold text-sm">Roster over limit</p>
+            <p className="text-red-300/80 text-xs mt-0.5">
+              You have {roster.length} players but the max is {league.roster_size}.
+              Drop {toDrop} player{toDrop !== 1 ? "s" : ""} to unlock lineup changes.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
         <div className="flex items-center justify-between mb-5">
           <h2 className="font-bold text-white text-lg">{myMember.team_name}</h2>
@@ -105,6 +120,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
               occupant={occupant}
               benchPlayers={mpoBench as any}
               otherStarters={otherSlotsFor(mpoSlotArray, i)}
+              locked={overRoster}
             />
           ))}
           {fpoSlotArray.map((occupant: any, i: number) => (
@@ -116,6 +132,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
               occupant={occupant}
               benchPlayers={fpoBench as any}
               otherStarters={otherSlotsFor(fpoSlotArray, i)}
+              locked={overRoster}
             />
           ))}
         </div>
@@ -132,6 +149,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
                     leagueId={Number(id)}
                     benchSpot={spot as any}
                     starterSlots={div === "MPO" ? mpoSlotArray : fpoSlotArray}
+                    locked={overRoster}
                   />
                 );
               })}
