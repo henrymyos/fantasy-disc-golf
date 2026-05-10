@@ -45,22 +45,37 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
 
   const roster = myRoster ?? [];
 
-  const mpoStarters = roster
-    .filter((r) => r.is_starter && (r.players as any)?.division === "MPO")
-    .slice(0, mpoSlots);
-  const fpoStarters = roster
-    .filter((r) => r.is_starter && (r.players as any)?.division === "FPO")
-    .slice(0, fpoSlots);
+  // Build a slot array that respects lineup_order:
+  // starters with a valid lineup_order go to that exact slot; the rest fill remaining slots in id order.
+  function buildSlotArray(starters: any[], numSlots: number): (any | null)[] {
+    const result: (any | null)[] = new Array(numSlots).fill(null);
+    const unordered: any[] = [];
+    for (const s of starters) {
+      const o = (s as any).lineup_order;
+      if (o != null && o >= 1 && o <= numSlots && result[o - 1] === null) {
+        result[o - 1] = s;
+      } else {
+        unordered.push(s);
+      }
+    }
+    let ui = 0;
+    for (let i = 0; i < numSlots && ui < unordered.length; i++) {
+      if (result[i] === null) result[i] = unordered[ui++];
+    }
+    return result;
+  }
 
-  const starterIds = new Set([...mpoStarters, ...fpoStarters].map((r) => r.id));
+  const allMpoStarters = roster.filter((r) => r.is_starter && (r.players as any)?.division === "MPO");
+  const allFpoStarters = roster.filter((r) => r.is_starter && (r.players as any)?.division === "FPO");
+
+  const mpoSlotArray = buildSlotArray(allMpoStarters, mpoSlots);
+  const fpoSlotArray = buildSlotArray(allFpoStarters, fpoSlots);
+
+  const starterIds = new Set([...mpoSlotArray, ...fpoSlotArray].filter(Boolean).map((r: any) => r.id));
   const bench = roster.filter((r) => !starterIds.has(r.id));
 
   const mpoBench = bench.filter((r) => (r.players as any)?.division === "MPO");
   const fpoBench = bench.filter((r) => (r.players as any)?.division === "FPO");
-
-  // Slot arrays: length = N, null = empty slot
-  const mpoSlotArray = Array.from({ length: mpoSlots }, (_, i) => (mpoStarters[i] ?? null) as any);
-  const fpoSlotArray = Array.from({ length: fpoSlots }, (_, i) => (fpoStarters[i] ?? null) as any);
 
   // All other slots for a given index: includes filled starters AND empty slots (null)
   function otherSlotsFor(slotArray: any[], skipIdx: number) {
@@ -69,7 +84,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
       .filter(({ slotIndex: si }) => si !== skipIdx + 1);
   }
 
-  const totalFilledStarters = mpoStarters.length + fpoStarters.length;
+  const totalFilledStarters = mpoSlotArray.filter(Boolean).length + fpoSlotArray.filter(Boolean).length;
   const totalSlots = mpoSlots + fpoSlots;
 
   return (
