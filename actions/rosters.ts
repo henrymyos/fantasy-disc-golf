@@ -211,6 +211,14 @@ export async function addFreeAgent(leagueId: number, playerId: number, dropPlaye
     acquired_week: league.current_week,
   });
 
+  await admin.from("roster_transactions").insert({
+    league_id: leagueId,
+    team_id: member.id,
+    player_id: playerId,
+    action: "add",
+    dropped_player_id: dropPlayerId ?? null,
+  });
+
   revalidatePath(`/league/${leagueId}/free-agency`);
   revalidatePath(`/league/${leagueId}/lineups`);
 }
@@ -237,6 +245,8 @@ export async function dropPlayer(leagueId: number, playerId: number): Promise<vo
     .eq("league_id", leagueId)
     .eq("team_id", member.id)
     .eq("player_id", playerId);
+
+  await admin.from("roster_transactions").insert({ league_id: leagueId, team_id: member.id, player_id: playerId, action: "drop" });
 
   revalidatePath(`/league/${leagueId}/free-agency`);
   revalidatePath(`/league/${leagueId}/lineups`);

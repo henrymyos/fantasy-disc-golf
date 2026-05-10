@@ -12,19 +12,23 @@ export function AddWithDropModal({
   leagueId,
   addPlayer,
   myRoster,
+  openSpots,
 }: {
   leagueId: number;
   addPlayer: { id: number; name: string; division: string };
   myRoster: RosterPlayer[];
+  openSpots: number;
 }) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
   const [pending, startTransition] = useTransition();
 
+  const rosterFull = openSpots === 0;
+
   function handleConfirm() {
-    if (selected == null) return;
+    if (rosterFull && selected == null) return;
     startTransition(async () => {
-      await addFreeAgent(leagueId, addPlayer.id, selected);
+      await addFreeAgent(leagueId, addPlayer.id, selected ?? undefined);
       setOpen(false);
       setSelected(null);
     });
@@ -64,7 +68,13 @@ export function AddWithDropModal({
                 </span>
                 <p className="text-white font-bold text-base">{addPlayer.name}</p>
               </div>
-              <p className="text-gray-500 text-xs mt-2">Your roster is full. Pick a player to drop.</p>
+              {rosterFull ? (
+                <p className="text-gray-500 text-xs mt-2">Your roster is full. Pick a player to drop.</p>
+              ) : (
+                <p className="text-[#36D7B7] text-xs font-medium mt-2 bg-[#36D7B7]/10 border border-[#36D7B7]/20 rounded-lg px-3 py-1.5">
+                  You have {openSpots} open spot{openSpots !== 1 ? "s" : ""}. Optionally drop a player.
+                </p>
+              )}
             </div>
 
             {/* Roster list */}
@@ -115,7 +125,7 @@ export function AddWithDropModal({
               <button
                 type="button"
                 onClick={handleConfirm}
-                disabled={selected == null || pending}
+                disabled={(rosterFull && selected == null) || pending}
                 className="flex-1 bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-40"
               >
                 {pending ? "Adding..." : "Confirm"}

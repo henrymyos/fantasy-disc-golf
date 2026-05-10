@@ -75,7 +75,6 @@ export function ScoringRules({ mpoStarters = 4, fpoStarters = 2 }: { mpoStarters
             <span className="text-gray-400 text-sm">{total} total starters</span>
           </div>
         </div>
-        <p className="text-gray-600 text-xs mt-2">Both divisions calibrated to ~25 pts/starter avg → ~{total * 25} pts/team per tournament.</p>
       </div>
 
       {/* Bonus points */}

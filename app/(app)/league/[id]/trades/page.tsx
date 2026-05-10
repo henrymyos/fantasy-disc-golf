@@ -1,22 +1,26 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { proposeTrade, respondToTrade, cancelTrade } from "@/actions/trades";
 
+type Player = { id: number; name: string; division: string; worldRanking: number | null };
+type Team = { id: number; teamName: string; roster: Player[] };
+type Step = "teams" | "players" | "review";
+
 export default function TradesPage({ params }: { params: Promise<{ id: string }> }) {
   const [leagueId, setLeagueId] = useState<number | null>(null);
-  const [trades, setTrades] = useState<any[]>([]);
-  const [myTeam, setMyTeam] = useState<any>(null);
-  const [myRoster, setMyRoster] = useState<any[]>([]);
-  const [teams, setTeams] = useState<any[]>([]);
-  const [showForm, setShowForm] = useState(false);
-  const [selectedTeam, setSelectedTeam] = useState<number | null>(null);
-  const [theirRoster, setTheirRoster] = useState<any[]>([]);
-  const [offerIds, setOfferIds] = useState<number[]>([]);
-  const [requestIds, setRequestIds] = useState<number[]>([]);
-  const [message, setMessage] = useState("");
+  const [myTeam, setMyTeam] = useState<Team | null>(null);
+  const [otherTeams, setOtherTeams] = useState<Team[]>([]);
+  const [pendingTrades, setPendingTrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [step, setStep] = useState<Step>("teams");
+  const [tradingWith, setTradingWith] = useState<Team | null>(null);
+  const [offerIds, setOfferIds] = useState<Set<number>>(new Set());
+  const [requestIds, setRequestIds] = useState<Set<number>>(new Set());
+  const [message, setMessage] = useState("");
+  const [submitting, startSubmitTransition] = useTransition();
 
   useEffect(() => {
     params.then(({ id }) => {
@@ -30,21 +34,42 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const [{ data: members }, { data: myMember }] = await Promise.all([
-      supabase.from("league_members").select("id, team_name, user_id").eq("league_id", lid),
-      supabase.from("league_members").select("id, team_name").eq("league_id", lid).eq("user_id", user.id).single(),
-    ]);
-
-    setMyTeam(myMember);
-    setTeams((members ?? []).filter((m) => m.id !== myMember?.id));
-
-    const { data: roster } = await supabase
-      .from("rosters")
-      .select("player_id, players(id, name, division)")
+    const { data: myMember } = await supabase
+      .from("league_members")
+      .select("id, team_name")
       .eq("league_id", lid)
-      .eq("team_id", myMember?.id ?? 0);
+      .eq("user_id", user.id)
+      .single();
+    if (!myMember) return;
 
-    setMyRoster(roster ?? []);
+    const { data: members } = await supabase
+      .from("league_members")
+      .select("id, team_name")
+      .eq("league_id", lid);
+
+    const { data: allRosters } = await supabase
+      .from("rosters")
+      .select("team_id, player_id, players(id, name, division, world_ranking)")
+      .eq("league_id", lid);
+
+    function buildTeam(m: { id: number; team_name: string }): Team {
+      const spots = (allRosters ?? []).filter((r) => r.team_id === m.id);
+      const roster: Player[] = spots
+        .map((s: any) => ({
+          id: s.players.id,
+          name: s.players.name,
+          division: s.players.division,
+          worldRanking: s.players.world_ranking,
+        }))
+        .sort((a, b) => {
+          if (a.division !== b.division) return a.division === "MPO" ? -1 : 1;
+          return (a.worldRanking ?? 9999) - (b.worldRanking ?? 9999);
+        });
+      return { id: m.id, teamName: m.team_name, roster };
+    }
+
+    setMyTeam(buildTeam(myMember));
+    setOtherTeams((members ?? []).filter((m) => m.id !== myMember.id).map(buildTeam));
 
     const { data: tradeData } = await supabase
       .from("trades")
@@ -52,195 +77,399 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
         id, status, message, proposed_at,
         proposer:league_members!trades_proposer_id_fkey(id, team_name),
         receiver:league_members!trades_receiver_id_fkey(id, team_name),
-        trade_players(player_id, from_team_id, to_team_id, players(name))
+        trade_players(player_id, from_team_id, to_team_id, players(name, division))
       `)
       .eq("league_id", lid)
-      .in("status", ["pending"])
+      .eq("status", "pending")
       .order("proposed_at", { ascending: false });
-
-    setTrades(tradeData ?? []);
+    setPendingTrades(tradeData ?? []);
     setLoading(false);
   }
 
-  async function loadTheirRoster(teamId: number) {
-    if (!leagueId) return;
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("rosters")
-      .select("player_id, players(id, name, division)")
-      .eq("league_id", leagueId)
-      .eq("team_id", teamId);
-    setTheirRoster(data ?? []);
+  function toggleOffer(id: number) {
+    setOfferIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  function toggleRequest(id: number) {
+    setRequestIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+
+  function goToTeam(team: Team) {
+    setTradingWith(team);
+    setOfferIds(new Set());
+    setRequestIds(new Set());
+    setMessage("");
+    setStep("players");
+  }
+
+  function handleSend() {
+    if (!leagueId || !tradingWith || offerIds.size === 0 || requestIds.size === 0) return;
+    startSubmitTransition(async () => {
+      await proposeTrade(leagueId, tradingWith.id, [...offerIds], [...requestIds], message);
+      setStep("teams");
+      setTradingWith(null);
+      setOfferIds(new Set());
+      setRequestIds(new Set());
+      setMessage("");
+      load(leagueId);
+    });
+  }
+
+  async function handleRespond(tradeId: number, accept: boolean) {
+    await respondToTrade(tradeId, accept);
+    if (leagueId) load(leagueId);
+  }
+
+  async function handleCancel(tradeId: number) {
+    await cancelTrade(tradeId);
+    if (leagueId) load(leagueId);
   }
 
   if (loading) return <div className="text-gray-500 text-sm">Loading...</div>;
 
-  return (
-    <div className="max-w-2xl space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-white font-bold">Trades</h2>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
-        >
-          {showForm ? "Cancel" : "Propose Trade"}
-        </button>
-      </div>
-
-      {/* Trade form */}
-      {showForm && (
-        <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5 space-y-4">
-          <h3 className="font-semibold text-white">New Trade Proposal</h3>
-
-          <div>
-            <label className="text-xs text-gray-400 mb-1 block">Trade with</label>
-            <select
-              className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#4B3DFF]"
-              value={selectedTeam ?? ""}
-              onChange={(e) => {
-                const tid = Number(e.target.value);
-                setSelectedTeam(tid);
-                setOfferIds([]);
-                setRequestIds([]);
-                loadTheirRoster(tid);
-              }}
-            >
-              <option value="">Select a team...</option>
-              {teams.map((t) => <option key={t.id} value={t.id}>{t.team_name}</option>)}
-            </select>
+  // ── Step: teams ──────────────────────────────────────────────────
+  if (step === "teams") {
+    return (
+      <div className="max-w-2xl space-y-6">
+        {pendingTrades.length > 0 && (
+          <div className="space-y-3">
+            <h2 className="text-white font-bold">Pending Trades</h2>
+            {pendingTrades.map((trade) => (
+              <PendingTradeCard
+                key={trade.id}
+                trade={trade}
+                myTeamId={myTeam?.id ?? 0}
+                onRespond={handleRespond}
+                onCancel={handleCancel}
+              />
+            ))}
           </div>
+        )}
 
-          {selectedTeam && (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-gray-400 mb-2">You offer:</p>
-                <div className="space-y-1">
-                  {myRoster.map((spot) => (
-                    <label key={spot.player_id} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={offerIds.includes(spot.player_id)}
-                        onChange={(e) => setOfferIds(e.target.checked
-                          ? [...offerIds, spot.player_id]
-                          : offerIds.filter((id) => id !== spot.player_id)
-                        )}
-                        className="rounded accent-[#4B3DFF]"
-                      />
-                      <span className="text-sm text-white">{spot.players?.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="text-xs text-gray-400 mb-2">You want:</p>
-                <div className="space-y-1">
-                  {theirRoster.map((spot) => (
-                    <label key={spot.player_id} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={requestIds.includes(spot.player_id)}
-                        onChange={(e) => setRequestIds(e.target.checked
-                          ? [...requestIds, spot.player_id]
-                          : requestIds.filter((id) => id !== spot.player_id)
-                        )}
-                        className="rounded accent-[#4B3DFF]"
-                      />
-                      <span className="text-sm text-white">{spot.players?.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+        <div>
+          <h2 className="text-white font-bold mb-4">Propose a Trade</h2>
+          {otherTeams.length === 0 ? (
+            <div className="bg-[#1a1d23] rounded-2xl p-12 border border-white/5 text-center">
+              <p className="text-gray-600 text-sm">No other teams in this league yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {otherTeams.map((team) => (
+                <button
+                  key={team.id}
+                  onClick={() => goToTeam(team)}
+                  className="w-full bg-[#1a1d23] hover:bg-[#23262e] border border-white/5 hover:border-white/10 rounded-2xl p-4 text-left transition"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-white font-semibold">{team.teamName}</p>
+                    <span className="text-gray-500 text-xs">{team.roster.length} players →</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {team.roster.slice(0, 7).map((p) => {
+                      const isMpo = p.division === "MPO";
+                      return (
+                        <span
+                          key={p.id}
+                          className="text-xs px-2 py-0.5 rounded-md font-medium"
+                          style={{
+                            background: isMpo ? "rgba(75,61,255,0.18)" : "rgba(54,215,183,0.15)",
+                            color: isMpo ? "#a09aff" : "#36D7B7",
+                          }}
+                        >
+                          {p.name.split(" ").pop()}
+                        </span>
+                      );
+                    })}
+                    {team.roster.length > 7 && (
+                      <span className="text-xs text-gray-600">+{team.roster.length - 7}</span>
+                    )}
+                  </div>
+                </button>
+              ))}
             </div>
           )}
+        </div>
+      </div>
+    );
+  }
 
+  if (!myTeam || !tradingWith) return null;
+
+  // ── Step: players ────────────────────────────────────────────────
+  if (step === "players") {
+    const canView = offerIds.size > 0 && requestIds.size > 0;
+
+    return (
+      <div className="max-w-2xl pb-24">
+        <div className="flex items-center gap-3 mb-5">
+          <button onClick={() => setStep("teams")} className="text-gray-400 hover:text-white text-sm transition">
+            ← Back
+          </button>
+          <h2 className="text-white font-bold">Propose a Trade</h2>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          {/* My column */}
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Message (optional)</label>
-            <input
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white placeholder-gray-600 focus:outline-none focus:border-[#4B3DFF]"
-              placeholder="Let's make a deal..."
-            />
+            <p className="text-white font-semibold text-sm mb-3 truncate">{myTeam.teamName}</p>
+            <div className="space-y-2">
+              {myTeam.roster.map((p) => (
+                <PlayerCard key={p.id} player={p} selected={offerIds.has(p.id)} onToggle={() => toggleOffer(p.id)} />
+              ))}
+              {myTeam.roster.length === 0 && (
+                <p className="text-gray-600 text-xs">No players on roster</p>
+              )}
+            </div>
           </div>
 
+          {/* Their column */}
+          <div>
+            <p className="text-white font-semibold text-sm mb-3 truncate">{tradingWith.teamName}</p>
+            <div className="space-y-2">
+              {tradingWith.roster.map((p) => (
+                <PlayerCard key={p.id} player={p} selected={requestIds.has(p.id)} onToggle={() => toggleRequest(p.id)} />
+              ))}
+              {tradingWith.roster.length === 0 && (
+                <p className="text-gray-600 text-xs">No players on roster</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Sticky footer */}
+        <div className="fixed bottom-0 left-56 right-0 z-40 bg-[#0f1117]/95 backdrop-blur-sm border-t border-white/5 px-6 py-4">
+          <div className="max-w-2xl flex items-center justify-between">
+            <div>
+              <p className="text-white font-semibold text-sm">Trade Proposal</p>
+              {(offerIds.size > 0 || requestIds.size > 0) && (
+                <p className="text-gray-500 text-xs mt-0.5">
+                  {offerIds.size} offering · {requestIds.size} requesting
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => setStep("review")}
+              disabled={!canView}
+              className="bg-[#36D7B7] hover:bg-[#2bc4a6] disabled:opacity-30 text-black font-bold px-7 py-2.5 rounded-full text-sm tracking-wide transition"
+            >
+              VIEW PROPOSAL
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Step: review ─────────────────────────────────────────────────
+  const iOffer = myTeam.roster.filter((p) => offerIds.has(p.id));
+  const iRequest = tradingWith.roster.filter((p) => requestIds.has(p.id));
+
+  return (
+    <div className="max-w-2xl space-y-4">
+      <div className="flex items-center gap-3">
+        <button onClick={() => setStep("players")} className="text-gray-400 hover:text-white text-sm transition">
+          ← Back
+        </button>
+        <h2 className="text-white font-bold">Trade Proposal</h2>
+        <span className="bg-[#36D7B7] text-black text-xs font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0">
+          {offerIds.size + requestIds.size}
+        </span>
+      </div>
+
+      {/* My team */}
+      <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
+        <p className="text-white font-semibold mb-4">{myTeam.teamName}</p>
+        <div className="grid grid-cols-2 gap-5">
+          <div>
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-3">Receives</p>
+            <div className="space-y-3">
+              {iRequest.map((p) => <ReviewPlayer key={p.id} player={p} />)}
+            </div>
+          </div>
+          <div>
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-3">Sends</p>
+            <div className="space-y-3">
+              {iOffer.map((p) => <ReviewPlayer key={p.id} player={p} />)}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Their team */}
+      <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
+        <p className="text-white font-semibold mb-4">{tradingWith.teamName}</p>
+        <div className="grid grid-cols-2 gap-5">
+          <div>
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-3">Receives</p>
+            <div className="space-y-3">
+              {iOffer.map((p) => <ReviewPlayer key={p.id} player={p} />)}
+            </div>
+          </div>
+          <div>
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-3">Sends</p>
+            <div className="space-y-3">
+              {iRequest.map((p) => <ReviewPlayer key={p.id} player={p} />)}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Message */}
+      <input
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        placeholder="Add a message (optional)"
+        className="w-full bg-[#1a1d23] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-[#4B3DFF] text-sm"
+      />
+
+      <button
+        onClick={handleSend}
+        disabled={submitting}
+        className="w-full bg-[#36D7B7] hover:bg-[#2bc4a6] disabled:opacity-40 text-black font-black py-4 rounded-2xl text-sm tracking-widest transition"
+      >
+        {submitting ? "Sending..." : "SEND TRADE PROPOSAL"}
+      </button>
+    </div>
+  );
+}
+
+// ── Sub-components ───────────────────────────────────────────────────
+
+function PlayerCard({ player, selected, onToggle }: { player: Player; selected: boolean; onToggle: () => void }) {
+  const isMpo = player.division === "MPO";
+  const accent = isMpo ? "#4B3DFF" : "#36D7B7";
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`w-full text-left rounded-xl overflow-hidden border transition ${
+        selected
+          ? "border-[#36D7B7]/50 ring-1 ring-[#36D7B7]/20"
+          : "border-white/5 hover:border-white/15"
+      }`}
+    >
+      {/* Colored header band */}
+      <div
+        className="px-3 py-1.5 flex items-center justify-between"
+        style={{ background: `${accent}28` }}
+      >
+        <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: accent }}>
+          {player.division}
+        </span>
+        <div
+          className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition"
+          style={
+            selected
+              ? { borderColor: "#36D7B7", background: "#36D7B7" }
+              : { borderColor: "rgba(255,255,255,0.25)", background: "transparent" }
+          }
+        >
+          {selected && (
+            <svg className="w-2.5 h-2.5" viewBox="0 0 10 10" fill="none">
+              <path d="M2 5l2.5 2.5L8 3" stroke="#000" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </div>
+      </div>
+      {/* Player info */}
+      <div className="bg-[#1a1d23] px-3 py-2">
+        <p className="text-white font-semibold text-sm leading-tight truncate">{player.name}</p>
+        {player.worldRanking != null && (
+          <p className="text-gray-600 text-xs mt-0.5">#{player.worldRanking}</p>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function ReviewPlayer({ player }: { player: Player }) {
+  const isMpo = player.division === "MPO";
+  const color = isMpo ? "#a09aff" : "#36D7B7";
+  return (
+    <div className="flex items-center gap-2.5">
+      <div
+        className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+        style={{ background: isMpo ? "rgba(75,61,255,0.25)" : "rgba(54,215,183,0.2)" }}
+      >
+        {player.name[0]?.toUpperCase()}
+      </div>
+      <div className="min-w-0">
+        <p className="text-white text-sm font-medium leading-tight truncate">{player.name}</p>
+        <p className="text-xs font-semibold" style={{ color }}>{player.division}</p>
+      </div>
+    </div>
+  );
+}
+
+function PendingTradeCard({
+  trade,
+  myTeamId,
+  onRespond,
+  onCancel,
+}: {
+  trade: any;
+  myTeamId: number;
+  onRespond: (id: number, accept: boolean) => void;
+  onCancel: (id: number) => void;
+}) {
+  const isReceiver = trade.receiver?.id === myTeamId;
+  const isProposer = trade.proposer?.id === myTeamId;
+  const toMe = (trade.trade_players ?? []).filter((tp: any) => tp.to_team_id === myTeamId);
+  const fromMe = (trade.trade_players ?? []).filter((tp: any) => tp.from_team_id === myTeamId);
+
+  return (
+    <div className="bg-[#1a1d23] rounded-2xl p-5 border border-[#4B3DFF]/25">
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <p className="text-white text-sm font-medium">
+            {trade.proposer?.team_name} → {trade.receiver?.team_name}
+          </p>
+          {trade.message && <p className="text-gray-500 text-xs mt-0.5">"{trade.message}"</p>}
+        </div>
+        <span className="text-xs text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full shrink-0 ml-3">Pending</span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 text-xs mb-4">
+        <div>
+          <p className="text-gray-500 font-semibold mb-1">You receive</p>
+          {toMe.map((tp: any) => (
+            <p key={tp.player_id} className="text-white">{tp.players?.name}</p>
+          ))}
+        </div>
+        <div>
+          <p className="text-gray-500 font-semibold mb-1">You give up</p>
+          {fromMe.map((tp: any) => (
+            <p key={tp.player_id} className="text-white">{tp.players?.name}</p>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        {isReceiver && (
+          <>
+            <button
+              onClick={() => onRespond(trade.id, true)}
+              className="text-xs bg-[#36D7B7] hover:bg-[#2bc4a6] text-black font-semibold px-4 py-1.5 rounded-full transition"
+            >
+              Accept
+            </button>
+            <button
+              onClick={() => onRespond(trade.id, false)}
+              className="text-xs border border-red-400/30 text-red-400 hover:border-red-400/60 px-4 py-1.5 rounded-full transition"
+            >
+              Reject
+            </button>
+          </>
+        )}
+        {isProposer && (
           <button
-            onClick={async () => {
-              if (!leagueId || !selectedTeam || offerIds.length === 0 || requestIds.length === 0) return;
-              await proposeTrade(leagueId, selectedTeam, offerIds, requestIds, message);
-              setShowForm(false);
-              if (leagueId) load(leagueId);
-            }}
-            className="w-full bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white font-semibold py-2.5 rounded-lg transition"
+            onClick={() => onCancel(trade.id)}
+            className="text-xs border border-white/10 text-gray-400 hover:text-white px-4 py-1.5 rounded-full transition"
           >
-            Send Trade Proposal
+            Cancel
           </button>
-        </div>
-      )}
-
-      {/* Pending trades */}
-      {trades.length === 0 ? (
-        <div className="bg-[#1a1d23] rounded-2xl p-12 border border-white/5 text-center">
-          <p className="text-gray-600 text-sm">No pending trades</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {trades.map((trade) => {
-            const isProposer = trade.proposer?.id === myTeam?.id;
-            const isReceiver = trade.receiver?.id === myTeam?.id;
-            const toMe = trade.trade_players?.filter((tp: any) => tp.to_team_id === myTeam?.id);
-            const fromMe = trade.trade_players?.filter((tp: any) => tp.from_team_id === myTeam?.id);
-
-            return (
-              <div key={trade.id} className="bg-[#1a1d23] rounded-2xl p-5 border border-[#4B3DFF]/30">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <p className="text-white text-sm font-medium">
-                      {trade.proposer?.team_name} → {trade.receiver?.team_name}
-                    </p>
-                    {trade.message && <p className="text-gray-500 text-xs mt-0.5">"{trade.message}"</p>}
-                  </div>
-                  <span className="text-xs text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full">Pending</span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 text-xs text-gray-400 mb-4">
-                  <div>
-                    <p className="font-medium text-gray-300 mb-1">You receive:</p>
-                    {(toMe ?? []).map((tp: any) => <p key={tp.player_id}>{tp.players?.name}</p>)}
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-300 mb-1">You give up:</p>
-                    {(fromMe ?? []).map((tp: any) => <p key={tp.player_id}>{tp.players?.name}</p>)}
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  {isReceiver && (
-                    <>
-                      <form action={respondToTrade.bind(null, trade.id, true)}>
-                        <button type="submit" className="text-xs bg-[#36D7B7] hover:bg-[#2bc4a6] text-black font-semibold px-4 py-1.5 rounded-full transition">
-                          Accept
-                        </button>
-                      </form>
-                      <form action={respondToTrade.bind(null, trade.id, false)}>
-                        <button type="submit" className="text-xs border border-red-400/30 text-red-400 hover:border-red-400/60 px-4 py-1.5 rounded-full transition">
-                          Reject
-                        </button>
-                      </form>
-                    </>
-                  )}
-                  {isProposer && (
-                    <form action={cancelTrade.bind(null, trade.id)}>
-                      <button type="submit" className="text-xs border border-white/10 text-gray-400 hover:text-white px-4 py-1.5 rounded-full transition">
-                        Cancel
-                      </button>
-                    </form>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

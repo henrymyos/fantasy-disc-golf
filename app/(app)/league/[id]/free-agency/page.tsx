@@ -1,6 +1,5 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { addFreeAgent } from "@/actions/rosters";
 import { AddWithDropModal } from "@/components/add-with-drop-modal";
 
 export default async function FreeAgencyPage({ params }: { params: Promise<{ id: string }> }) {
@@ -63,7 +62,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
 
   const rosterCount = (myRoster ?? []).length;
   const overLimit = rosterCount > league.roster_size;
-  const rosterFull = rosterCount >= league.roster_size;
+  const openSpots = Math.max(0, league.roster_size - rosterCount);
 
   const mpo = freeAgents.filter((p) => p.division === "MPO");
   const fpo = freeAgents.filter((p) => p.division !== "MPO");
@@ -84,9 +83,14 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
       )}
       <div className="flex items-center justify-between">
         <h2 className="text-white font-bold">Free Agents ({freeAgents.length})</h2>
-        {rosterFull && !overLimit && (
+        {!overLimit && openSpots === 0 && (
           <span className="text-yellow-400 text-xs bg-yellow-400/10 px-3 py-1 rounded-full">
             Roster full — pick a player to drop when adding
+          </span>
+        )}
+        {!overLimit && openSpots > 0 && (
+          <span className="text-gray-400 text-xs bg-white/5 px-3 py-1 rounded-full">
+            {openSpots} open spot{openSpots !== 1 ? "s" : ""}
           </span>
         )}
       </div>
@@ -118,21 +122,13 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
 
                     {overLimit ? (
                       <span className="text-xs text-gray-600 px-3 py-1.5 shrink-0 ml-2">Add</span>
-                    ) : rosterFull ? (
+                    ) : (
                       <AddWithDropModal
                         leagueId={Number(id)}
                         addPlayer={player}
                         myRoster={(myRoster ?? []) as any}
+                        openSpots={openSpots}
                       />
-                    ) : (
-                      <form action={addFreeAgent.bind(null, Number(id), player.id, undefined)}>
-                        <button
-                          type="submit"
-                          className="text-xs bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white px-3 py-1.5 rounded-full font-medium transition shrink-0 ml-2"
-                        >
-                          Add
-                        </button>
-                      </form>
                     )}
                   </div>
                 ))}

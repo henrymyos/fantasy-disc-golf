@@ -6,19 +6,16 @@ import { usePathname } from "next/navigation";
 const NAV_TABS = [
   { label: "Dashboard", href: "" },
   { label: "Matchups", href: "/matchups" },
-  { label: "Lineups", href: "/lineups" },
+  { label: "Team", href: "/lineups" },
   { label: "Free Agency", href: "/free-agency" },
   { label: "Draft", href: "/draft" },
-  { label: "Trades", href: "/trades" },
+  { label: "Settings", href: "/settings" },
 ];
 
-export function LeagueTabNav({ base, isCommissioner }: { base: string; isCommissioner: boolean }) {
+export function LeagueTabNav({ base, isCommissioner, draftComplete }: { base: string; isCommissioner: boolean; draftComplete?: boolean }) {
   const pathname = usePathname();
 
-  const tabs = [
-    ...NAV_TABS,
-    ...(isCommissioner ? [{ label: "Settings", href: "/settings" }] : []),
-  ];
+  const tabs = NAV_TABS.filter((t) => !(t.href === "/draft" && draftComplete));
 
   return (
     <nav className="flex gap-1 mb-6 border-b border-white/5 pb-0 -mx-0 overflow-x-auto">

@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { deleteLeague } from "@/actions/leagues";
 import { LeagueSettingsForm } from "@/components/league-settings-form";
@@ -43,6 +44,13 @@ export default async function LeagueSettingsPage({
   const mpoStarters: number = (divData as any)?.mpo_starters ?? 4;
   const fpoStarters: number = (divData as any)?.fpo_starters ?? 2;
 
+  const { data: completedDrafts } = await supabase
+    .from("drafts")
+    .select("id, total_rounds, started_at")
+    .eq("league_id", id)
+    .eq("status", "complete")
+    .order("started_at", { ascending: false });
+
   return (
     <div className="max-w-xl space-y-8">
       <div>
@@ -77,6 +85,32 @@ export default async function LeagueSettingsPage({
           <ScoringRules mpoStarters={mpoStarters} fpoStarters={fpoStarters} />
         </div>
       </div>
+
+      {completedDrafts && completedDrafts.length > 0 && (
+        <div>
+          <h2 className="text-white font-bold text-lg mb-5">Draft Results</h2>
+          <div className="bg-[#1a1d23] rounded-2xl border border-white/5 overflow-hidden">
+            {completedDrafts.map((d, i) => {
+              const date = d.started_at
+                ? new Date(d.started_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                : "Draft";
+              return (
+                <Link
+                  key={d.id}
+                  href={`/league/${id}/draft/${d.id}`}
+                  className={`flex items-center justify-between px-5 py-4 hover:bg-white/5 transition ${i !== 0 ? "border-t border-white/5" : ""}`}
+                >
+                  <div>
+                    <p className="text-white font-medium text-sm">{date}</p>
+                    <p className="text-gray-500 text-xs mt-0.5">{d.total_rounds} rounds</p>
+                  </div>
+                  <span className="text-gray-600 text-sm">→</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {isCommissioner && (
         <div className="border border-red-500/30 rounded-xl p-5 bg-red-500/5">

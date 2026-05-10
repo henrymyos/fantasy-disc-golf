@@ -34,6 +34,13 @@ export default async function LeagueLayout({
     redirect("/dashboard");
   }
 
+  const { data: draft } = await supabase
+    .from("drafts")
+    .select("status")
+    .eq("league_id", id)
+    .single();
+
+  const draftComplete = draft?.status === "complete";
   const base = `/league/${id}`;
 
   return (
@@ -41,10 +48,6 @@ export default async function LeagueLayout({
       {/* League header */}
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="text-gray-600 hover:text-gray-400 transition text-sm">
-            ← Leagues
-          </Link>
-          <span className="text-gray-700">/</span>
           <h1 className="text-white font-bold text-xl">{league.name}</h1>
         </div>
         <div className="flex items-center gap-3 text-xs text-gray-500">
@@ -64,7 +67,7 @@ export default async function LeagueLayout({
       </div>
 
       {/* Tab nav */}
-      <LeagueTabNav base={base} isCommissioner={!!membership.is_commissioner} />
+      <LeagueTabNav base={base} isCommissioner={!!membership.is_commissioner} draftComplete={draftComplete} />
 
       {children}
     </div>

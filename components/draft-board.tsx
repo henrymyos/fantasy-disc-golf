@@ -18,6 +18,7 @@ type Props = {
   availablePlayers: AvailablePlayer[];
   myMemberId: number | null;
   isCommissioner: boolean;
+  readOnly?: boolean;
 };
 
 function getPickNumber(round: number, draftPosition: number, numTeams: number): number {
@@ -39,18 +40,18 @@ function splitName(full: string): { first: string; last: string } {
   return { first: parts.slice(0, -1).join(" "), last: parts[parts.length - 1] };
 }
 
-export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, myMemberId, isCommissioner }: Props) {
+export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, myMemberId, isCommissioner, readOnly }: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("all");
   const [search, setSearch] = useState("");
   const [, startTransition] = useTransition();
 
-  // Poll when draft is live
+  // Poll when draft is live (skip in read-only view)
   useEffect(() => {
-    if (draft?.status !== "in_progress") return;
+    if (readOnly || draft?.status !== "in_progress") return;
     const id = setInterval(() => router.refresh(), 5000);
     return () => clearInterval(id);
-  }, [draft?.status, router]);
+  }, [readOnly, draft?.status, router]);
 
   const N = members.length;
   const totalRounds = draft?.totalRounds ?? 0;
@@ -200,29 +201,31 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
             </span>
           )}
         </div>
-        <div className="flex gap-2">
-          {isCommissioner && draft?.status === "pending" && (
-            <form action={startDraft.bind(null, leagueId)}>
-              <button className="bg-[#36D7B7] hover:bg-[#2bc4a6] text-black font-bold px-5 py-1.5 rounded-lg text-sm transition">
-                Start Draft
-              </button>
-            </form>
-          )}
-          {isCommissioner && draft?.status === "in_progress" && (
-            <form action={pauseDraft.bind(null, leagueId)}>
-              <button className="border border-yellow-500/40 text-yellow-400 hover:bg-yellow-400/10 px-4 py-1.5 rounded-lg text-sm font-semibold transition">
-                Pause
-              </button>
-            </form>
-          )}
-          {isCommissioner && draft?.status === "paused" && (
-            <form action={resumeDraft.bind(null, leagueId)}>
-              <button className="bg-[#36D7B7] hover:bg-[#2bc4a6] text-black font-bold px-5 py-1.5 rounded-lg text-sm transition">
-                Resume
-              </button>
-            </form>
-          )}
-        </div>
+        {!readOnly && (
+          <div className="flex gap-2">
+            {isCommissioner && draft?.status === "pending" && (
+              <form action={startDraft.bind(null, leagueId)}>
+                <button className="bg-[#36D7B7] hover:bg-[#2bc4a6] text-black font-bold px-5 py-1.5 rounded-lg text-sm transition">
+                  Start Draft
+                </button>
+              </form>
+            )}
+            {isCommissioner && draft?.status === "in_progress" && (
+              <form action={pauseDraft.bind(null, leagueId)}>
+                <button className="border border-yellow-500/40 text-yellow-400 hover:bg-yellow-400/10 px-4 py-1.5 rounded-lg text-sm font-semibold transition">
+                  Pause
+                </button>
+              </form>
+            )}
+            {isCommissioner && draft?.status === "paused" && (
+              <form action={resumeDraft.bind(null, leagueId)}>
+                <button className="bg-[#36D7B7] hover:bg-[#2bc4a6] text-black font-bold px-5 py-1.5 rounded-lg text-sm transition">
+                  Resume
+                </button>
+              </form>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Board grid */}
@@ -246,7 +249,7 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
       </div>
 
       {/* Player picker */}
-      {drafted && (
+      {drafted && !readOnly && (
         <div className="shrink-0 mt-2 rounded-xl border border-white/5 bg-[#1a1d23] flex flex-col" style={{ height: "240px" }}>
           {/* Picker header */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 shrink-0">
