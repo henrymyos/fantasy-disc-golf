@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { LeagueMember, Matchup } from "@/types";
 
@@ -110,6 +111,27 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
             </div>
           )}
         </div>
+
+        {/* Mock Draft */}
+        <Link
+          href={`/league/${id}/mock-draft`}
+          className="block bg-[#1a1d23] rounded-2xl p-5 border border-white/5 hover:border-[#4B3DFF]/40 hover:bg-[#1a1d23]/80 transition"
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-[#4B3DFF]/20 border border-[#4B3DFF]/30 flex items-center justify-center text-xl shrink-0">
+                🎯
+              </div>
+              <div className="min-w-0">
+                <p className="text-white font-bold text-sm">Mock Draft</p>
+                <p className="text-gray-500 text-xs mt-0.5">
+                  Practice against bots — pick your draft position and go
+                </p>
+              </div>
+            </div>
+            <span className="text-gray-600 text-lg shrink-0">→</span>
+          </div>
+        </Link>
 
         {/* Members */}
         <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">

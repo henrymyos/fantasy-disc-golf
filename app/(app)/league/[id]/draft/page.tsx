@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { DraftBoard } from "@/components/draft-board";
 
@@ -79,14 +80,25 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
     }));
 
   return (
-    <DraftBoard
-      leagueId={Number(id)}
-      draft={draft ? { id: draft.id, status: draft.status, currentPick: draft.current_pick, totalRounds: draft.total_rounds } : null}
-      members={members}
-      picks={picks}
-      availablePlayers={availablePlayers}
-      myMemberId={myMemberRow?.id ?? null}
-      isCommissioner={isCommissioner}
-    />
+    <div className="space-y-4">
+      <div className="flex items-center justify-end">
+        <Link
+          href={`/league/${id}/mock-draft`}
+          className="flex items-center gap-2 text-sm bg-[#4B3DFF]/15 hover:bg-[#4B3DFF]/25 border border-[#4B3DFF]/30 text-[#4B3DFF] hover:text-white font-semibold px-3 py-1.5 rounded-lg transition"
+        >
+          <span>🎯</span>
+          <span>Mock Draft</span>
+        </Link>
+      </div>
+      <DraftBoard
+        leagueId={Number(id)}
+        draft={draft ? { id: draft.id, status: draft.status, currentPick: draft.current_pick, totalRounds: draft.total_rounds } : null}
+        members={members}
+        picks={picks}
+        availablePlayers={availablePlayers}
+        myMemberId={myMemberRow?.id ?? null}
+        isCommissioner={isCommissioner}
+      />
+    </div>
   );
 }
