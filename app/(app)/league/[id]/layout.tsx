@@ -48,7 +48,12 @@ export default async function LeagueLayout({
       {/* League header */}
       <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
         <div className="flex items-center gap-3">
-          <h1 className="text-white font-bold text-xl">{league.name}</h1>
+          <Link
+            href={base}
+            className="text-white font-bold text-xl hover:text-[#4B3DFF] transition"
+          >
+            {league.name}
+          </Link>
         </div>
         <div className="flex items-center gap-3 text-xs text-gray-500 flex-wrap">
           <Link
