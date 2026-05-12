@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { FreeAgencyList } from "@/components/free-agency-list";
 
@@ -24,6 +25,14 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
     .single();
 
   if (!myMember) redirect("/dashboard");
+
+  const { data: draft } = await supabase
+    .from("drafts")
+    .select("status")
+    .eq("league_id", id)
+    .single();
+
+  const draftComplete = draft?.status === "complete";
 
   const { data: rosteredSpots } = await supabase
     .from("rosters")
@@ -59,7 +68,25 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
 
   return (
     <div className="max-w-xl space-y-4">
-      {overLimit && (
+      {!draftComplete && (
+        <div className="bg-yellow-400/10 border border-yellow-400/30 rounded-xl px-4 py-3 flex items-start gap-3">
+          <span className="text-yellow-400 text-lg leading-none mt-0.5">🔒</span>
+          <div className="flex-1">
+            <p className="text-yellow-300 font-semibold text-sm">Free agency opens after the draft</p>
+            <p className="text-yellow-300/70 text-xs mt-0.5">
+              You can browse free agents, but adds are locked until the draft is complete.
+            </p>
+          </div>
+          <Link
+            href={`/league/${id}/draft`}
+            className="text-yellow-300 hover:text-white text-xs font-semibold whitespace-nowrap shrink-0 self-center underline"
+          >
+            View draft →
+          </Link>
+        </div>
+      )}
+
+      {overLimit && draftComplete && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex items-start gap-3">
           <span className="text-red-400 text-lg leading-none mt-0.5">⚠</span>
           <div>
@@ -74,12 +101,12 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
 
       <div className="flex items-center justify-between">
         <h2 className="text-white font-bold">Free Agents ({freeAgents.length})</h2>
-        {!overLimit && openSpots === 0 && (
+        {draftComplete && !overLimit && openSpots === 0 && (
           <span className="text-yellow-400 text-xs bg-yellow-400/10 px-3 py-1 rounded-full">
             Roster full — pick a player to drop when adding
           </span>
         )}
-        {!overLimit && openSpots > 0 && (
+        {draftComplete && !overLimit && openSpots > 0 && (
           <span className="text-gray-400 text-xs bg-white/5 px-3 py-1 rounded-full">
             {openSpots} open spot{openSpots !== 1 ? "s" : ""}
           </span>
@@ -97,6 +124,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
           myRoster={(myRoster ?? []) as any}
           openSpots={openSpots}
           overLimit={overLimit}
+          addsDisabled={!draftComplete}
         />
       )}
     </div>

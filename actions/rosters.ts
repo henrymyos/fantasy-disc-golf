@@ -178,6 +178,14 @@ export async function addFreeAgent(leagueId: number, playerId: number, dropPlaye
 
   if (!league) return;
 
+  const { data: draft } = await admin
+    .from("drafts")
+    .select("status")
+    .eq("league_id", leagueId)
+    .single();
+
+  if (draft?.status !== "complete") return;
+
   const { data: existing } = await admin
     .from("rosters")
     .select("id")

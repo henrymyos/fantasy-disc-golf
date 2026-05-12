@@ -25,9 +25,10 @@ type Props = {
   myRoster: RosterPlayer[];
   openSpots: number;
   overLimit: boolean;
+  addsDisabled?: boolean;
 };
 
-export function FreeAgencyList({ leagueId, freeAgents, myRoster, openSpots, overLimit }: Props) {
+export function FreeAgencyList({ leagueId, freeAgents, myRoster, openSpots, overLimit, addsDisabled = false }: Props) {
   const [tab, setTab] = useState<Tab>("all");
 
   const filtered = freeAgents
@@ -83,8 +84,13 @@ export function FreeAgencyList({ leagueId, freeAgents, myRoster, openSpots, over
                 className="bg-[#1a1d23] border border-white/5 rounded-xl px-3 py-2.5 flex items-center gap-3"
               >
                 {/* Add button — left */}
-                {overLimit ? (
-                  <span className="text-xs text-gray-600 px-3 py-1.5 shrink-0">Add</span>
+                {overLimit || addsDisabled ? (
+                  <span
+                    className="text-xs text-gray-600 px-3 py-1.5 shrink-0"
+                    title={addsDisabled ? "Adds locked until draft completes" : undefined}
+                  >
+                    Add
+                  </span>
                 ) : (
                   <AddWithDropModal
                     leagueId={leagueId}

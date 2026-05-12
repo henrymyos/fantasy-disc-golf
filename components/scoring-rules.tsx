@@ -100,10 +100,11 @@ export function ScoringRules({ mpoStarters = 4, fpoStarters = 2 }: { mpoStarters
             <div className="text-gray-600 text-xs mt-0.5">Hole-in-one</div>
           </div>
         </div>
-        <p className="text-gray-600 text-xs mt-2">Tied players share averaged points. Bonuses stack per round.</p>
+        <p className="text-gray-600 text-xs mt-2">Each tied player earns the full bonus — bonuses are not shared. Bonuses stack per round.</p>
       </div>
 
       {/* Placement tables side by side */}
+      <p className="text-gray-600 text-xs">Tied finishes share averaged placement points across the tied positions.</p>
       <div style={{ display: "flex", flexDirection: "row", gap: "16px" }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p className="text-sm font-medium text-[#4B3DFF] mb-3 flex items-center gap-2">
