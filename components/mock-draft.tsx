@@ -283,7 +283,7 @@ export function MockDraft({
   const panelHeight = PANEL_HEIGHTS[panelSize];
 
   return (
-    <div className="space-y-4" style={{ paddingBottom: phase !== "setup" ? panelHeight + 32 : 32 }}>
+    <div className="space-y-4" style={{ paddingBottom: panelHeight + 32 }}>
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
@@ -447,11 +447,10 @@ export function MockDraft({
       </div>
 
       {/* Tabbed bottom panel: Available / My Team — visible whenever drafting or complete */}
-      {phase !== "setup" && (
-        <div
-          className="fixed bottom-0 left-0 md:left-14 lg:left-56 right-0 z-40 bg-[#0f1117]/95 backdrop-blur-sm border-t border-white/5 flex flex-col transition-[height] duration-200"
-          style={{ height: panelHeight }}
-        >
+      <div
+        className="fixed bottom-0 left-0 md:left-14 lg:left-56 right-0 z-40 bg-[#0f1117]/95 backdrop-blur-sm border-t border-white/5 flex flex-col transition-[height] duration-200"
+        style={{ height: panelHeight }}
+      >
           {/* Tab header */}
           <div className="flex items-center gap-2 px-3 lg:px-6 py-2 border-b border-white/5 shrink-0">
             <div className="flex flex-col -my-1">
@@ -553,7 +552,6 @@ export function MockDraft({
             )}
           </div>
         </div>
-      )}
 
       {phase === "complete" && !isReadOnly && (
         <div className="bg-[#36D7B7]/10 border border-[#36D7B7]/30 rounded-2xl p-5 flex items-center justify-between gap-4 flex-wrap">
