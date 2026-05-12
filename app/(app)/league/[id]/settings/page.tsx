@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { deleteLeague } from "@/actions/leagues";
 import { LeagueSettingsForm } from "@/components/league-settings-form";
 import { ScoringRules } from "@/components/scoring-rules";
+import { DGPT_2026_SCHEDULE, effectiveSelection, getPlayoffSlugs } from "@/lib/dgpt-2026-schedule";
 
 export default async function LeagueSettingsPage({
   params,
@@ -17,7 +18,7 @@ export default async function LeagueSettingsPage({
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, name, commissioner_id, max_teams, roster_size, starters_count, invite_code")
+    .select("id, name, commissioner_id, max_teams, roster_size, starters_count, invite_code, selected_event_slugs")
     .eq("id", id)
     .single();
 
@@ -52,6 +53,12 @@ export default async function LeagueSettingsPage({
     .order("started_at", { ascending: false });
 
   const inviteCode = (league as any).invite_code as string | null;
+  const selectedSlugs = effectiveSelection((league as any).selected_event_slugs);
+  const totalEvents = DGPT_2026_SCHEDULE.length;
+  const validSelected = selectedSlugs.filter((s) => DGPT_2026_SCHEDULE.some((e) => e.slug === s));
+  const selectedCount = validSelected.length;
+  const playoffCount = getPlayoffSlugs(validSelected).length;
+  const regularCount = Math.max(0, selectedCount - playoffCount);
 
   return (
     <div className="max-w-xl space-y-8">
@@ -91,6 +98,32 @@ export default async function LeagueSettingsPage({
           )}
         </div>
       </div>
+
+      {isCommissioner && (
+        <div>
+          <h2 className="text-white font-bold text-lg mb-5">Season</h2>
+          <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-white font-medium text-sm">2026 DGPT Schedule</p>
+              <p className="text-gray-500 text-xs mt-0.5">
+                <span className="text-white font-semibold tabular-nums">{selectedCount}</span>
+                <span> of {totalEvents} tournaments</span>
+              </p>
+              <p className="text-gray-600 text-xs mt-0.5">
+                <span className="text-gray-400">{regularCount} regular</span>
+                <span> · </span>
+                <span className="text-[#F5A524]">{playoffCount} playoff{playoffCount !== 1 ? "s" : ""}</span>
+              </p>
+            </div>
+            <Link
+              href={`/league/${id}/settings/season`}
+              className="bg-[#4B3DFF]/15 hover:bg-[#4B3DFF]/25 border border-[#4B3DFF]/30 text-[#4B3DFF] hover:text-white text-sm font-semibold px-4 py-2 rounded-lg transition shrink-0"
+            >
+              Edit Season
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div>
         <h2 className="text-white font-bold text-lg mb-5">Scoring</h2>

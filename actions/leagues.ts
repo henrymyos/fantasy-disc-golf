@@ -210,6 +210,39 @@ export async function updateLeague(
   return { message: "saved" };
 }
 
+export async function setSelectedEvents(
+  leagueId: string,
+  slugs: string[]
+): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const admin = createAdminClient();
+
+  const { data: league } = await admin
+    .from("leagues")
+    .select("commissioner_id")
+    .eq("id", leagueId)
+    .single();
+
+  if (!league || league.commissioner_id !== user.id) {
+    throw new Error("Not authorized");
+  }
+
+  const cleaned = Array.from(new Set(slugs.filter((s) => typeof s === "string" && s.length > 0)));
+
+  const { error } = await admin
+    .from("leagues")
+    .update({ selected_event_slugs: cleaned })
+    .eq("id", leagueId);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/league/${leagueId}/settings`);
+  revalidatePath(`/league/${leagueId}/settings/season`);
+}
+
 export async function deleteLeague(leagueId: string): Promise<void> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
