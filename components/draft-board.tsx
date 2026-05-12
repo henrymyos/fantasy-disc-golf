@@ -9,6 +9,11 @@ type Member = { id: number; teamName: string; draftPosition: number };
 type PickInfo = { pickNumber: number; teamId: number; playerName: string; playerDivision: string };
 type AvailablePlayer = { id: number; name: string; division: string; worldRanking: number | null; overallRank: number | null };
 type Tab = "all" | "mpo" | "fpo";
+type BottomTab = "available" | "team";
+type PanelSize = "small" | "medium" | "large";
+
+const PANEL_HEIGHTS: Record<PanelSize, number> = { small: 140, medium: 240, large: 460 };
+const PANEL_ORDER: PanelSize[] = ["small", "medium", "large"];
 
 type Props = {
   leagueId: number;
@@ -43,8 +48,14 @@ function splitName(full: string): { first: string; last: string } {
 export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, myMemberId, isCommissioner, readOnly }: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("all");
+  const [bottomTab, setBottomTab] = useState<BottomTab>("available");
   const [search, setSearch] = useState("");
+  const [panelSize, setPanelSize] = useState<PanelSize>("medium");
   const [, startTransition] = useTransition();
+  const panelIdx = PANEL_ORDER.indexOf(panelSize);
+  const canEnlarge = panelIdx < PANEL_ORDER.length - 1;
+  const canShrink = panelIdx > 0;
+  const panelHeight = PANEL_HEIGHTS[panelSize];
 
   // Poll when draft is live (skip in read-only view)
   useEffect(() => {
@@ -179,6 +190,11 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
 
   const drafted = draft?.status === "in_progress" || draft?.status === "paused" || draft?.status === "complete";
 
+  // My team — picks where teamId === myMemberId, sorted by pickNumber
+  const myPicks = myMemberId == null
+    ? []
+    : picks.filter((p) => p.teamId === myMemberId).sort((a, b) => a.pickNumber - b.pickNumber);
+
   return (
     <div className="flex flex-col" style={{ height: "calc(100vh - 152px)" }}>
 
@@ -248,70 +264,148 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
         )}
       </div>
 
-      {/* Player picker */}
+      {/* Bottom panel: Available / My Team */}
       {drafted && !readOnly && (
-        <div className="shrink-0 mt-2 rounded-xl border border-white/5 bg-[#1a1d23] flex flex-col" style={{ height: "240px" }}>
-          {/* Picker header */}
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 shrink-0">
-            <span className={`text-xs font-bold ${isMyPick ? "text-[#36D7B7] animate-pulse" : "text-gray-500"}`}>
-              {isMyPick ? "YOUR PICK — select a player" : draft?.status === "complete" ? "Draft complete" : `Available Players (${availablePlayers.length})`}
-            </span>
-            <div className="flex gap-1 bg-[#0f1117] rounded-lg p-0.5 ml-auto">
-              {(["all", "mpo", "fpo"] as Tab[]).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTab(t)}
-                  className={`px-3 py-1 rounded-md text-xs font-semibold transition ${
-                    t === tab ? "bg-[#4B3DFF] text-white" : "text-gray-400 hover:text-white"
-                  }`}
-                >
-                  {t.toUpperCase()}
-                </button>
-              ))}
+        <div
+          className="shrink-0 mt-2 rounded-xl border border-white/5 bg-[#1a1d23] flex flex-col transition-[height] duration-200"
+          style={{ height: panelHeight }}
+        >
+          {/* Tab header */}
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 shrink-0 flex-wrap">
+            <div className="flex flex-col -my-1">
+              <button
+                onClick={() => canEnlarge && setPanelSize(PANEL_ORDER[panelIdx + 1])}
+                disabled={!canEnlarge}
+                className="text-gray-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed leading-none"
+                title="Enlarge"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="18 15 12 9 6 15" />
+                </svg>
+              </button>
+              <button
+                onClick={() => canShrink && setPanelSize(PANEL_ORDER[panelIdx - 1])}
+                disabled={!canShrink}
+                className="text-gray-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed leading-none"
+                title="Shrink"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
             </div>
-            <input
-              type="text"
-              placeholder="Search..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="bg-[#0f1117] border border-white/10 rounded-lg px-3 py-1 text-white text-xs placeholder-gray-600 focus:outline-none focus:border-[#4B3DFF] w-36"
-            />
+            <div className="flex gap-1 bg-[#0f1117] rounded-lg p-0.5">
+              <button
+                onClick={() => setBottomTab("available")}
+                className={`px-3 py-1 rounded-md text-xs font-semibold transition ${
+                  bottomTab === "available" ? "bg-[#4B3DFF] text-white" : "text-gray-400 hover:text-white"
+                }`}
+              >
+                Available ({availablePlayers.length})
+              </button>
+              <button
+                onClick={() => setBottomTab("team")}
+                className={`px-3 py-1 rounded-md text-xs font-semibold transition ${
+                  bottomTab === "team" ? "bg-[#4B3DFF] text-white" : "text-gray-400 hover:text-white"
+                }`}
+              >
+                My Team ({myPicks.length})
+              </button>
+            </div>
+
+            {bottomTab === "available" && (
+              <>
+                <div className="flex gap-1 bg-[#0f1117] rounded-lg p-0.5 ml-auto">
+                  {(["all", "mpo", "fpo"] as Tab[]).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setTab(t)}
+                      className={`px-3 py-1 rounded-md text-xs font-semibold transition ${
+                        t === tab ? "bg-[#4B3DFF] text-white" : "text-gray-400 hover:text-white"
+                      }`}
+                    >
+                      {t.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="bg-[#0f1117] border border-white/10 rounded-lg px-3 py-1 text-white text-xs placeholder-gray-600 focus:outline-none focus:border-[#4B3DFF] w-36"
+                />
+              </>
+            )}
+
+            {isMyPick && (
+              <span className="ml-auto text-[#36D7B7] font-bold text-xs animate-pulse">
+                {bottomTab === "available" ? "YOUR PICK — select a player" : "Switch to Available to draft"}
+              </span>
+            )}
           </div>
 
-          {/* Player rows */}
+          {/* Body */}
           <div className="overflow-y-auto flex-1">
-            {filtered.length === 0 && (
-              <p className="text-gray-600 text-xs text-center py-6">No players found</p>
-            )}
-            {filtered.map((player) => (
-              <div
-                key={player.id}
-                className="flex items-center gap-2 px-3 py-2 border-b border-white/5 hover:bg-white/5 transition"
-              >
-                <span className="text-gray-600 text-xs font-mono w-7 text-right shrink-0">
-                  {tab === "all"
-                    ? player.overallRank != null ? `#${player.overallRank}` : ""
-                    : player.worldRanking != null ? `#${player.worldRanking}` : ""}
-                </span>
-                <span className="flex-1 text-white text-sm truncate">{player.name}</span>
-                <span className={`text-xs font-semibold shrink-0 ${divColor(player.division)}`}>
-                  {player.division}
-                </span>
-                {isMyPick && draft?.status === "in_progress" && (
-                  <form
-                    action={makeDraftPick.bind(null, leagueId, player.id)}
-                    onSubmit={() => startTransition(() => { setTimeout(() => router.refresh(), 300); })}
+            {bottomTab === "available" ? (
+              filtered.length === 0 ? (
+                <p className="text-gray-600 text-xs text-center py-6">No players found</p>
+              ) : (
+                filtered.map((player) => (
+                  <div
+                    key={player.id}
+                    className="flex items-center gap-3 px-3 py-2 border-b border-white/5 hover:bg-white/5 transition"
                   >
-                    <button
-                      type="submit"
-                      className="text-xs bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white px-3 py-1.5 rounded-full transition shrink-0"
-                    >
-                      Draft
-                    </button>
-                  </form>
-                )}
-              </div>
-            ))}
+                    {isMyPick && draft?.status === "in_progress" ? (
+                      <form
+                        action={makeDraftPick.bind(null, leagueId, player.id)}
+                        onSubmit={() => startTransition(() => { setTimeout(() => router.refresh(), 300); })}
+                        className="shrink-0 -mr-2"
+                      >
+                        <button
+                          type="submit"
+                          className="text-xs bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white px-3 py-1.5 rounded-full transition"
+                        >
+                          Draft
+                        </button>
+                      </form>
+                    ) : (
+                      <span className="w-[60px] shrink-0 -mr-2" />
+                    )}
+                    <span className="text-gray-600 text-xs font-mono w-7 text-right shrink-0">
+                      {tab === "all"
+                        ? player.overallRank != null ? `#${player.overallRank}` : ""
+                        : player.worldRanking != null ? `#${player.worldRanking}` : ""}
+                    </span>
+                    <div className="flex-1 min-w-0 flex items-center gap-2">
+                      <span className="text-white text-sm truncate min-w-0">{player.name}</span>
+                      <span className={`text-xs font-semibold shrink-0 ${divColor(player.division)}`}>
+                        {player.division}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )
+            ) : myPicks.length === 0 ? (
+              <p className="text-gray-600 text-xs text-center py-6">No picks yet</p>
+            ) : (
+              myPicks.map((p) => (
+                <div
+                  key={p.pickNumber}
+                  className="flex items-center gap-3 px-3 py-2 border-b border-white/5"
+                >
+                  <span className="text-gray-600 text-xs font-mono w-12 text-right shrink-0">
+                    #{p.pickNumber}
+                  </span>
+                  <div className="flex-1 min-w-0 flex items-center gap-2">
+                    <span className="text-white text-sm truncate min-w-0">{p.playerName}</span>
+                    <span className={`text-xs font-semibold shrink-0 ${divColor(p.playerDivision)}`}>
+                      {p.playerDivision}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
