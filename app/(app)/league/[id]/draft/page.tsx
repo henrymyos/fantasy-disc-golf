@@ -11,11 +11,15 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, commissioner_id, draft_status")
+    .select("id, commissioner_id, draft_status, mpo_starters, fpo_starters, roster_size")
     .eq("id", id)
     .single();
 
   if (!league) notFound();
+
+  const mpoSlots: number = (league as any).mpo_starters ?? 4;
+  const fpoSlots: number = (league as any).fpo_starters ?? 2;
+  const rosterSize: number = (league as any).roster_size ?? 14;
 
   const isCommissioner = league.commissioner_id === user.id;
 
@@ -98,6 +102,9 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
         availablePlayers={availablePlayers}
         myMemberId={myMemberRow?.id ?? null}
         isCommissioner={isCommissioner}
+        mpoSlots={mpoSlots}
+        fpoSlots={fpoSlots}
+        rosterSize={rosterSize}
       />
     </div>
   );

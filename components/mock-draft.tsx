@@ -66,6 +66,8 @@ export function MockDraft({
   leagueName,
   numTeams,
   rosterSize,
+  mpoStarters,
+  fpoStarters,
   players,
   initialMockDraft,
 }: Props) {
@@ -548,7 +550,13 @@ export function MockDraft({
                 onPick={makePick}
               />
             ) : (
-              <TeamList picks={myPicks} playerById={playerById} />
+              <TeamList
+                picks={myPicks}
+                playerById={playerById}
+                mpoSlots={mpoStarters}
+                fpoSlots={fpoStarters}
+                rosterSize={rosterSize}
+              />
             )}
           </div>
         </div>
@@ -648,39 +656,138 @@ function AvailableList({
 function TeamList({
   picks,
   playerById,
+  mpoSlots,
+  fpoSlots,
+  rosterSize,
 }: {
   picks: Pick[];
   playerById: Record<number, Player>;
+  mpoSlots: number;
+  fpoSlots: number;
+  rosterSize: number;
 }) {
-  if (picks.length === 0) {
-    return <p className="text-gray-600 text-xs text-center py-6">No picks yet</p>;
-  }
+  const ordered = [...picks].sort((a, b) => a.pickNumber - b.pickNumber);
+  const mpo = ordered.filter((p) => playerById[p.playerId!]?.division === "MPO");
+  const fpo = ordered.filter((p) => playerById[p.playerId!]?.division === "FPO");
+  const mpoStartersList = mpo.slice(0, mpoSlots);
+  const fpoStartersList = fpo.slice(0, fpoSlots);
+  const bench = [
+    ...mpo.slice(mpoSlots),
+    ...fpo.slice(fpoSlots),
+  ].sort((a, b) => a.pickNumber - b.pickNumber);
+  const filledStarters = mpoStartersList.length + fpoStartersList.length;
+  const totalSlots = mpoSlots + fpoSlots;
+  const benchCapacity = Math.max(0, rosterSize - totalSlots);
+  const emptyBenchCount = Math.max(0, benchCapacity - bench.length);
+
   return (
-    <>
-      {picks.map((p) => {
-        const player = playerById[p.playerId!];
-        const isMpo = player.division === "MPO";
-        const accentColor = isMpo ? "#4B3DFF" : "#36D7B7";
-        return (
-          <div
-            key={p.pickNumber}
-            className="flex items-center gap-3 px-3 lg:px-6 py-2 border-b border-white/5"
-          >
-            <span className="text-gray-600 text-xs font-mono w-12 text-right shrink-0">
-              #{p.pickNumber}
-            </span>
-            <div className="flex-1 min-w-0 flex items-center gap-2">
-              <span className="text-white text-sm truncate min-w-0">{player.name}</span>
-              <span
-                className="text-[10px] font-bold uppercase shrink-0"
-                style={{ color: accentColor }}
-              >
-                {player.division}
-              </span>
-            </div>
+    <div className="px-3 lg:px-6 py-2 space-y-2">
+      <div className="flex items-center justify-between px-1">
+        <span className="text-xs text-gray-500 font-semibold uppercase tracking-wide">Starters</span>
+        <span className="text-gray-500 text-xs">{filledStarters}/{totalSlots}</span>
+      </div>
+      <div className="space-y-1.5">
+        {Array.from({ length: mpoSlots }).map((_, i) => (
+          <MockLineupRow
+            key={`mpo-${i}`}
+            division="MPO"
+            slotIndex={i + 1}
+            pick={mpoStartersList[i] ?? null}
+            playerById={playerById}
+          />
+        ))}
+        {Array.from({ length: fpoSlots }).map((_, i) => (
+          <MockLineupRow
+            key={`fpo-${i}`}
+            division="FPO"
+            slotIndex={i + 1}
+            pick={fpoStartersList[i] ?? null}
+            playerById={playerById}
+          />
+        ))}
+      </div>
+      {benchCapacity > 0 && (
+        <>
+          <div className="flex items-center justify-between px-1 pt-2">
+            <span className="text-xs text-gray-500 font-semibold uppercase tracking-wide">Bench</span>
+            <span className="text-gray-500 text-xs">{bench.length}/{benchCapacity}</span>
           </div>
-        );
-      })}
-    </>
+          <div className="space-y-1.5">
+            {bench.map((p) => {
+              const div = playerById[p.playerId!]?.division ?? "MPO";
+              return (
+                <MockLineupRow
+                  key={p.pickNumber}
+                  division={div === "MPO" ? "MPO" : "FPO"}
+                  pick={p}
+                  playerById={playerById}
+                  bench
+                />
+              );
+            })}
+            {Array.from({ length: emptyBenchCount }).map((_, i) => (
+              <MockBenchEmptyRow key={`bench-empty-${i}`} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function MockBenchEmptyRow() {
+  return (
+    <div
+      className="flex items-center gap-3 p-2.5 rounded-xl border border-dashed"
+      style={{ background: "rgba(15,17,23,0.5)", borderColor: "rgba(255,255,255,0.08)" }}
+    >
+      <span className="w-12 shrink-0 text-center text-xs font-bold uppercase tracking-wide py-1 rounded-lg text-gray-600 bg-white/5">
+        —
+      </span>
+      <span className="flex-1 text-gray-600 text-sm italic">Empty bench</span>
+    </div>
+  );
+}
+
+function MockLineupRow({
+  division,
+  slotIndex,
+  pick,
+  playerById,
+  bench = false,
+}: {
+  division: "MPO" | "FPO";
+  slotIndex?: number;
+  pick: Pick | null;
+  playerById: Record<number, Player>;
+  bench?: boolean;
+}) {
+  const color = division === "MPO" ? "#4B3DFF" : "#36D7B7";
+  const bgFilled = division === "MPO" ? "rgba(75,61,255,0.12)" : "rgba(54,215,183,0.10)";
+  const borderFilled = division === "MPO" ? "rgba(75,61,255,0.19)" : "rgba(54,215,183,0.16)";
+  const player = pick?.playerId != null ? playerById[pick.playerId] : null;
+  return (
+    <div
+      className="flex items-center gap-3 p-2.5 rounded-xl border"
+      style={{
+        background: bench ? "rgba(15,17,23,1)" : player ? bgFilled : "rgba(255,255,255,0.02)",
+        borderColor: bench ? "rgba(255,255,255,0.05)" : player ? borderFilled : "rgba(255,255,255,0.06)",
+      }}
+    >
+      <span
+        className="w-12 shrink-0 text-center text-xs font-bold uppercase tracking-wide py-1 rounded-lg"
+        style={{ color, background: `${color}20` }}
+      >
+        {division}
+      </span>
+      {player ? (
+        <span className="flex-1 text-white text-sm font-medium truncate">{player.name}</span>
+      ) : (
+        <span className="flex-1 text-gray-600 text-sm italic">Empty</span>
+      )}
+      <span className="text-gray-500 text-xs font-mono shrink-0">
+        {pick ? `#${pick.pickNumber}` : slotIndex ? `Slot ${slotIndex}` : ""}
+      </span>
+    </div>
   );
 }

@@ -123,11 +123,52 @@ export async function makeDraftPick(leagueId: number, playerId: number): Promise
 
   if (alreadyPicked) return;
 
+  // Auto-fill starter slot in pick order. Earlier picks within a division fill
+  // the starter slots first; once full, subsequent picks land on the bench.
+  const { data: player } = await admin
+    .from("players")
+    .select("division")
+    .eq("id", playerId)
+    .single();
+
+  const { data: leagueSlots } = await admin
+    .from("leagues")
+    .select("mpo_starters, fpo_starters")
+    .eq("id", leagueId)
+    .single();
+
+  const slotLimit =
+    player?.division === "MPO"
+      ? (leagueSlots as any)?.mpo_starters ?? 4
+      : (leagueSlots as any)?.fpo_starters ?? 2;
+
+  const { data: divStarters } = await admin
+    .from("rosters")
+    .select("lineup_order, players!inner(division)")
+    .eq("league_id", leagueId)
+    .eq("team_id", member.id)
+    .eq("is_starter", true)
+    .eq("players.division", player?.division ?? "MPO");
+
+  const takenOrders = new Set(
+    (divStarters ?? []).map((r: any) => r.lineup_order).filter((o: number | null) => o != null),
+  );
+
+  let assignedOrder: number | null = null;
+  for (let i = 1; i <= slotLimit; i++) {
+    if (!takenOrders.has(i)) {
+      assignedOrder = i;
+      break;
+    }
+  }
+
   await admin.from("rosters").insert({
     league_id: leagueId,
     team_id: member.id,
     player_id: playerId,
     acquired_week: 1,
+    is_starter: assignedOrder !== null,
+    lineup_order: assignedOrder,
   });
 
   await admin.from("draft_picks").insert({

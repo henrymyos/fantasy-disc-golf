@@ -23,6 +23,9 @@ type Props = {
   availablePlayers: AvailablePlayer[];
   myMemberId: number | null;
   isCommissioner: boolean;
+  mpoSlots?: number;
+  fpoSlots?: number;
+  rosterSize?: number;
   readOnly?: boolean;
 };
 
@@ -39,13 +42,68 @@ function divBg(division: string): string {
   return division === "MPO" ? "rgba(75,61,255,0.32)" : "rgba(54,215,183,0.22)";
 }
 
+function DraftLineupRow({
+  division,
+  slotIndex,
+  pick,
+  bench = false,
+}: {
+  division: "MPO" | "FPO";
+  slotIndex?: number;
+  pick: PickInfo | null;
+  bench?: boolean;
+}) {
+  const color = division === "MPO" ? "#4B3DFF" : "#36D7B7";
+  const bgFilled = division === "MPO" ? "rgba(75,61,255,0.12)" : "rgba(54,215,183,0.10)";
+  const borderFilled = division === "MPO" ? "rgba(75,61,255,0.19)" : "rgba(54,215,183,0.16)";
+  const filled = pick !== null;
+  return (
+    <div
+      className="flex items-center gap-3 p-2.5 rounded-xl border"
+      style={{
+        background: bench ? "rgba(15,17,23,1)" : filled ? bgFilled : "rgba(255,255,255,0.02)",
+        borderColor: bench ? "rgba(255,255,255,0.05)" : filled ? borderFilled : "rgba(255,255,255,0.06)",
+      }}
+    >
+      <span
+        className="w-12 shrink-0 text-center text-xs font-bold uppercase tracking-wide py-1 rounded-lg"
+        style={{ color, background: `${color}20` }}
+      >
+        {division}
+      </span>
+      {pick ? (
+        <span className="flex-1 text-white text-sm font-medium truncate">{pick.playerName}</span>
+      ) : (
+        <span className="flex-1 text-gray-600 text-sm italic">Empty</span>
+      )}
+      <span className="text-gray-500 text-xs font-mono shrink-0">
+        {pick ? `#${pick.pickNumber}` : slotIndex ? `Slot ${slotIndex}` : ""}
+      </span>
+    </div>
+  );
+}
+
+function DraftBenchEmptyRow() {
+  return (
+    <div
+      className="flex items-center gap-3 p-2.5 rounded-xl border border-dashed"
+      style={{ background: "rgba(15,17,23,0.5)", borderColor: "rgba(255,255,255,0.08)" }}
+    >
+      <span className="w-12 shrink-0 text-center text-xs font-bold uppercase tracking-wide py-1 rounded-lg text-gray-600 bg-white/5">
+        —
+      </span>
+      <span className="flex-1 text-gray-600 text-sm italic">Empty bench</span>
+    </div>
+  );
+}
+
 function splitName(full: string): { first: string; last: string } {
   const parts = full.trim().split(" ");
   if (parts.length === 1) return { first: "", last: parts[0] };
   return { first: parts.slice(0, -1).join(" "), last: parts[parts.length - 1] };
 }
 
-export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, myMemberId, isCommissioner, readOnly }: Props) {
+export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, myMemberId, isCommissioner, mpoSlots = 4, fpoSlots = 2, rosterSize = 14, readOnly }: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("all");
   const [bottomTab, setBottomTab] = useState<BottomTab>("available");
@@ -194,6 +252,20 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
   const myPicks = myMemberId == null
     ? []
     : picks.filter((p) => p.teamId === myMemberId).sort((a, b) => a.pickNumber - b.pickNumber);
+
+  // Bucket into starter slots (in pick order, by division) then bench.
+  const myMpoPicks = myPicks.filter((p) => p.playerDivision === "MPO");
+  const myFpoPicks = myPicks.filter((p) => p.playerDivision !== "MPO");
+  const mpoStarterPicks = myMpoPicks.slice(0, mpoSlots);
+  const fpoStarterPicks = myFpoPicks.slice(0, fpoSlots);
+  const benchPicks = [
+    ...myMpoPicks.slice(mpoSlots),
+    ...myFpoPicks.slice(fpoSlots),
+  ].sort((a, b) => a.pickNumber - b.pickNumber);
+  const filledStarters = mpoStarterPicks.length + fpoStarterPicks.length;
+  const totalStarterSlots = mpoSlots + fpoSlots;
+  const benchCapacity = Math.max(0, rosterSize - totalStarterSlots);
+  const emptyBenchCount = Math.max(0, benchCapacity - benchPicks.length);
 
   return (
     <div className="flex flex-col" style={{ height: "calc(100vh - 152px)" }}>
@@ -389,22 +461,51 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
             ) : myPicks.length === 0 ? (
               <p className="text-gray-600 text-xs text-center py-6">No picks yet</p>
             ) : (
-              myPicks.map((p) => (
-                <div
-                  key={p.pickNumber}
-                  className="flex items-center gap-3 px-3 py-2 border-b border-white/5"
-                >
-                  <span className="text-gray-600 text-xs font-mono w-12 text-right shrink-0">
-                    #{p.pickNumber}
-                  </span>
-                  <div className="flex-1 min-w-0 flex items-center gap-2">
-                    <span className="text-white text-sm truncate min-w-0">{p.playerName}</span>
-                    <span className={`text-xs font-semibold shrink-0 ${divColor(p.playerDivision)}`}>
-                      {p.playerDivision}
-                    </span>
-                  </div>
+              <div className="px-3 py-2 space-y-2">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs text-gray-500 font-semibold uppercase tracking-wide">Starters</span>
+                  <span className="text-gray-500 text-xs">{filledStarters}/{totalStarterSlots}</span>
                 </div>
-              ))
+                <div className="space-y-1.5">
+                  {Array.from({ length: mpoSlots }).map((_, i) => (
+                    <DraftLineupRow
+                      key={`mpo-${i}`}
+                      division="MPO"
+                      slotIndex={i + 1}
+                      pick={mpoStarterPicks[i] ?? null}
+                    />
+                  ))}
+                  {Array.from({ length: fpoSlots }).map((_, i) => (
+                    <DraftLineupRow
+                      key={`fpo-${i}`}
+                      division="FPO"
+                      slotIndex={i + 1}
+                      pick={fpoStarterPicks[i] ?? null}
+                    />
+                  ))}
+                </div>
+                {benchCapacity > 0 && (
+                  <>
+                    <div className="flex items-center justify-between px-1 pt-2">
+                      <span className="text-xs text-gray-500 font-semibold uppercase tracking-wide">Bench</span>
+                      <span className="text-gray-500 text-xs">{benchPicks.length}/{benchCapacity}</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {benchPicks.map((p) => (
+                        <DraftLineupRow
+                          key={p.pickNumber}
+                          division={p.playerDivision === "MPO" ? "MPO" : "FPO"}
+                          pick={p}
+                          bench
+                        />
+                      ))}
+                      {Array.from({ length: emptyBenchCount }).map((_, i) => (
+                        <DraftBenchEmptyRow key={`bench-empty-${i}`} />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             )}
           </div>
         </div>

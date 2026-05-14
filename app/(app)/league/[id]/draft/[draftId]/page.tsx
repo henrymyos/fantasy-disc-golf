@@ -31,6 +31,15 @@ export default async function DraftResultPage({
 
   if (!draft || draft.status !== "complete") notFound();
 
+  const { data: leagueSlotRow } = await supabase
+    .from("leagues")
+    .select("mpo_starters, fpo_starters, roster_size")
+    .eq("id", id)
+    .single();
+  const mpoSlots: number = (leagueSlotRow as any)?.mpo_starters ?? 4;
+  const fpoSlots: number = (leagueSlotRow as any)?.fpo_starters ?? 2;
+  const rosterSize: number = (leagueSlotRow as any)?.roster_size ?? 14;
+
   const { data: memberRows } = await supabase
     .from("league_members")
     .select("id, team_name, draft_position")
@@ -66,6 +75,9 @@ export default async function DraftResultPage({
       availablePlayers={[]}
       myMemberId={member.id}
       isCommissioner={false}
+      mpoSlots={mpoSlots}
+      fpoSlots={fpoSlots}
+      rosterSize={rosterSize}
       readOnly
     />
   );
