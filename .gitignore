@@ -24,6 +24,9 @@
 .DS_Store
 *.pem
 
+# claude local settings (may contain secrets / machine-specific permissions)
+.claude/settings.local.json
+
 # debug
 npm-debug.log*
 yarn-debug.log*
