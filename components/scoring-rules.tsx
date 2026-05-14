@@ -104,7 +104,7 @@ export function ScoringRules({ mpoStarters = 4, fpoStarters = 2 }: { mpoStarters
       </div>
 
       {/* Placement tables side by side */}
-      <p className="text-gray-600 text-xs">Tied finishes share averaged placement points across the tied positions.</p>
+      <p className="text-gray-600 text-xs">Tied finishes each earn the full points for the position they tied for.</p>
       <div style={{ display: "flex", flexDirection: "row", gap: "16px" }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p className="text-sm font-medium text-[#4B3DFF] mb-3 flex items-center gap-2">

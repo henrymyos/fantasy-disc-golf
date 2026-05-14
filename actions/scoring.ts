@@ -15,7 +15,7 @@ export async function createTournament(leagueId: number, name: string, week: num
   const { data: league } = await admin.from("leagues").select("commissioner_id").eq("id", leagueId).single();
   if (!league || league.commissioner_id !== user.id) return;
 
-  await admin.from("tournaments").insert({ name, week, league_id: leagueId });
+  await admin.from("tournaments").insert({ name, week });
   revalidatePath(`/league/${leagueId}/scoring`);
 }
 
@@ -50,32 +50,13 @@ export async function enterResults(
     (playerRows ?? []).map((p) => [p.id, p.division ?? "MPO"])
   );
 
-  // Average points across tied positions within the same division.
-  type TieKey = string; // `${division}:${position}`
-  const tieGroups = new Map<TieKey, number[]>();
-  results.forEach((r) => {
-    const div = divisionMap.get(r.playerId) ?? "MPO";
-    const key: TieKey = `${div}:${r.position}`;
-    const group = tieGroups.get(key) ?? [];
-    group.push(r.playerId);
-    tieGroups.set(key, group);
-  });
-
-  const tiedPoints = new Map<number, number>();
-  tieGroups.forEach((ids, key) => {
-    const [div, posStr] = key.split(":");
-    const pos = Number(posStr);
-    const avg =
-      ids.reduce((sum, _, i) => sum + getPointsForDivision(pos + i, div), 0) / ids.length;
-    ids.forEach((id) => tiedPoints.set(id, Math.round(avg * 10) / 10));
-  });
-
+  // Tied players all get the points for their finishing position (no averaging).
   const bonusMap = new Map<number, PlayerBonus>();
   bonuses.forEach((b) => bonusMap.set(b.playerId, b));
 
   const rows = results.map((r) => {
     const div = divisionMap.get(r.playerId) ?? "MPO";
-    const placementPts = tiedPoints.get(r.playerId) ?? getPointsForDivision(r.position, div);
+    const placementPts = getPointsForDivision(r.position, div);
     const b = bonusMap.get(r.playerId);
     const bonusPts = b
       ? b.hotRoundCount * BONUS_POINTS.hotRound +
@@ -106,7 +87,7 @@ export async function finalizeWeekScores(leagueId: number, week: number): Promis
   const { data: league } = await admin.from("leagues").select("commissioner_id").eq("id", leagueId).single();
   if (!league || league.commissioner_id !== user.id) return;
 
-  const { data: tournaments } = await admin.from("tournaments").select("id").eq("league_id", leagueId).eq("week", week);
+  const { data: tournaments } = await admin.from("tournaments").select("id").eq("week", week);
   const tournamentIds = (tournaments ?? []).map((t) => t.id);
   if (tournamentIds.length === 0) return;
 

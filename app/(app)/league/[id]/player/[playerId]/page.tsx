@@ -31,27 +31,28 @@ export default async function PlayerPage({
   const { data: events } = await supabase
     .from("tournaments")
     .select(`
-      id, name, week, start_date,
-      tournament_results!inner(fantasy_points, finishing_position, hot_round_count, bogey_free_count, ace_count)
+      id, name, week, start_date, pdga_event_id,
+      tournament_results(fantasy_points, finishing_position, hot_round_count, bogey_free_count, ace_count)
     `)
-    .eq("league_id", id)
     .eq("tournament_results.player_id", playerId)
-    .order("week", { ascending: false });
+    .order("start_date", { ascending: true });
 
   const isMpo = player.division === "MPO";
   const accentColor = isMpo ? "#4B3DFF" : "#36D7B7";
 
-  const totalPts = (events ?? []).reduce((sum, e) => {
+  const playedEvents = (events ?? []).filter((e) => ((e.tournament_results as any[]) ?? []).length > 0);
+
+  const totalPts = playedEvents.reduce((sum, e) => {
     const r = (e.tournament_results as any)[0];
     return sum + (r?.fantasy_points ?? 0);
   }, 0);
 
-  const avgFinish = (events ?? []).length > 0
+  const avgFinish = playedEvents.length > 0
     ? Math.round(
-        (events ?? []).reduce((sum, e) => {
+        playedEvents.reduce((sum, e) => {
           const r = (e.tournament_results as any)[0];
           return sum + (r?.finishing_position ?? 0);
-        }, 0) / (events ?? []).length
+        }, 0) / playedEvents.length
       )
     : null;
 
@@ -86,7 +87,7 @@ export default async function PlayerPage({
               )}
             </div>
           </div>
-          {(events ?? []).length > 0 && (
+          {playedEvents.length > 0 && (
             <div className="ml-auto flex gap-5 shrink-0">
               <div className="text-center">
                 <p className="text-white font-bold text-lg">{totalPts.toFixed(1)}</p>
@@ -99,7 +100,7 @@ export default async function PlayerPage({
                 </div>
               )}
               <div className="text-center">
-                <p className="text-white font-bold text-lg">{(events ?? []).length}</p>
+                <p className="text-white font-bold text-lg">{playedEvents.length}</p>
                 <p className="text-gray-500 text-xs">Events</p>
               </div>
             </div>
@@ -142,7 +143,18 @@ export default async function PlayerPage({
                   }`}
                 >
                   <div className="min-w-0">
-                    <p className="text-white text-sm font-medium truncate">{event.name}</p>
+                    {(event as any).pdga_event_id ? (
+                      <a
+                        href={`https://www.pdga.com/tour/event/${(event as any).pdga_event_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-white text-sm font-medium truncate hover:underline block"
+                      >
+                        {event.name}
+                      </a>
+                    ) : (
+                      <p className="text-white text-sm font-medium truncate">{event.name}</p>
+                    )}
                     {event.start_date && (
                       <p className="text-gray-600 text-xs mt-0.5">
                         {new Date(event.start_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}

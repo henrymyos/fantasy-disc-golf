@@ -21,7 +21,6 @@ export default async function ScoringPage({ params }: { params: Promise<{ id: st
   const { data: tournaments } = await supabase
     .from("tournaments")
     .select("id, name, week")
-    .eq("league_id", id)
     .order("week", { ascending: false });
 
   const { data: allPlayers } = await supabase
