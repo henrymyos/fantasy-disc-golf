@@ -37,8 +37,69 @@ export default async function PlayerPage({
     .eq("tournament_results.player_id", playerId)
     .order("start_date", { ascending: true });
 
+  // All result rows for players in this player's division — used both to
+  // compute event-level field sizes and to tier this player's season totals
+  // and average finish against same-division peers.
+  const { data: divResults } = await supabase
+    .from("tournament_results")
+    .select("tournament_id, player_id, finishing_position, fantasy_points, players!inner(division)")
+    .eq("players.division", player.division);
+
+  const fieldSizeByTournament = new Map<number, number>();
+  const peerTotals = new Map<number, number>();
+  const peerFinishes = new Map<number, number[]>();
+  (divResults ?? []).forEach((r: any) => {
+    fieldSizeByTournament.set(r.tournament_id, (fieldSizeByTournament.get(r.tournament_id) ?? 0) + 1);
+    peerTotals.set(r.player_id, (peerTotals.get(r.player_id) ?? 0) + Number(r.fantasy_points ?? 0));
+    const arr = peerFinishes.get(r.player_id) ?? [];
+    arr.push(Number(r.finishing_position));
+    peerFinishes.set(r.player_id, arr);
+  });
+
+  const GREEN = "#4ade80";
+  const YELLOW = "#facc15";
+  const RED = "#f87171";
+
   const isMpo = player.division === "MPO";
   const accentColor = isMpo ? "#4B3DFF" : "#36D7B7";
+
+  function tierColor(finish: number | null, tournamentId: number): string {
+    if (finish == null) return accentColor;
+    const size = fieldSizeByTournament.get(tournamentId);
+    if (!size || size < 4) return accentColor;
+    const ratio = finish / size;
+    if (ratio <= 0.25) return GREEN;
+    if (ratio <= 0.5) return YELLOW;
+    return RED;
+  }
+
+  // Build percentile thresholds among peers (same division, at least one result).
+  function thresholds(values: number[], lowerIsBetter: boolean): { top25: number; top50: number } | null {
+    if (values.length < 4) return null;
+    const sorted = [...values].sort((a, b) => (lowerIsBetter ? a - b : b - a));
+    const top25Idx = Math.max(0, Math.ceil(sorted.length * 0.25) - 1);
+    const top50Idx = Math.max(0, Math.ceil(sorted.length * 0.5) - 1);
+    return { top25: sorted[top25Idx], top50: sorted[top50Idx] };
+  }
+
+  const peerTotalArr = [...peerTotals.values()];
+  const peerAvgArr = [...peerFinishes.entries()]
+    .map(([, arr]) => arr.reduce((s, n) => s + n, 0) / arr.length);
+  const totalThresh = thresholds(peerTotalArr, false);
+  const avgThresh = thresholds(peerAvgArr, true);
+
+  function totalPtsColor(value: number): string {
+    if (!totalThresh) return "white";
+    if (value >= totalThresh.top25) return GREEN;
+    if (value >= totalThresh.top50) return YELLOW;
+    return RED;
+  }
+  function avgFinishColor(value: number): string {
+    if (!avgThresh) return "white";
+    if (value <= avgThresh.top25) return GREEN;
+    if (value <= avgThresh.top50) return YELLOW;
+    return RED;
+  }
 
   const playedEvents = (events ?? []).filter((e) => ((e.tournament_results as any[]) ?? []).length > 0);
 
@@ -85,12 +146,12 @@ export default async function PlayerPage({
           {playedEvents.length > 0 && (
             <div className="ml-auto flex gap-5 shrink-0">
               <div className="text-center">
-                <p className="text-white font-bold text-lg">{totalPts.toFixed(1)}</p>
+                <p className="font-bold text-lg" style={{ color: totalPtsColor(totalPts) }}>{totalPts.toFixed(1)}</p>
                 <p className="text-gray-500 text-xs">Total pts</p>
               </div>
               {avgFinish && (
                 <div className="text-center">
-                  <p className="text-white font-bold text-lg">{avgFinish}</p>
+                  <p className="font-bold text-lg" style={{ color: avgFinishColor(avgFinish) }}>{avgFinish}</p>
                   <p className="text-gray-500 text-xs">Avg finish</p>
                 </div>
               )}
@@ -158,7 +219,7 @@ export default async function PlayerPage({
                   </div>
                   <span
                     className="text-sm font-bold tabular-nums text-right w-14"
-                    style={{ color: accentColor }}
+                    style={{ color: tierColor(finish, event.id) }}
                   >
                     {pts > 0 ? pts.toFixed(1) : "—"}
                   </span>
