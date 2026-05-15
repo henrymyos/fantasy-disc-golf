@@ -26,11 +26,11 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
   useEffect(() => {
     params.then(({ id }) => {
       setLeagueId(Number(id));
-      load(Number(id));
+      load(Number(id), true);
     });
   }, []);
 
-  async function load(lid: number) {
+  async function load(lid: number, applyPrefill = false) {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -70,7 +70,27 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
     }
 
     setMyTeam(buildTeam(myMember));
-    setOtherTeams((members ?? []).filter((m) => m.id !== myMember.id).map(buildTeam));
+    const others = (members ?? []).filter((m) => m.id !== myMember.id).map(buildTeam);
+    setOtherTeams(others);
+
+    if (applyPrefill) {
+      const sp = new URLSearchParams(window.location.search);
+      const withParam = sp.get("with");
+      const wantParam = sp.get("want");
+      if (withParam && wantParam) {
+        const targetTeam = others.find((t) => t.id === Number(withParam));
+        const wantId = Number(wantParam);
+        if (targetTeam && targetTeam.roster.some((p) => p.id === wantId)) {
+          setTradingWith(targetTeam);
+          setRequestIds(new Set([wantId]));
+          setOfferIds(new Set());
+          setMessage("");
+          setStep("players");
+        }
+        // Strip the query params so a reload doesn't re-apply.
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    }
 
     const { data: tradeData } = await supabase
       .from("trades")

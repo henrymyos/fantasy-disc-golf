@@ -36,14 +36,35 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
 
   const { data: rosteredSpots } = await supabase
     .from("rosters")
-    .select("player_id")
+    .select("player_id, team_id, league_members!inner(team_name)")
     .eq("league_id", id);
 
-  const rosteredIds = new Set((rosteredSpots ?? []).map((r) => r.player_id));
+  const rosteredOwner = new Map<number, { teamId: number; teamName: string }>();
+  (rosteredSpots ?? []).forEach((r: any) => {
+    rosteredOwner.set(r.player_id, {
+      teamId: r.team_id,
+      teamName: r.league_members?.team_name ?? "Unknown",
+    });
+  });
+  const rosteredIds = new Set(rosteredOwner.keys());
 
   const { data: allPlayers } = await supabase
     .from("players")
     .select("id, name, division, world_ranking, overall_rank");
+
+  const { data: resultRows } = await supabase
+    .from("tournament_results")
+    .select("player_id, fantasy_points");
+
+  const pointsByPlayer = new Map<number, number>();
+  (resultRows ?? []).forEach((r: any) => {
+    pointsByPlayer.set(
+      r.player_id,
+      (pointsByPlayer.get(r.player_id) ?? 0) + Number(r.fantasy_points ?? 0),
+    );
+  });
+
+  const seasonStarted = (resultRows ?? []).length > 0;
 
   const freeAgents = (allPlayers ?? [])
     .filter((p) => !rosteredIds.has(p.id))
@@ -53,7 +74,24 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
       division: p.division,
       worldRanking: p.world_ranking as number | null,
       overallRank: (p as any).overall_rank as number | null,
+      totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
     }));
+
+  const leaderboard = (allPlayers ?? [])
+    .map((p) => {
+      const owner = rosteredOwner.get(p.id);
+      return {
+        id: p.id,
+        name: p.name,
+        division: p.division,
+        worldRanking: p.world_ranking as number | null,
+        overallRank: (p as any).overall_rank as number | null,
+        totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
+        ownerTeamId: owner?.teamId ?? null,
+        ownerTeamName: owner?.teamName ?? null,
+      };
+    })
+    .sort((a, b) => b.totalPoints - a.totalPoints);
 
   const { data: myRoster } = await supabase
     .from("rosters")
@@ -100,7 +138,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
       )}
 
       <div className="flex items-center justify-between">
-        <h2 className="text-white font-bold">Free Agents ({freeAgents.length})</h2>
+        <h2 className="text-white font-bold">Players</h2>
         {draftComplete && !overLimit && openSpots === 0 && (
           <span className="text-yellow-400 text-xs bg-yellow-400/10 px-3 py-1 rounded-full">
             Roster full — pick a player to drop when adding
@@ -113,20 +151,17 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
         )}
       </div>
 
-      {freeAgents.length === 0 ? (
-        <div className="bg-[#1a1d23] rounded-2xl p-12 border border-white/5 text-center">
-          <p className="text-gray-600 text-sm">All players have been drafted. Check back after trades.</p>
-        </div>
-      ) : (
-        <FreeAgencyList
-          leagueId={Number(id)}
-          freeAgents={freeAgents}
-          myRoster={(myRoster ?? []) as any}
-          openSpots={openSpots}
-          overLimit={overLimit}
-          addsDisabled={!draftComplete}
-        />
-      )}
+      <FreeAgencyList
+        leagueId={Number(id)}
+        freeAgents={freeAgents}
+        leaderboard={leaderboard}
+        myRoster={(myRoster ?? []) as any}
+        openSpots={openSpots}
+        overLimit={overLimit}
+        addsDisabled={!draftComplete}
+        myTeamId={myMember.id}
+        seasonStarted={seasonStarted}
+      />
     </div>
   );
 }

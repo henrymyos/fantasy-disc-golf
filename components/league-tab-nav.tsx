@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 const NAV_TABS = [
   { label: "League", href: "" },
   { label: "Team", href: "/lineups" },
-  { label: "Free Agency", href: "/free-agency" },
+  { label: "Players", href: "/free-agency" },
   { label: "Draft", href: "/draft" },
 ];
 

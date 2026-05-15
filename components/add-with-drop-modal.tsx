@@ -42,7 +42,7 @@ export function AddWithDropModal({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-xs bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white px-3 py-1.5 rounded-full font-medium transition shrink-0 ml-2"
+        className="text-xs bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white py-1.5 rounded-full font-medium transition shrink-0 ml-2 w-16 text-center"
       >
         Add
       </button>

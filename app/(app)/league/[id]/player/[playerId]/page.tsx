@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { BackLink } from "@/components/back-link";
 
 export default async function PlayerPage({
   params,
@@ -60,12 +60,7 @@ export default async function PlayerPage({
     <div className="max-w-2xl space-y-6">
       {/* Back + header */}
       <div>
-        <Link
-          href={`/league/${id}/lineups`}
-          className="text-gray-400 hover:text-white text-sm transition inline-block mb-4"
-        >
-          ← Back
-        </Link>
+        <BackLink fallbackHref={`/league/${id}/lineups`} />
         <div className="flex items-center gap-4">
           <div
             className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-black text-lg shrink-0"
