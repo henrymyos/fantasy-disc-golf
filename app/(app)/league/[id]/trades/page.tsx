@@ -137,6 +137,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
             {pendingTrades.map((trade) => (
               <PendingTradeCard
                 key={trade.id}
+                leagueId={leagueId ?? 0}
                 trade={trade}
                 myTeamId={myTeam?.id ?? 0}
                 onRespond={handleRespond}
@@ -162,36 +163,40 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
           ) : (
             <div className="space-y-3">
               {otherTeams.map((team) => (
-                <button
+                <div
                   key={team.id}
-                  onClick={() => goToTeam(team)}
-                  className="w-full bg-[#1a1d23] hover:bg-[#23262e] border border-white/5 hover:border-white/10 rounded-2xl p-4 text-left transition"
+                  className="w-full bg-[#1a1d23] hover:bg-[#23262e] border border-white/5 hover:border-white/10 rounded-2xl p-4 transition"
                 >
-                  <div className="flex items-center justify-between mb-3">
+                  <button
+                    type="button"
+                    onClick={() => goToTeam(team)}
+                    className="w-full flex items-center justify-between mb-3 text-left"
+                  >
                     <p className="text-white font-semibold">{team.teamName}</p>
                     <span className="text-gray-500 text-xs">{team.roster.length} players →</span>
-                  </div>
+                  </button>
                   <div className="flex flex-wrap gap-1.5">
                     {team.roster.slice(0, 7).map((p) => {
                       const isMpo = p.division === "MPO";
                       return (
-                        <span
+                        <Link
                           key={p.id}
-                          className="text-xs px-2 py-0.5 rounded-md font-medium"
+                          href={`/league/${leagueId}/player/${p.id}`}
+                          className="text-xs px-2 py-0.5 rounded-md font-medium hover:underline"
                           style={{
                             background: isMpo ? "rgba(75,61,255,0.18)" : "rgba(54,215,183,0.15)",
                             color: isMpo ? "#a09aff" : "#36D7B7",
                           }}
                         >
                           {p.name.split(" ").pop()}
-                        </span>
+                        </Link>
                       );
                     })}
                     {team.roster.length > 7 && (
                       <span className="text-xs text-gray-600">+{team.roster.length - 7}</span>
                     )}
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           )}
@@ -221,7 +226,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
             <p className="text-white font-semibold text-sm mb-3 truncate">{myTeam.teamName}</p>
             <div className="space-y-2">
               {myTeam.roster.map((p) => (
-                <PlayerCard key={p.id} player={p} selected={offerIds.has(p.id)} onToggle={() => toggleOffer(p.id)} />
+                <PlayerCard key={p.id} leagueId={leagueId ?? 0} player={p} selected={offerIds.has(p.id)} onToggle={() => toggleOffer(p.id)} />
               ))}
               {myTeam.roster.length === 0 && (
                 <p className="text-gray-600 text-xs">No players on roster</p>
@@ -234,7 +239,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
             <p className="text-white font-semibold text-sm mb-3 truncate">{tradingWith.teamName}</p>
             <div className="space-y-2">
               {tradingWith.roster.map((p) => (
-                <PlayerCard key={p.id} player={p} selected={requestIds.has(p.id)} onToggle={() => toggleRequest(p.id)} />
+                <PlayerCard key={p.id} leagueId={leagueId ?? 0} player={p} selected={requestIds.has(p.id)} onToggle={() => toggleRequest(p.id)} />
               ))}
               {tradingWith.roster.length === 0 && (
                 <p className="text-gray-600 text-xs">No players on roster</p>
@@ -290,13 +295,13 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
           <div>
             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-3">Receives</p>
             <div className="space-y-3">
-              {iRequest.map((p) => <ReviewPlayer key={p.id} player={p} />)}
+              {iRequest.map((p) => <ReviewPlayer key={p.id} leagueId={leagueId ?? 0} player={p} />)}
             </div>
           </div>
           <div>
             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-3">Sends</p>
             <div className="space-y-3">
-              {iOffer.map((p) => <ReviewPlayer key={p.id} player={p} />)}
+              {iOffer.map((p) => <ReviewPlayer key={p.id} leagueId={leagueId ?? 0} player={p} />)}
             </div>
           </div>
         </div>
@@ -309,13 +314,13 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
           <div>
             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-3">Receives</p>
             <div className="space-y-3">
-              {iOffer.map((p) => <ReviewPlayer key={p.id} player={p} />)}
+              {iOffer.map((p) => <ReviewPlayer key={p.id} leagueId={leagueId ?? 0} player={p} />)}
             </div>
           </div>
           <div>
             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-3">Sends</p>
             <div className="space-y-3">
-              {iRequest.map((p) => <ReviewPlayer key={p.id} player={p} />)}
+              {iRequest.map((p) => <ReviewPlayer key={p.id} leagueId={leagueId ?? 0} player={p} />)}
             </div>
           </div>
         </div>
@@ -342,15 +347,17 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
 
 // ── Sub-components ───────────────────────────────────────────────────
 
-function PlayerCard({ player, selected, onToggle }: { player: Player; selected: boolean; onToggle: () => void }) {
+function PlayerCard({ leagueId, player, selected, onToggle }: { leagueId: number; player: Player; selected: boolean; onToggle: () => void }) {
   const isMpo = player.division === "MPO";
   const accent = isMpo ? "#4B3DFF" : "#36D7B7";
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onToggle}
-      className={`w-full text-left rounded-xl overflow-hidden border transition ${
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}
+      className={`w-full text-left rounded-xl overflow-hidden border transition cursor-pointer ${
         selected
           ? "border-[#36D7B7]/50 ring-1 ring-[#36D7B7]/20"
           : "border-white/5 hover:border-white/15"
@@ -381,20 +388,26 @@ function PlayerCard({ player, selected, onToggle }: { player: Player; selected: 
       </div>
       {/* Player info */}
       <div className="bg-[#1a1d23] px-3 py-2">
-        <p className="text-white font-semibold text-sm leading-tight truncate">{player.name}</p>
+        <Link
+          href={`/league/${leagueId}/player/${player.id}`}
+          onClick={(e) => e.stopPropagation()}
+          className="text-white font-semibold text-sm leading-tight truncate hover:underline block"
+        >
+          {player.name}
+        </Link>
         {player.worldRanking != null && (
           <p className="text-gray-600 text-xs mt-0.5">#{player.worldRanking}</p>
         )}
       </div>
-    </button>
+    </div>
   );
 }
 
-function ReviewPlayer({ player }: { player: Player }) {
+function ReviewPlayer({ leagueId, player }: { leagueId: number; player: Player }) {
   const isMpo = player.division === "MPO";
   const color = isMpo ? "#a09aff" : "#36D7B7";
   return (
-    <div className="flex items-center gap-2.5">
+    <Link href={`/league/${leagueId}/player/${player.id}`} className="flex items-center gap-2.5 hover:opacity-80 transition">
       <div
         className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
         style={{ background: isMpo ? "rgba(75,61,255,0.25)" : "rgba(54,215,183,0.2)" }}
@@ -402,19 +415,21 @@ function ReviewPlayer({ player }: { player: Player }) {
         {player.name[0]?.toUpperCase()}
       </div>
       <div className="min-w-0">
-        <p className="text-white text-sm font-medium leading-tight truncate">{player.name}</p>
+        <p className="text-white text-sm font-medium leading-tight truncate hover:underline">{player.name}</p>
         <p className="text-xs font-semibold" style={{ color }}>{player.division}</p>
       </div>
-    </div>
+    </Link>
   );
 }
 
 function PendingTradeCard({
+  leagueId,
   trade,
   myTeamId,
   onRespond,
   onCancel,
 }: {
+  leagueId: number;
   trade: any;
   myTeamId: number;
   onRespond: (id: number, accept: boolean) => void;
@@ -441,13 +456,25 @@ function PendingTradeCard({
         <div>
           <p className="text-gray-500 font-semibold mb-1">You receive</p>
           {toMe.map((tp: any) => (
-            <p key={tp.player_id} className="text-white">{tp.players?.name}</p>
+            <Link
+              key={tp.player_id}
+              href={`/league/${leagueId}/player/${tp.player_id}`}
+              className="block text-white hover:underline"
+            >
+              {tp.players?.name}
+            </Link>
           ))}
         </div>
         <div>
           <p className="text-gray-500 font-semibold mb-1">You give up</p>
           {fromMe.map((tp: any) => (
-            <p key={tp.player_id} className="text-white">{tp.players?.name}</p>
+            <Link
+              key={tp.player_id}
+              href={`/league/${leagueId}/player/${tp.player_id}`}
+              className="block text-white hover:underline"
+            >
+              {tp.players?.name}
+            </Link>
           ))}
         </div>
       </div>
