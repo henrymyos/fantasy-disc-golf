@@ -82,26 +82,33 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
       <div className="lg:col-span-1 bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
         <h2 className="font-bold text-white mb-4">Standings</h2>
         <div className="space-y-2">
-          {standings.map((t, i) => (
-            <div
-              key={t.id}
-              className={`flex items-center justify-between py-2 px-3 rounded-lg ${
-                t.user_id === user.id ? "bg-[#4B3DFF]/15 border border-[#4B3DFF]/30" : "hover:bg-white/3"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <span className="text-gray-500 text-sm w-4">{i + 1}</span>
-                <div>
-                  <p className="text-white text-sm font-medium">{t.team_name}</p>
-                  <p className="text-gray-600 text-xs">{(t.profiles as any)?.username}</p>
+          {standings.map((t, i) => {
+            const isMe = t.user_id === user.id;
+            const href = isMe ? `/league/${id}/lineups` : `/league/${id}/team/${t.id}`;
+            return (
+              <Link
+                key={t.id}
+                href={href}
+                className={`flex items-center justify-between py-2 px-3 rounded-lg transition ${
+                  isMe
+                    ? "bg-[#4B3DFF]/15 border border-[#4B3DFF]/30 hover:bg-[#4B3DFF]/20"
+                    : "hover:bg-white/5"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-gray-500 text-sm w-4">{i + 1}</span>
+                  <div>
+                    <p className="text-white text-sm font-medium">{t.team_name}</p>
+                    <p className="text-gray-600 text-xs">{(t.profiles as any)?.username}</p>
+                  </div>
                 </div>
-              </div>
-              <div className="text-right">
-                <p className="text-white text-sm font-semibold">{t.wins}-{t.losses}</p>
-                <p className="text-gray-500 text-xs">{t.points.toFixed(0)} pts</p>
-              </div>
-            </div>
-          ))}
+                <div className="text-right">
+                  <p className="text-white text-sm font-semibold">{t.wins}-{t.losses}</p>
+                  <p className="text-gray-500 text-xs">{t.points.toFixed(0)} pts</p>
+                </div>
+              </Link>
+            );
+          })}
           {standings.length === 0 && (
             <p className="text-gray-600 text-sm text-center py-4">No teams yet</p>
           )}
