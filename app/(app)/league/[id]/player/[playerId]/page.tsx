@@ -1,6 +1,9 @@
 import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { BackLink } from "@/components/back-link";
+import { AddWithDropModal } from "@/components/add-with-drop-modal";
+import { placeWaiverClaim } from "@/actions/rosters";
 
 export default async function PlayerPage({
   params,
@@ -27,6 +30,60 @@ export default async function PlayerPage({
     .eq("id", playerId)
     .single();
   if (!player) notFound();
+
+  // Player's current roster status in this league.
+  const { data: rosterEntry } = await supabase
+    .from("rosters")
+    .select("team_id, league_members!inner(id, team_name)")
+    .eq("league_id", id)
+    .eq("player_id", playerId)
+    .maybeSingle();
+  const ownerTeamId = (rosterEntry as any)?.team_id ?? null;
+  const ownerTeamName = (rosterEntry as any)?.league_members?.team_name ?? null;
+  const isFreeAgent = ownerTeamId == null;
+  const isMine = ownerTeamId === member.id;
+
+  // For an Add/Claim button we need league info, draft status, waiver state,
+  // and the user's current roster.
+  const { data: league } = await supabase
+    .from("leagues")
+    .select("roster_size, waivers_locked")
+    .eq("id", id)
+    .single();
+  const { data: draft } = await supabase
+    .from("drafts")
+    .select("status")
+    .eq("league_id", id)
+    .single();
+  const draftComplete = draft?.status === "complete";
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const { data: activeTournament } = await supabase
+    .from("tournaments")
+    .select("id")
+    .lte("start_date", todayIso)
+    .gte("end_date", todayIso)
+    .maybeSingle();
+  const waiversActive = ((league as any)?.waivers_locked === true) || activeTournament !== null;
+
+  const { data: myRosterRows } = await supabase
+    .from("rosters")
+    .select("player_id, players(id, name, division)")
+    .eq("league_id", id)
+    .eq("team_id", member.id);
+  const myRoster = myRosterRows ?? [];
+  const rosterCount = myRoster.length;
+  const openSpots = Math.max(0, ((league as any)?.roster_size ?? 14) - rosterCount);
+
+  const { data: myClaim } = await supabase
+    .from("waiver_claims")
+    .select("id")
+    .eq("league_id", id)
+    .eq("team_id", member.id)
+    .eq("player_id", playerId)
+    .eq("status", "pending")
+    .maybeSingle();
+  const hasPendingClaim = myClaim !== null;
 
   const { data: events } = await supabase
     .from("tournaments")
@@ -122,6 +179,50 @@ export default async function PlayerPage({
       {/* Back + header */}
       <div>
         <BackLink fallbackHref={`/league/${id}/lineups`} />
+
+        {/* Action chip: Trade / Add / Claim / Pending / Mine */}
+        {!isMine && (
+          <div className="mb-4">
+            {isFreeAgent ? (
+              !draftComplete ? (
+                <span className="text-xs text-gray-500 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full">
+                  Add locked until draft completes
+                </span>
+              ) : waiversActive ? (
+                hasPendingClaim ? (
+                  <span className="text-xs border border-yellow-400/40 text-yellow-300 px-3 py-1.5 rounded-full font-medium">
+                    Claim pending
+                  </span>
+                ) : (
+                  <form action={placeWaiverClaim.bind(null, Number(id), Number(playerId), undefined)}>
+                    <button
+                      type="submit"
+                      className="text-xs bg-yellow-400 hover:bg-yellow-300 text-black font-bold px-4 py-1.5 rounded-full transition"
+                    >
+                      Claim
+                    </button>
+                  </form>
+                )
+              ) : (
+                <AddWithDropModal
+                  leagueId={Number(id)}
+                  addPlayer={{ id: player.id, name: player.name, division: player.division }}
+                  myRoster={myRoster as any}
+                  openSpots={openSpots}
+                />
+              )
+            ) : (
+              <Link
+                href={`/league/${id}/trades?with=${ownerTeamId}&want=${playerId}`}
+                className="inline-flex items-center text-xs bg-[#36D7B7] hover:bg-[#2bc4a6] text-black font-bold px-4 py-1.5 rounded-full transition"
+                title={ownerTeamName ? `Trade with ${ownerTeamName}` : "Propose a trade"}
+              >
+                Trade
+              </Link>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center gap-4">
           <div
             className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-black text-lg shrink-0"

@@ -43,6 +43,8 @@ function StarterCounter({
   );
 }
 
+type WaiverOrderMode = "reverse_standings" | "reverse_last_add";
+
 type Props = {
   leagueId: string;
   initial: {
@@ -51,6 +53,7 @@ type Props = {
     rosterSize: number;
     mpoStarters: number;
     fpoStarters: number;
+    waiverOrderMode: WaiverOrderMode;
   };
 };
 
@@ -130,6 +133,21 @@ export function LeagueSettingsForm({ leagueId, initial }: Props) {
       {state?.errors?.fpoStarters && (
         <p className="text-red-400 text-xs">{state.errors.fpoStarters[0]}</p>
       )}
+
+      <div>
+        <label className="block text-sm text-gray-400 mb-1">Waiver order</label>
+        <select
+          name="waiverOrderMode"
+          defaultValue={initial.waiverOrderMode}
+          className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#4B3DFF] transition"
+        >
+          <option value="reverse_standings">Reverse standings (worst record first)</option>
+          <option value="reverse_last_add">Least recent free-agent add</option>
+        </select>
+        <p className="text-gray-600 text-xs mt-1">
+          Applied automatically when a tournament starts and a waiver period opens.
+        </p>
+      </div>
 
       {state?.message && !saved && (
         <p className="text-red-400 text-sm bg-red-400/10 rounded-lg px-3 py-2">{state.message}</p>

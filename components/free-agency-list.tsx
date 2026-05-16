@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AddWithDropModal } from "@/components/add-with-drop-modal";
+import { cancelWaiverClaim, placeWaiverClaim } from "@/actions/rosters";
 
 type Player = {
   id: number;
@@ -29,6 +30,14 @@ type RosterPlayer = {
 type DivisionTab = "all" | "mpo" | "fpo";
 type ViewTab = "available" | "leaders";
 
+type PendingClaim = {
+  id: number;
+  playerId: number;
+  playerName: string;
+  division: string;
+  dropPlayerId: number | null;
+};
+
 type Props = {
   leagueId: number;
   freeAgents: FreeAgent[];
@@ -39,6 +48,8 @@ type Props = {
   addsDisabled?: boolean;
   myTeamId: number;
   seasonStarted: boolean;
+  waiversLocked?: boolean;
+  pendingClaims?: PendingClaim[];
 };
 
 export function FreeAgencyList({
@@ -51,7 +62,56 @@ export function FreeAgencyList({
   addsDisabled = false,
   myTeamId,
   seasonStarted,
+  waiversLocked = false,
+  pendingClaims = [],
 }: Props) {
+  const claimedPlayerIds = new Set(pendingClaims.map((c) => c.playerId));
+
+  function actionButton(player: { id: number; name: string; division: string }) {
+    if (overLimit || addsDisabled) {
+      return (
+        <span
+          className="text-xs text-gray-600 py-1.5 shrink-0 ml-2 w-16 text-center"
+          title={addsDisabled ? "Adds locked until draft completes" : undefined}
+        >
+          Add
+        </span>
+      );
+    }
+    if (waiversLocked) {
+      if (claimedPlayerIds.has(player.id)) {
+        const claim = pendingClaims.find((c) => c.playerId === player.id)!;
+        return (
+          <form action={cancelWaiverClaim.bind(null, leagueId, claim.id)} className="shrink-0 ml-2">
+            <button
+              type="submit"
+              className="text-xs border border-yellow-400/40 text-yellow-300 hover:text-white hover:border-yellow-300 py-1.5 rounded-full font-medium transition w-16 text-center"
+            >
+              Pending
+            </button>
+          </form>
+        );
+      }
+      return (
+        <form action={placeWaiverClaim.bind(null, leagueId, player.id, undefined)} className="shrink-0 ml-2">
+          <button
+            type="submit"
+            className="text-xs bg-yellow-400 hover:bg-yellow-300 text-black py-1.5 rounded-full font-medium transition w-16 text-center"
+          >
+            Claim
+          </button>
+        </form>
+      );
+    }
+    return (
+      <AddWithDropModal
+        leagueId={leagueId}
+        addPlayer={{ id: player.id, name: player.name, division: player.division }}
+        myRoster={myRoster}
+        openSpots={openSpots}
+      />
+    );
+  }
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -157,23 +217,7 @@ export function FreeAgencyList({
                       ? (player.overallRank != null ? `#${player.overallRank}` : null)
                       : (player.worldRanking != null ? `#${player.worldRanking}` : null))}
                 rightSlot={null}
-                addControl={
-                  overLimit || addsDisabled ? (
-                    <span
-                      className="text-xs text-gray-600 px-3 py-1.5 shrink-0"
-                      title={addsDisabled ? "Adds locked until draft completes" : undefined}
-                    >
-                      Add
-                    </span>
-                  ) : (
-                    <AddWithDropModal
-                      leagueId={leagueId}
-                      addPlayer={{ id: player.id, name: player.name, division: player.division }}
-                      myRoster={myRoster}
-                      openSpots={openSpots}
-                    />
-                  )
-                }
+                addControl={actionButton(player)}
               />
             ))}
           </div>
@@ -185,21 +229,7 @@ export function FreeAgencyList({
             const isMine = player.ownerTeamId === myTeamId;
 
             const addControl = isFreeAgent ? (
-              overLimit || addsDisabled ? (
-                <span
-                  className="text-xs text-gray-600 py-1.5 shrink-0 ml-2 w-16 text-center"
-                  title={addsDisabled ? "Adds locked until draft completes" : undefined}
-                >
-                  Add
-                </span>
-              ) : (
-                <AddWithDropModal
-                  leagueId={leagueId}
-                  addPlayer={{ id: player.id, name: player.name, division: player.division }}
-                  myRoster={myRoster}
-                  openSpots={openSpots}
-                />
-              )
+              actionButton(player)
             ) : isMine ? (
               <span className="shrink-0 ml-2 w-16" />
             ) : (

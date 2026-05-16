@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { LineupSlot, BenchSlot } from "@/components/lineup-slot";
 import { TeamActionsPanel } from "@/components/team-actions-panel";
+import { getActiveTournament } from "@/lib/lineup-lock";
 
 export default async function LineupsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -43,7 +44,10 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
     .order("lineup_order", { ascending: true, nullsFirst: false })
     .order("id", { ascending: true });
 
-  const roster = myRoster ?? [];
+  const roster = (myRoster ?? []) as any[];
+
+  const activeTournament = await getActiveTournament(supabase);
+  const lineupLocked = activeTournament !== null;
 
   function buildSlotArray(starters: any[], numSlots: number): (any | null)[] {
     const result: (any | null)[] = new Array(numSlots).fill(null);
@@ -85,6 +89,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
   const totalSlots = mpoSlots + fpoSlots;
   const overRoster = roster.length > league.roster_size;
   const toDrop = roster.length - league.roster_size;
+  const lineupsDisabled = overRoster || lineupLocked;
 
   // Fetch transaction history
   const { data: txRows } = await supabase
@@ -155,6 +160,18 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
+      {lineupLocked && activeTournament && (
+        <div className="bg-yellow-400/10 border border-yellow-400/30 rounded-xl px-4 py-3 flex items-start gap-3">
+          <span className="text-yellow-400 text-lg leading-none mt-0.5">🔒</span>
+          <div>
+            <p className="text-yellow-300 font-semibold text-sm">Lineup locked — {activeTournament.name} is in progress</p>
+            <p className="text-yellow-300/70 text-xs mt-0.5">
+              Lineup changes reopen after {new Date(activeTournament.end_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}.
+            </p>
+          </div>
+        </div>
+      )}
+
       <TeamActionsPanel
         leagueId={Number(id)}
         myTeamId={myMember.id}
@@ -178,7 +195,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
               occupant={occupant}
               benchPlayers={mpoBench as any}
               otherStarters={otherSlotsFor(mpoSlotArray, i)}
-              locked={overRoster}
+              locked={lineupsDisabled}
             />
           ))}
           {fpoSlotArray.map((occupant: any, i: number) => (
@@ -190,7 +207,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
               occupant={occupant}
               benchPlayers={fpoBench as any}
               otherStarters={otherSlotsFor(fpoSlotArray, i)}
-              locked={overRoster}
+              locked={lineupsDisabled}
             />
           ))}
         </div>
@@ -207,7 +224,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
                     leagueId={Number(id)}
                     benchSpot={spot as any}
                     starterSlots={div === "MPO" ? mpoSlotArray : fpoSlotArray}
-                    locked={overRoster}
+                    locked={lineupsDisabled}
                   />
                 );
               })}

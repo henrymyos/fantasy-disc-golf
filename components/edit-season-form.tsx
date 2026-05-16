@@ -31,7 +31,21 @@ export function EditSeasonForm({ leagueId, events, initialSelected }: Props) {
     return false;
   }, [selected, initialSet]);
 
+  // Tournaments are locked in once they've already happened or start within
+  // a month — the slate is committed at that point.
+  const LOCK_WINDOW_DAYS = 30;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const lockBoundary = new Date(today);
+  lockBoundary.setDate(lockBoundary.getDate() + LOCK_WINDOW_DAYS);
+  const lockBoundaryIso = lockBoundary.toISOString().slice(0, 10);
+  function isLocked(event: DgptEvent): boolean {
+    return event.startDate <= lockBoundaryIso;
+  }
+
   function toggle(slug: string) {
+    const ev = events.find((e) => e.slug === slug);
+    if (ev && isLocked(ev)) return;
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(slug)) next.delete(slug);
@@ -41,11 +55,23 @@ export function EditSeasonForm({ leagueId, events, initialSelected }: Props) {
   }
 
   function selectAll() {
-    setSelected(new Set(events.map((e) => e.slug)));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const e of events) if (!isLocked(e)) next.add(e.slug);
+      return next;
+    });
   }
 
   function clearAll() {
-    setSelected(new Set());
+    setSelected((prev) => {
+      const next = new Set<string>();
+      // Preserve any locked-in selections so bulk-clear can't drop them.
+      for (const slug of prev) {
+        const ev = events.find((e) => e.slug === slug);
+        if (ev && isLocked(ev)) next.add(slug);
+      }
+      return next;
+    });
   }
 
   function save() {
@@ -107,14 +133,19 @@ export function EditSeasonForm({ leagueId, events, initialSelected }: Props) {
       <div className="bg-[#1a1d23] rounded-2xl border border-white/5 overflow-hidden">
         {events.map((event, i) => {
           const isSelected = selected.has(event.slug);
+          const locked = isLocked(event);
           return (
             <button
               key={event.slug}
               type="button"
               onClick={() => toggle(event.slug)}
+              disabled={locked}
+              title={locked ? "Locked — tournament has started or is within a month" : undefined}
               className={`w-full flex items-center gap-4 px-4 py-3.5 text-left transition ${
                 i !== 0 ? "border-t border-white/5" : ""
-              } ${isSelected ? "hover:bg-white/[0.03]" : "hover:bg-white/[0.03] opacity-50"}`}
+              } ${locked ? "cursor-not-allowed" : "hover:bg-white/[0.03]"} ${
+                isSelected ? "" : "opacity-50"
+              }`}
             >
               {/* Checkbox */}
               <span
@@ -139,6 +170,11 @@ export function EditSeasonForm({ leagueId, events, initialSelected }: Props) {
                   {isSelected && playoffSet.has(event.slug) && (
                     <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 text-[#F5A524] bg-[#F5A524]/15 border border-[#F5A524]/30">
                       Playoff
+                    </span>
+                  )}
+                  {locked && (
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 text-gray-400 bg-white/5 border border-white/10">
+                      🔒 Locked
                     </span>
                   )}
                 </div>

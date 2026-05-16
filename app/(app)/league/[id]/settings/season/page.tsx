@@ -25,7 +25,11 @@ export default async function EditSeasonPage({
     redirect(`/league/${id}/settings`);
   }
 
-  const selected = effectiveSelection((league as any).selected_event_slugs);
+  // Drop any stale slugs that aren't on the current schedule (e.g., removed
+  // events) so the displayed count doesn't exceed the schedule total.
+  const scheduleSlugs = new Set(DGPT_2026_SCHEDULE.map((e) => e.slug));
+  const selected = effectiveSelection((league as any).selected_event_slugs)
+    .filter((s) => scheduleSlugs.has(s));
 
   return (
     <EditSeasonForm

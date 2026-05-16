@@ -38,12 +38,15 @@ export default async function LeagueSettingsPage({
 
   const { data: divData } = await supabase
     .from("leagues")
-    .select("mpo_starters, fpo_starters")
+    .select("mpo_starters, fpo_starters, waiver_order_mode")
     .eq("id", id)
     .single();
 
   const mpoStarters: number = (divData as any)?.mpo_starters ?? 4;
   const fpoStarters: number = (divData as any)?.fpo_starters ?? 2;
+  const waiverOrderMode = ((divData as any)?.waiver_order_mode ?? "reverse_standings") as
+    | "reverse_standings"
+    | "reverse_last_add";
 
   const { data: completedDrafts } = await supabase
     .from("drafts")
@@ -85,6 +88,7 @@ export default async function LeagueSettingsPage({
                 rosterSize: league.roster_size,
                 mpoStarters,
                 fpoStarters,
+                waiverOrderMode,
               }}
             />
           ) : (

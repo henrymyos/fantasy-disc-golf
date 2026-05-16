@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createTournament, finalizeWeekScores, advanceWeek } from "@/actions/scoring";
+import { setWaiversLocked, processWaivers } from "@/actions/rosters";
 import { EnterResultsForm } from "./enter-results-form";
 
 export default async function ScoringPage({ params }: { params: Promise<{ id: string }> }) {
@@ -11,7 +12,7 @@ export default async function ScoringPage({ params }: { params: Promise<{ id: st
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, commissioner_id, current_week, name")
+    .select("id, commissioner_id, current_week, name, waivers_locked")
     .eq("id", id)
     .single();
 
@@ -84,6 +85,37 @@ export default async function ScoringPage({ params }: { params: Promise<{ id: st
               Advance to Week {league.current_week + 1}
             </button>
           </form>
+
+          {/* Waivers */}
+          {(league as any).waivers_locked ? (
+            <>
+              <form action={processWaivers.bind(null, Number(id))}>
+                <button
+                  type="submit"
+                  className="bg-yellow-400 hover:bg-yellow-300 text-black font-bold text-sm px-4 py-2 rounded-lg transition"
+                >
+                  Process Waivers
+                </button>
+              </form>
+              <form action={setWaiversLocked.bind(null, Number(id), false)}>
+                <button
+                  type="submit"
+                  className="border border-white/10 hover:border-white/20 text-gray-300 text-sm font-medium px-4 py-2 rounded-lg transition"
+                >
+                  Cancel Waivers
+                </button>
+              </form>
+            </>
+          ) : (
+            <form action={setWaiversLocked.bind(null, Number(id), true)}>
+              <button
+                type="submit"
+                className="border border-yellow-400/40 text-yellow-300 hover:text-white hover:border-yellow-300 text-sm font-medium px-4 py-2 rounded-lg transition"
+              >
+                Start Waiver Period
+              </button>
+            </form>
+          )}
         </div>
       </div>
 

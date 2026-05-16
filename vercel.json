@@ -3,6 +3,10 @@
     {
       "path": "/api/sync-pdga",
       "schedule": "0 13 * * 1"
+    },
+    {
+      "path": "/api/waiver-cron",
+      "schedule": "0 8 * * *"
     }
   ]
 }

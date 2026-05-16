@@ -2,6 +2,8 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { DraftBoard } from "@/components/draft-board";
+import { DraftScheduleForm } from "@/components/draft-schedule-form";
+import { randomizeDraftOrder } from "@/actions/drafts";
 
 export default async function DraftPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -25,16 +27,35 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
 
   const { data: draft } = await supabase
     .from("drafts")
-    .select("id, status, current_pick, total_rounds")
+    .select("id, status, current_pick, total_rounds, scheduled_at")
     .eq("league_id", id)
     .single();
 
-  const { data: memberRows } = await supabase
+  // All members for the pre-draft commissioner panel (some may not have a
+  // draft_position yet).
+  const { data: allMemberRows } = await supabase
     .from("league_members")
-    .select("id, team_name, draft_position")
+    .select("id, team_name, draft_position, joined_at")
     .eq("league_id", id)
-    .not("draft_position", "is", null)
-    .order("draft_position");
+    .order("draft_position", { ascending: true, nullsFirst: false })
+    .order("joined_at", { ascending: true });
+
+  // Pre-draft we want to show the board for everyone, even before the order
+  // has been randomized. Pull every member and fall back to "Team N"
+  // placeholders if their slot hasn't been assigned yet.
+  const { data: memberRowsRaw } = await supabase
+    .from("league_members")
+    .select("id, team_name, draft_position, joined_at")
+    .eq("league_id", id)
+    .order("draft_position", { ascending: true, nullsFirst: false })
+    .order("joined_at", { ascending: true });
+
+  const orderSet = (memberRowsRaw ?? []).every((m: any) => m.draft_position != null);
+  const memberRows = (memberRowsRaw ?? []).map((m: any, i: number) => ({
+    id: m.id,
+    team_name: orderSet ? m.team_name : `Team ${i + 1}`,
+    draft_position: orderSet ? m.draft_position : i + 1,
+  }));
 
   const { data: myMemberRow } = await supabase
     .from("league_members")
@@ -83,6 +104,9 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
       overallRank: p.overall_rank,
     }));
 
+  const draftPending = draft?.status === "pending";
+  const scheduledAt = (draft as any)?.scheduled_at as string | null;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end">
@@ -94,6 +118,65 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
           <span>Mock Draft</span>
         </Link>
       </div>
+
+      {draftPending && scheduledAt && (
+        <div className="bg-[#4B3DFF]/10 border border-[#4B3DFF]/30 rounded-xl px-4 py-3 flex items-center gap-3">
+          <span className="text-lg">📅</span>
+          <div>
+            <p className="text-white font-semibold text-sm">Draft scheduled</p>
+            <p className="text-gray-400 text-xs mt-0.5">
+              {new Date(scheduledAt).toLocaleString("en-US", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+              })}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {draftPending && isCommissioner && (
+        <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5 space-y-5">
+          <div>
+            <h3 className="text-white font-bold">Pre-draft setup</h3>
+            <p className="text-gray-500 text-xs mt-0.5">Commissioner only · only available before the draft begins</p>
+          </div>
+
+          <DraftScheduleForm leagueId={Number(id)} scheduledAt={scheduledAt} />
+
+          {/* Order */}
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-[220px]">
+              <p className="text-xs text-gray-400 mb-2">Draft order</p>
+              {(allMemberRows ?? []).every((m: any) => m.draft_position == null) ? (
+                <p className="text-gray-600 text-sm italic">Not set yet — click Randomize to assign positions.</p>
+              ) : (
+                <ol className="space-y-1">
+                  {(allMemberRows ?? []).map((m: any) => (
+                    <li key={m.id} className="flex items-center gap-3 text-sm">
+                      <span className="text-gray-500 text-xs font-mono w-6 text-right">
+                        {m.draft_position ? `#${m.draft_position}` : "—"}
+                      </span>
+                      <span className="text-white">{m.team_name}</span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+            <form action={randomizeDraftOrder.bind(null, Number(id))}>
+              <button
+                type="submit"
+                className="border border-[#36D7B7]/40 hover:bg-[#36D7B7]/10 text-[#36D7B7] hover:text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
+              >
+                Randomize Order
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       <DraftBoard
         leagueId={Number(id)}
         draft={draft ? { id: draft.id, status: draft.status, currentPick: draft.current_pick, totalRounds: draft.total_rounds } : null}

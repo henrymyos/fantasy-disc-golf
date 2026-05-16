@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { z } from "zod";
+import { DGPT_2026_SCHEDULE } from "@/lib/dgpt-2026-schedule";
 
 function generateInviteCode(): string {
   return Math.random().toString(36).substring(2, 10).toUpperCase();
@@ -159,6 +160,7 @@ const UpdateLeagueSchema = z.object({
   rosterSize: z.coerce.number().int().min(5).max(20),
   mpoStarters: z.coerce.number().int().min(1).max(20),
   fpoStarters: z.coerce.number().int().min(1).max(20),
+  waiverOrderMode: z.enum(["reverse_standings", "reverse_last_add"]).default("reverse_standings"),
 }).refine((d) => d.mpoStarters + d.fpoStarters <= d.rosterSize, {
   message: "Total starters cannot exceed roster size",
   path: ["fpoStarters"],
@@ -179,13 +181,14 @@ export async function updateLeague(
     rosterSize: formData.get("rosterSize"),
     mpoStarters: formData.get("mpoStarters"),
     fpoStarters: formData.get("fpoStarters"),
+    waiverOrderMode: formData.get("waiverOrderMode") ?? "reverse_standings",
   });
 
   if (!result.success) {
     return { errors: result.error.flatten().fieldErrors };
   }
 
-  const { name, maxTeams, rosterSize, mpoStarters, fpoStarters } = result.data;
+  const { name, maxTeams, rosterSize, mpoStarters, fpoStarters, waiverOrderMode } = result.data;
   const startersCount = mpoStarters + fpoStarters;
   const admin = createAdminClient();
 
@@ -201,7 +204,7 @@ export async function updateLeague(
 
   const { error } = await admin
     .from("leagues")
-    .update({ name, max_teams: maxTeams, roster_size: rosterSize, starters_count: startersCount, mpo_starters: mpoStarters, fpo_starters: fpoStarters })
+    .update({ name, max_teams: maxTeams, roster_size: rosterSize, starters_count: startersCount, mpo_starters: mpoStarters, fpo_starters: fpoStarters, waiver_order_mode: waiverOrderMode })
     .eq("id", leagueId);
 
   if (error) return { message: error.message };
@@ -232,9 +235,34 @@ export async function setSelectedEvents(
 
   const cleaned = Array.from(new Set(slugs.filter((s) => typeof s === "string" && s.length > 0)));
 
+  // Re-apply the same lock window enforced in the UI: events that started
+  // within the next month (or already happened) can't have their inclusion
+  // changed, so preserve their current state regardless of the submitted set.
+  const lockBoundary = new Date();
+  lockBoundary.setHours(0, 0, 0, 0);
+  lockBoundary.setDate(lockBoundary.getDate() + 30);
+  const lockBoundaryIso = lockBoundary.toISOString().slice(0, 10);
+  const lockedSlugs = new Set(
+    DGPT_2026_SCHEDULE.filter((e) => e.startDate <= lockBoundaryIso).map((e) => e.slug),
+  );
+
+  const { data: current } = await admin
+    .from("leagues")
+    .select("selected_event_slugs")
+    .eq("id", leagueId)
+    .single();
+  const currentSelected = new Set<string>(((current as any)?.selected_event_slugs ?? []) as string[]);
+
+  // Strip locked entries from the submitted list, then re-add any locked slugs
+  // matching the prior persisted state.
+  const final = new Set(cleaned.filter((s) => !lockedSlugs.has(s)));
+  for (const slug of lockedSlugs) {
+    if (currentSelected.has(slug)) final.add(slug);
+  }
+
   const { error } = await admin
     .from("leagues")
-    .update({ selected_event_slugs: cleaned })
+    .update({ selected_event_slugs: Array.from(final) })
     .eq("id", leagueId);
 
   if (error) throw new Error(error.message);

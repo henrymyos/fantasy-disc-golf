@@ -45,6 +45,83 @@ export async function startDraft(leagueId: number): Promise<void> {
   revalidatePath(`/league/${leagueId}/draft`);
 }
 
+// Commissioner-only: assign a random draft_position to each member.
+// Only allowed before the draft starts.
+export async function randomizeDraftOrder(leagueId: number): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const admin = createAdminClient();
+  const { data: league } = await admin
+    .from("leagues")
+    .select("commissioner_id")
+    .eq("id", leagueId)
+    .single();
+  if (!league || league.commissioner_id !== user.id) return;
+
+  const { data: draft } = await admin
+    .from("drafts")
+    .select("status")
+    .eq("league_id", leagueId)
+    .single();
+  if (!draft || draft.status !== "pending") return;
+
+  const { data: members } = await admin
+    .from("league_members")
+    .select("id")
+    .eq("league_id", leagueId)
+    .order("joined_at");
+  if (!members || members.length === 0) return;
+
+  const shuffled = [...members].sort(() => Math.random() - 0.5);
+  for (let i = 0; i < shuffled.length; i++) {
+    await admin
+      .from("league_members")
+      .update({ draft_position: i + 1 })
+      .eq("id", shuffled[i].id);
+  }
+
+  revalidatePath(`/league/${leagueId}/draft`);
+  revalidatePath(`/league/${leagueId}`);
+}
+
+// Commissioner-only: schedule (or clear) the draft start time.
+export async function scheduleDraft(leagueId: number, scheduledAtIso: string | null): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const admin = createAdminClient();
+  const { data: league } = await admin
+    .from("leagues")
+    .select("commissioner_id")
+    .eq("id", leagueId)
+    .single();
+  if (!league || league.commissioner_id !== user.id) return;
+
+  const { data: draft } = await admin
+    .from("drafts")
+    .select("id, status")
+    .eq("league_id", leagueId)
+    .single();
+  if (!draft || draft.status !== "pending") return;
+
+  // Reject past times (allow null to clear).
+  if (scheduledAtIso) {
+    const ms = Date.parse(scheduledAtIso);
+    if (!Number.isFinite(ms) || ms <= Date.now()) return;
+  }
+
+  await admin
+    .from("drafts")
+    .update({ scheduled_at: scheduledAtIso })
+    .eq("id", draft.id);
+
+  revalidatePath(`/league/${leagueId}/draft`);
+  revalidatePath(`/league/${leagueId}`);
+}
+
 export async function pauseDraft(leagueId: number): Promise<void> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

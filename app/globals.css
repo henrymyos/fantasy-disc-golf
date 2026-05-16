@@ -22,6 +22,15 @@ body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
+/* Used on wheel-picker columns so the scrollbar doesn't crowd the digits. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

@@ -246,7 +246,14 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
     });
   }
 
-  const drafted = draft?.status === "in_progress" || draft?.status === "paused" || draft?.status === "complete";
+  // Show the bottom Available/My Team panel in any state where the board is
+  // visible (including pending), but only allow actual drafting during
+  // in_progress.
+  const drafted =
+    draft?.status === "pending" ||
+    draft?.status === "in_progress" ||
+    draft?.status === "paused" ||
+    draft?.status === "complete";
 
   // My team — picks where teamId === myMemberId, sorted by pickNumber
   const myPicks = myMemberId == null

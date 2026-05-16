@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { proposeTrade, respondToTrade, cancelTrade, type TradeMovement } from "@/actions/trades";
 
@@ -21,6 +22,11 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
   const [movements, setMovements] = useState<TradeMovement[]>([]);
   const [message, setMessage] = useState("");
   const [submitting, startSubmitTransition] = useTransition();
+  // True when this trades page was entered via ?with=&want= from another
+  // page (e.g. a player profile). Used to route "← Back" buttons through
+  // the browser history so the user lands back where they came from.
+  const [enteredViaPrefill, setEnteredViaPrefill] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     params.then(({ id }) => {
@@ -85,6 +91,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
           setMovements([{ playerId: wantId, fromTeamId: targetTeam.id, toTeamId: me.id }]);
           setMessage("");
           setStep("players");
+          setEnteredViaPrefill(true);
         }
         window.history.replaceState(null, "", window.location.pathname);
       }
@@ -293,7 +300,13 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
     return (
       <div className="max-w-5xl pb-24">
         <div className="flex items-center gap-3 mb-5">
-          <button onClick={() => setStep("teams")} className="text-gray-400 hover:text-white text-sm transition">
+          <button
+            onClick={() => {
+              if (enteredViaPrefill) router.back();
+              else setStep("teams");
+            }}
+            className="text-gray-400 hover:text-white text-sm transition"
+          >
             ← Back
           </button>
           <h2 className="text-white font-bold">Build the trade</h2>

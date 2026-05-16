@@ -17,11 +17,19 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, name, current_week, starters_count, selected_event_slugs")
+    .select("id, name, current_week, starters_count, selected_event_slugs, waivers_locked")
     .eq("id", id)
     .single();
 
   if (!league) notFound();
+
+  const { data: activeTournament } = await supabase
+    .from("tournaments")
+    .select("id")
+    .lte("start_date", new Date().toISOString().slice(0, 10))
+    .gte("end_date", new Date().toISOString().slice(0, 10))
+    .maybeSingle();
+  const waiversActive = (league as any).waivers_locked === true || activeTournament !== null;
 
   const selectedSlugs = new Set(effectiveSelection((league as any).selected_event_slugs));
   const today = new Date().toISOString().slice(0, 10);
@@ -39,7 +47,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   const { data: members } = await supabase
     .from("league_members")
-    .select("id, team_name, user_id, is_commissioner, profiles(username)")
+    .select("id, team_name, user_id, is_commissioner, waiver_priority, profiles(username)")
     .eq("league_id", id)
     .order("joined_at");
 
@@ -102,10 +110,20 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                     : "hover:bg-white/5"
                 }`}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0">
                   <span className="text-gray-500 text-sm w-4">{i + 1}</span>
-                  <div>
-                    <p className="text-white text-sm font-medium">{t.team_name}</p>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-white text-sm font-medium truncate">{t.team_name}</p>
+                      {waiversActive && (t as any).waiver_priority != null && (
+                        <span
+                          className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded text-yellow-300 bg-yellow-400/15"
+                          title={`Next waiver pick: #${(t as any).waiver_priority}`}
+                        >
+                          W#{(t as any).waiver_priority}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-gray-600 text-xs">{(t.profiles as any)?.username}</p>
                   </div>
                 </div>
