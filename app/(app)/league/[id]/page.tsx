@@ -2,6 +2,12 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { LeagueMember, Matchup } from "@/types";
+import {
+  DGPT_2026_SCHEDULE,
+  effectiveSelection,
+  formatEventDateRange,
+  formatEventLocation,
+} from "@/lib/dgpt-2026-schedule";
 
 export default async function LeagueDashboard({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -11,11 +17,18 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, name, current_week, starters_count")
+    .select("id, name, current_week, starters_count, selected_event_slugs")
     .eq("id", id)
     .single();
 
   if (!league) notFound();
+
+  const selectedSlugs = new Set(effectiveSelection((league as any).selected_event_slugs));
+  const today = new Date().toISOString().slice(0, 10);
+  const upcomingEvents = DGPT_2026_SCHEDULE
+    .filter((e) => selectedSlugs.has(e.slug) && e.startDate > today)
+    .sort((a, b) => a.startDate.localeCompare(b.startDate))
+    .slice(0, 6);
 
   const { data: members } = await supabase
     .from("league_members")
@@ -111,6 +124,37 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
             </div>
           )}
         </div>
+
+        {/* Upcoming tournaments */}
+        {upcomingEvents.length > 0 && (
+          <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
+            <h2 className="font-bold text-white mb-4">Upcoming Tournaments</h2>
+            <div className="space-y-2">
+              {upcomingEvents.map((event) => {
+                const url = event.pdgaEventId
+                  ? `https://www.pdga.com/tour/event/${event.pdgaEventId}`
+                  : `https://www.pdga.com/tour/search?keys=${encodeURIComponent(event.name)}`;
+                return (
+                  <a
+                    key={event.slug}
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between gap-4 p-3 rounded-xl bg-[#0f1117] border border-white/5 hover:border-white/15 transition"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-white font-medium text-sm truncate">{event.name}</p>
+                      <p className="text-gray-500 text-xs mt-0.5 truncate">
+                        {formatEventDateRange(event)} · {formatEventLocation(event)}
+                      </p>
+                    </div>
+                    <span className="text-gray-600 text-sm shrink-0">→</span>
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Mock Draft */}
         <Link

@@ -5,12 +5,17 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+export type TradeMovement = {
+  playerId: number;
+  fromTeamId: number;
+  toTeamId: number;
+};
+
 export async function proposeTrade(
   leagueId: number,
-  receiverTeamId: number,
-  offerPlayerIds: number[],
-  requestPlayerIds: number[],
-  message: string
+  receiverTeamIds: number[],
+  movements: TradeMovement[],
+  message: string,
 ): Promise<void> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -26,13 +31,18 @@ export async function proposeTrade(
     .single();
 
   if (!proposer) return;
+  if (receiverTeamIds.length === 0 || movements.length === 0) return;
+
+  // Reject any movement that doesn't actually move a player (same from = to).
+  const filtered = movements.filter((m) => m.fromTeamId !== m.toTeamId);
+  if (filtered.length === 0) return;
 
   const { data: trade, error } = await admin
     .from("trades")
     .insert({
       league_id: leagueId,
       proposer_id: proposer.id,
-      receiver_id: receiverTeamId,
+      receiver_id: receiverTeamIds[0] ?? null, // legacy column, first receiver
       message: message || null,
     })
     .select()
@@ -40,22 +50,23 @@ export async function proposeTrade(
 
   if (error || !trade) return;
 
-  const tradePlayers = [
-    ...offerPlayerIds.map((pid) => ({
+  await admin.from("trade_players").insert(
+    filtered.map((m) => ({
       trade_id: trade.id,
-      player_id: pid,
-      from_team_id: proposer.id,
-      to_team_id: receiverTeamId,
+      player_id: m.playerId,
+      from_team_id: m.fromTeamId,
+      to_team_id: m.toTeamId,
     })),
-    ...requestPlayerIds.map((pid) => ({
-      trade_id: trade.id,
-      player_id: pid,
-      from_team_id: receiverTeamId,
-      to_team_id: proposer.id,
-    })),
-  ];
+  );
 
-  await admin.from("trade_players").insert(tradePlayers);
+  await admin.from("trade_participants").insert(
+    receiverTeamIds.map((teamId) => ({
+      trade_id: trade.id,
+      team_id: teamId,
+      status: "pending" as const,
+    })),
+  );
+
   revalidatePath(`/league/${leagueId}/trades`);
 }
 
@@ -68,7 +79,7 @@ export async function respondToTrade(tradeId: number, accept: boolean): Promise<
 
   const { data: trade } = await admin
     .from("trades")
-    .select("id, league_id, proposer_id, receiver_id, status")
+    .select("id, league_id, proposer_id, status")
     .eq("id", tradeId)
     .single();
 
@@ -80,16 +91,55 @@ export async function respondToTrade(tradeId: number, accept: boolean): Promise<
     .eq("league_id", trade.league_id)
     .eq("user_id", user.id)
     .single();
+  if (!member) return;
 
-  if (!member || member.id !== trade.receiver_id) return;
+  // The current user must be a pending participant on this trade.
+  const { data: myParticipant } = await admin
+    .from("trade_participants")
+    .select("id, status")
+    .eq("trade_id", tradeId)
+    .eq("team_id", member.id)
+    .single();
+
+  if (!myParticipant || myParticipant.status !== "pending") return;
 
   if (!accept) {
-    await admin.from("trades").update({ status: "rejected", resolved_at: new Date().toISOString() }).eq("id", tradeId);
+    await admin
+      .from("trade_participants")
+      .update({ status: "rejected", responded_at: new Date().toISOString() })
+      .eq("id", myParticipant.id);
+
+    // A single rejection kills the whole trade.
+    await admin
+      .from("trades")
+      .update({ status: "rejected", resolved_at: new Date().toISOString() })
+      .eq("id", tradeId);
+
     revalidatePath(`/league/${trade.league_id}/trades`);
     return;
   }
 
-  const { data: tradePlayers } = await admin.from("trade_players").select("player_id, from_team_id, to_team_id").eq("trade_id", tradeId);
+  await admin
+    .from("trade_participants")
+    .update({ status: "accepted", responded_at: new Date().toISOString() })
+    .eq("id", myParticipant.id);
+
+  // If every participant has accepted, execute the player moves.
+  const { data: allParticipants } = await admin
+    .from("trade_participants")
+    .select("status")
+    .eq("trade_id", tradeId);
+
+  const allAccepted = (allParticipants ?? []).every((p) => p.status === "accepted");
+  if (!allAccepted) {
+    revalidatePath(`/league/${trade.league_id}/trades`);
+    return;
+  }
+
+  const { data: tradePlayers } = await admin
+    .from("trade_players")
+    .select("player_id, from_team_id, to_team_id")
+    .eq("trade_id", tradeId);
 
   for (const tp of tradePlayers ?? []) {
     await admin.from("rosters").update({ team_id: tp.to_team_id })
@@ -98,7 +148,11 @@ export async function respondToTrade(tradeId: number, accept: boolean): Promise<
       .eq("team_id", tp.from_team_id);
   }
 
-  await admin.from("trades").update({ status: "accepted", resolved_at: new Date().toISOString() }).eq("id", tradeId);
+  await admin
+    .from("trades")
+    .update({ status: "accepted", resolved_at: new Date().toISOString() })
+    .eq("id", tradeId);
+
   revalidatePath(`/league/${trade.league_id}/trades`);
   revalidatePath(`/league/${trade.league_id}/lineups`);
 }
