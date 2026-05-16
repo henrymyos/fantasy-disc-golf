@@ -29,6 +29,84 @@ function pointsFor(position: number, division: "MPO" | "FPO"): number {
   return 1;
 }
 
+// Per-round bonus points must match lib/scoring-constants.ts.
+const BONUS_POINTS = { hotRound: 10, bogeyFree: 5, ace: 20 } as const;
+
+type RoundBonus = { hot: number; bogey: number; ace: number };
+
+async function fetchRoundJson(pdgaId: number, division: "MPO" | "FPO", round: number): Promise<any | null> {
+  const url = `https://www.pdga.com/apps/tournament/live-api/live_results_fetch_round?TournID=${pdgaId}&Division=${division}&Round=${round}`;
+  try {
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) return null;
+    const data = await r.json();
+    return data?.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * For a single event, walks every (division, round) and computes per-PDGA#
+ * counts of hot rounds, bogey-free rounds, and aces.
+ *
+ * - Hot round  = lowest RoundScore in that division+round. Multiple players
+ *                can share it; each gets credit.
+ * - Bogey-free = no hole's score exceeds par in that round.
+ * - Ace        = a hole scored 1 on a par >= 2 hole.
+ */
+async function computeBonusesForEvent(pdgaId: number): Promise<Map<string, RoundBonus>> {
+  const bonus = new Map<string, RoundBonus>();
+
+  for (const division of ["MPO", "FPO"] as const) {
+    // Probe rounds 1..6 in parallel (events have 3–4; extras come back empty).
+    const roundResponses = await Promise.all(
+      [1, 2, 3, 4, 5, 6].map((r) => fetchRoundJson(pdgaId, division, r)),
+    );
+
+    for (const data of roundResponses) {
+      if (!data?.scores) continue;
+      const holesInRound = data.layouts?.[0]?.Holes ?? 18;
+
+      // Only count players who actually completed the round.
+      const completed = (data.scores as any[]).filter(
+        (s) =>
+          typeof s.RoundScore === "number" &&
+          Array.isArray(s.HoleScores) &&
+          s.HoleScores.length === holesInRound &&
+          s.HoleScores.every((h: string) => h !== "" && h != null),
+      );
+      if (completed.length < 5) continue; // round wasn't played for this division
+
+      const minRound = Math.min(...completed.map((s) => s.RoundScore));
+
+      for (const s of completed) {
+        if (!s.PDGANum) continue;
+        const key = String(s.PDGANum);
+        const entry = bonus.get(key) ?? { hot: 0, bogey: 0, ace: 0 };
+
+        if (s.RoundScore === minRound) entry.hot += 1;
+
+        const pars = String(s.Pars ?? "").split(",").map((n) => Number(n));
+        const holes = (s.HoleScores as string[]).map((n) => Number(n));
+        let bogeyFree = holes.length > 0;
+        for (let i = 0; i < holes.length; i++) {
+          if (holes[i] > (pars[i] ?? 99)) { bogeyFree = false; break; }
+        }
+        if (bogeyFree) entry.bogey += 1;
+
+        for (let i = 0; i < holes.length; i++) {
+          if (holes[i] === 1 && (pars[i] ?? 0) >= 2) entry.ace += 1;
+        }
+
+        bonus.set(key, entry);
+      }
+    }
+  }
+
+  return bonus;
+}
+
 type ParsedRow = { place: number; pdgaNumber: number; name: string };
 
 async function fetchEventHtml(pdgaId: number): Promise<string> {
@@ -146,6 +224,9 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
       fpoRows: fpo.length,
     });
 
+    // Pull per-player hot rounds, bogey-free rounds, and aces for this event.
+    const bonusByPdga = await computeBonusesForEvent(event.pdgaId);
+
     const sections = [
       { rows: mpo, division: "MPO" as const },
       { rows: fpo, division: "FPO" as const },
@@ -158,14 +239,20 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
           unmatched.push({ event: event.name, ...r, division });
           continue;
         }
+        const bonus = bonusByPdga.get(String(r.pdgaNumber)) ?? { hot: 0, bogey: 0, ace: 0 };
+        const placementPts = pointsFor(r.place, division);
+        const bonusPts =
+          bonus.hot * BONUS_POINTS.hotRound +
+          bonus.bogey * BONUS_POINTS.bogeyFree +
+          bonus.ace * BONUS_POINTS.ace;
         rowsToInsert.push({
           tournament_id: event.dbId,
           player_id: player.id,
           finishing_position: r.place,
-          hot_round_count: 0,
-          bogey_free_count: 0,
-          ace_count: 0,
-          fantasy_points: pointsFor(r.place, division),
+          hot_round_count: bonus.hot,
+          bogey_free_count: bonus.bogey,
+          ace_count: bonus.ace,
+          fantasy_points: Math.round((placementPts + bonusPts) * 10) / 10,
         });
       }
     }
