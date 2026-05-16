@@ -30,6 +30,13 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
     .sort((a, b) => a.startDate.localeCompare(b.startDate))
     .slice(0, 6);
 
+  const { data: draft } = await supabase
+    .from("drafts")
+    .select("status")
+    .eq("league_id", id)
+    .single();
+  const showMockDraft = draft?.status !== "complete";
+
   const { data: members } = await supabase
     .from("league_members")
     .select("id, team_name, user_id, is_commissioner, profiles(username)")
@@ -117,6 +124,28 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
       {/* This week's matchups */}
       <div className="lg:col-span-2 space-y-4">
+        {showMockDraft && (
+          <Link
+            href={`/league/${id}/mock-draft`}
+            className="block bg-[#1a1d23] rounded-2xl p-5 border border-white/5 hover:border-[#4B3DFF]/40 hover:bg-[#1a1d23]/80 transition"
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-[#4B3DFF]/20 border border-[#4B3DFF]/30 flex items-center justify-center text-xl shrink-0">
+                  🎯
+                </div>
+                <div className="min-w-0">
+                  <p className="text-white font-bold text-sm">Mock Draft</p>
+                  <p className="text-gray-500 text-xs mt-0.5">
+                    Practice against bots — pick your draft position and go
+                  </p>
+                </div>
+              </div>
+              <span className="text-gray-600 text-lg shrink-0">→</span>
+            </div>
+          </Link>
+        )}
+
         <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
           <h2 className="font-bold text-white mb-4">Week {league.current_week} Matchups</h2>
           {(matchups ?? []).length === 0 ? (
@@ -163,47 +192,6 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
           </div>
         )}
 
-        {/* Mock Draft */}
-        <Link
-          href={`/league/${id}/mock-draft`}
-          className="block bg-[#1a1d23] rounded-2xl p-5 border border-white/5 hover:border-[#4B3DFF]/40 hover:bg-[#1a1d23]/80 transition"
-        >
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-[#4B3DFF]/20 border border-[#4B3DFF]/30 flex items-center justify-center text-xl shrink-0">
-                🎯
-              </div>
-              <div className="min-w-0">
-                <p className="text-white font-bold text-sm">Mock Draft</p>
-                <p className="text-gray-500 text-xs mt-0.5">
-                  Practice against bots — pick your draft position and go
-                </p>
-              </div>
-            </div>
-            <span className="text-gray-600 text-lg shrink-0">→</span>
-          </div>
-        </Link>
-
-        {/* Members */}
-        <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
-          <h2 className="font-bold text-white mb-4">Teams ({(members ?? []).length})</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {(members ?? []).map((m) => (
-              <div key={m.id} className="flex items-center gap-2 py-2 px-3 rounded-lg hover:bg-white/3">
-                <div className="w-7 h-7 rounded-full bg-[#4B3DFF]/40 flex items-center justify-center text-white text-xs font-bold">
-                  {m.team_name[0]?.toUpperCase()}
-                </div>
-                <div>
-                  <p className="text-white text-sm font-medium">{m.team_name}</p>
-                  <p className="text-gray-600 text-xs">{(m.profiles as any)?.username}</p>
-                </div>
-                {m.is_commissioner && (
-                  <span className="ml-auto text-xs text-[#36D7B7]">★</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );
