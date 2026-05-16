@@ -474,7 +474,7 @@ function TeamRosterCard({ leagueId, player }: { leagueId: number; player: Player
     <div className="rounded-xl overflow-hidden border border-white/5">
       <div
         className="px-3 py-1.5 flex items-center"
-        style={{ background: `${accent}28` }}
+        style={{ background: isMpo ? "var(--mpo-fill)" : "var(--fpo-fill)" }}
       >
         <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: accent }}>
           {player.division}
@@ -533,7 +533,7 @@ function SelectablePlayerCard({
         onClick={onToggle}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}
         className="px-3 py-1.5 flex items-center justify-between cursor-pointer"
-        style={{ background: `${accent}28` }}
+        style={{ background: isMpo ? "var(--mpo-fill)" : "var(--fpo-fill)" }}
       >
         <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: accent }}>
           {player.division}

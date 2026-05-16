@@ -40,8 +40,8 @@ export function LineupSlot({
   const [open, setOpen] = useState(false);
   const color = divColor(division);
   const isMpo = division === "MPO";
-  const bgFilled = isMpo ? "rgba(75,61,255,0.12)" : "rgba(54,215,183,0.10)";
-  const borderFilled = isMpo ? "rgba(75,61,255,0.19)" : "rgba(54,215,183,0.16)";
+  const bgFilled = isMpo ? "var(--mpo-fill)" : "var(--fpo-fill)";
+  const borderFilled = isMpo ? "var(--mpo-fill-border)" : "var(--fpo-fill-border)";
 
   return (
     <>

@@ -3,6 +3,10 @@
 :root {
   --background: #0f1117;
   --foreground: #ffffff;
+  --mpo-fill: rgba(75, 61, 255, 0.32);
+  --mpo-fill-border: rgba(75, 61, 255, 0.45);
+  --fpo-fill: rgba(54, 215, 183, 0.26);
+  --fpo-fill-border: rgba(54, 215, 183, 0.40);
 }
 
 @theme inline {
@@ -31,4 +35,98 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #ffffff35;
+}
+
+/* ─── Light theme overrides ─────────────────────────────────────────────
+   The app was written with dark surface hex codes baked in via Tailwind's
+   arbitrary-value syntax (e.g. `bg-[#1a1d23]`). To support light mode
+   without rewriting every component, this block targets those specific
+   generated class selectors and remaps them when `data-theme="light"` is
+   set on <html>. Brand accents (#4B3DFF, #36D7B7) keep their values in
+   both themes since they read well on either background.
+   ────────────────────────────────────────────────────────────────────── */
+
+[data-theme="light"] {
+  --background: #f5f6fa;
+  --foreground: #0f1117;
+  --mpo-fill: rgba(75, 61, 255, 0.22);
+  --mpo-fill-border: rgba(75, 61, 255, 0.35);
+  --fpo-fill: rgba(54, 215, 183, 0.22);
+  --fpo-fill-border: rgba(54, 215, 183, 0.35);
+}
+
+[data-theme="light"] body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: #00000020;
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: #00000035;
+}
+
+/* Surface colors */
+[data-theme="light"] .bg-\[\#0f1117\] { background-color: #eef0f5 !important; }
+[data-theme="light"] .bg-\[\#13151c\] { background-color: #ffffff !important; }
+[data-theme="light"] .bg-\[\#1a1d23\] { background-color: #ffffff !important; }
+[data-theme="light"] .bg-\[\#1e2028\] { background-color: #f0f1f5 !important; }
+[data-theme="light"] .bg-\[\#23262e\] { background-color: #e9ebf0 !important; }
+[data-theme="light"] .hover\:bg-\[\#23262e\]:hover { background-color: #e9ebf0 !important; }
+
+/* Text: anything explicitly white should become dark on light surfaces */
+[data-theme="light"] .text-white { color: #0f1117 !important; }
+
+/* …except on brand-colored buttons/badges, where white text must stay white. */
+[data-theme="light"] .bg-\[\#4B3DFF\].text-white,
+[data-theme="light"] .bg-\[\#4B3DFF\] .text-white,
+[data-theme="light"] .bg-\[\#3a2ee0\] .text-white,
+[data-theme="light"] .bg-\[\#3a2eff\] .text-white,
+[data-theme="light"] .hover\:bg-\[\#3a2ee0\]:hover .text-white,
+[data-theme="light"] .hover\:bg-\[\#3a2eff\]:hover .text-white {
+  color: #ffffff !important;
+}
+
+/* Mute hierarchy: light theme has darker greys than dark theme defaults */
+[data-theme="light"] .text-gray-300 { color: #1f2937 !important; }
+[data-theme="light"] .text-gray-400 { color: #4b5563 !important; }
+[data-theme="light"] .text-gray-500 { color: #6b7280 !important; }
+[data-theme="light"] .text-gray-600 { color: #9ca3af !important; }
+[data-theme="light"] .text-gray-700 { color: #cbd5e1 !important; }
+
+/* Borders: white/X opacity reads as invisible on light surfaces */
+[data-theme="light"] .border-white\/5,
+[data-theme="light"] .border-white\/10,
+[data-theme="light"] .border-white\/15,
+[data-theme="light"] .border-white\/20,
+[data-theme="light"] .border-white\/30 {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+[data-theme="light"] .hover\:border-white\/10:hover,
+[data-theme="light"] .hover\:border-white\/15:hover,
+[data-theme="light"] .hover\:border-white\/20:hover,
+[data-theme="light"] .hover\:border-white\/30:hover {
+  border-color: rgba(0, 0, 0, 0.16) !important;
+}
+
+/* Subtle white/X backgrounds (hover/highlights) → subtle black/X */
+[data-theme="light"] .bg-white\/3,
+[data-theme="light"] .bg-white\/5,
+[data-theme="light"] .bg-white\/10 {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+}
+[data-theme="light"] .hover\:bg-white\/5:hover,
+[data-theme="light"] .hover\:bg-white\/10:hover {
+  background-color: rgba(0, 0, 0, 0.06) !important;
+}
+[data-theme="light"] .border-white\/5,
+[data-theme="light"] .ring-white\/10 {
+  --tw-ring-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Inputs: explicit text-white was overridden above, but inputs styled with
+   placeholder-gray-600 need a slightly darker placeholder on light */
+[data-theme="light"] .placeholder-gray-600::placeholder {
+  color: #9ca3af !important;
 }

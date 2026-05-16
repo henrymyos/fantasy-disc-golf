@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/actions/auth";
 import { SidebarNav } from "@/components/sidebar-nav";
 import { MobileTopBar } from "@/components/mobile-top-bar";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -45,6 +46,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               {username}
             </span>
           </div>
+          <ThemeToggle />
           <form action={logout}>
             <button
               type="submit"
