@@ -7,6 +7,10 @@
   --mpo-fill-border: rgba(75, 61, 255, 0.45);
   --fpo-fill: rgba(54, 215, 183, 0.26);
   --fpo-fill-border: rgba(54, 215, 183, 0.40);
+  /* Foreground colors for draft pick cells; readable on the tinted backgrounds
+     in both themes. */
+  --pick-fg: #ffffff;
+  --pick-fg-muted: rgba(255, 255, 255, 0.7);
 }
 
 @theme inline {
@@ -62,6 +66,9 @@ body {
   --mpo-fill-border: rgba(75, 61, 255, 0.35);
   --fpo-fill: rgba(54, 215, 183, 0.22);
   --fpo-fill-border: rgba(54, 215, 183, 0.35);
+  /* Picks: dark text reads better on the lighter tinted bg in light mode */
+  --pick-fg: #0f1117;
+  --pick-fg-muted: rgba(15, 17, 23, 0.7);
 }
 
 [data-theme="light"] body {
@@ -78,8 +85,10 @@ body {
 
 /* Surface colors */
 [data-theme="light"] .bg-\[\#0f1117\] { background-color: #eef0f5 !important; }
+[data-theme="light"] .bg-\[\#0f1117\]\/95 { background-color: rgba(238, 240, 245, 0.95) !important; }
 [data-theme="light"] .bg-\[\#13151c\] { background-color: #ffffff !important; }
 [data-theme="light"] .bg-\[\#1a1d23\] { background-color: #ffffff !important; }
+[data-theme="light"] .bg-\[\#1a1d23\]\/80 { background-color: rgba(255, 255, 255, 0.85) !important; }
 [data-theme="light"] .bg-\[\#1e2028\] { background-color: #f0f1f5 !important; }
 [data-theme="light"] .bg-\[\#23262e\] { background-color: #e9ebf0 !important; }
 [data-theme="light"] .hover\:bg-\[\#23262e\]:hover { background-color: #e9ebf0 !important; }

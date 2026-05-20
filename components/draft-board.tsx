@@ -39,7 +39,7 @@ function divColor(division: string) {
 }
 
 function divBg(division: string): string {
-  return division === "MPO" ? "rgba(75,61,255,0.32)" : "rgba(54,215,183,0.22)";
+  return division === "MPO" ? "var(--mpo-fill)" : "var(--fpo-fill)";
 }
 
 function DraftLineupRow({
@@ -208,16 +208,16 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
         gridCells.push(
           <div
             key={`${round}-${m.id}`}
-            style={{ background: divBg(pick.playerDivision) }}
+            style={{ background: divBg(pick.playerDivision), color: "var(--pick-fg)" }}
             className="flex flex-col p-2 min-h-[80px] rounded-lg overflow-hidden"
           >
             <div className="flex justify-between items-center">
-              <span className="text-white/50 text-[10px] font-semibold">{pick.playerDivision}</span>
-              <span className="text-white/40 text-[10px] font-mono">{pickLabel}</span>
+              <span className="text-[10px] font-semibold" style={{ color: "var(--pick-fg-muted)" }}>{pick.playerDivision}</span>
+              <span className="text-[10px] font-mono" style={{ color: "var(--pick-fg-muted)", opacity: 0.7 }}>{pickLabel}</span>
             </div>
             <div className="flex-1 flex flex-col justify-end mt-1">
-              {first && <p className="text-white/70 text-[11px] leading-tight truncate">{first}</p>}
-              <p className="text-white font-bold text-sm leading-tight truncate">{last}</p>
+              {first && <p className="text-[11px] leading-tight truncate" style={{ color: "var(--pick-fg-muted)" }}>{first}</p>}
+              <p className="font-bold text-sm leading-tight truncate" style={{ color: "var(--pick-fg)" }}>{last}</p>
             </div>
           </div>
         );
@@ -393,13 +393,13 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
             </div>
 
             {bottomTab === "available" && (
-              <>
-                <div className="flex gap-1 bg-[#0f1117] rounded-lg p-0.5 ml-auto">
+              <div className="ml-auto flex flex-col-reverse sm:flex-row sm:items-center gap-2">
+                <div className="flex gap-1 bg-[#0f1117] rounded-lg p-0.5 w-48 sm:w-auto">
                   {(["all", "mpo", "fpo"] as Tab[]).map((t) => (
                     <button
                       key={t}
                       onClick={() => setTab(t)}
-                      className={`px-3 py-1 rounded-md text-xs font-semibold transition ${
+                      className={`flex-1 sm:flex-initial px-3 py-1 rounded-md text-xs font-semibold transition ${
                         t === tab ? "bg-[#4B3DFF] text-white" : "text-gray-400 hover:text-white"
                       }`}
                     >
@@ -412,9 +412,9 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
                   placeholder="Search..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="bg-[#0f1117] border border-white/10 rounded-lg px-3 py-1 text-white text-xs placeholder-gray-600 focus:outline-none focus:border-[#4B3DFF] w-36"
+                  className="bg-[#0f1117] border border-white/10 rounded-lg px-3 py-1 text-white text-xs placeholder-gray-600 focus:outline-none focus:border-[#4B3DFF] w-48 sm:w-36"
                 />
-              </>
+              </div>
             )}
 
             {isMyPick && (

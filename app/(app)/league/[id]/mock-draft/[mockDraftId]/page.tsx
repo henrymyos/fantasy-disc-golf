@@ -34,7 +34,7 @@ export default async function MockDraftViewerPage({
   const admin = createAdminClient();
   const { data: mock } = await admin
     .from("mock_drafts")
-    .select("id, user_id, league_id, my_draft_position, num_teams, roster_size, picks, created_at")
+    .select("id, user_id, league_id, my_draft_position, num_teams, roster_size, picks, created_at, status")
     .eq("id", Number(mockDraftId))
     .single();
 
@@ -65,6 +65,7 @@ export default async function MockDraftViewerPage({
         myDraftPosition: mock.my_draft_position,
         picks: (mock.picks ?? []) as SavedPick[],
         createdAt: mock.created_at,
+        status: ((mock as any).status ?? "complete") as "in_progress" | "complete",
       }}
     />
   );

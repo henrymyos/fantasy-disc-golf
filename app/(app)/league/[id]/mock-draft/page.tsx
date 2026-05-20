@@ -35,7 +35,7 @@ export default async function MockDraftHubPage({
   const admin = createAdminClient();
   const { data: drafts } = await admin
     .from("mock_drafts")
-    .select("id, my_draft_position, num_teams, roster_size, picks, created_at")
+    .select("id, my_draft_position, num_teams, roster_size, picks, created_at, status")
     .eq("user_id", user.id)
     .eq("league_id", id)
     .order("created_at", { ascending: false });
@@ -110,9 +110,20 @@ export default async function MockDraftHubPage({
                   className={`flex items-center justify-between gap-4 px-5 py-4 hover:bg-white/5 transition ${i !== 0 ? "border-t border-white/5" : ""}`}
                 >
                   <div className="min-w-0">
-                    <p className="text-white font-medium text-sm">
-                      {date} <span className="text-gray-600">· {time}</span>
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-white font-medium text-sm">
+                        {date} <span className="text-gray-600">· {time}</span>
+                      </p>
+                      {(d as any).status === "in_progress" ? (
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded text-yellow-300 bg-yellow-400/15 border border-yellow-400/30">
+                          In progress
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded text-[#36D7B7] bg-[#36D7B7]/10 border border-[#36D7B7]/25">
+                          Complete
+                        </span>
+                      )}
+                    </div>
                     <p className="text-gray-500 text-xs mt-0.5">
                       Pick #{d.my_draft_position} of {d.num_teams} · {myPicks.length} players drafted
                     </p>

@@ -11,6 +11,8 @@ type SavedPick = {
   playerId: number | null;
 };
 
+type MockStatus = "in_progress" | "complete";
+
 export async function saveMockDraft(
   leagueId: string,
   payload: {
@@ -18,6 +20,8 @@ export async function saveMockDraft(
     numTeams: number;
     rosterSize: number;
     picks: SavedPick[];
+    status?: MockStatus;
+    id?: number;
   }
 ): Promise<{ id: number }> {
   const supabase = await createClient();
@@ -35,6 +39,33 @@ export async function saveMockDraft(
     .single();
   if (!member) throw new Error("Not a member of this league");
 
+  const status: MockStatus = payload.status ?? "complete";
+
+  if (payload.id) {
+    // Update an existing draft (e.g. auto-save during drafting).
+    const { data: existing } = await admin
+      .from("mock_drafts")
+      .select("user_id")
+      .eq("id", payload.id)
+      .single();
+    if (!existing || existing.user_id !== user.id) {
+      throw new Error("Not authorized");
+    }
+    const { error: updateError } = await admin
+      .from("mock_drafts")
+      .update({
+        my_draft_position: payload.myDraftPosition,
+        num_teams: payload.numTeams,
+        roster_size: payload.rosterSize,
+        picks: payload.picks,
+        status,
+      })
+      .eq("id", payload.id);
+    if (updateError) throw new Error(updateError.message);
+    revalidatePath(`/league/${leagueId}/mock-draft`);
+    return { id: payload.id };
+  }
+
   const { data, error } = await admin
     .from("mock_drafts")
     .insert({
@@ -44,6 +75,7 @@ export async function saveMockDraft(
       num_teams: payload.numTeams,
       roster_size: payload.rosterSize,
       picks: payload.picks,
+      status,
     })
     .select("id")
     .single();

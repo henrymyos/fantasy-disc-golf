@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { saveMockDraft } from "@/actions/mock-drafts";
 
 type Player = {
@@ -52,12 +53,15 @@ type Props = {
   mpoStarters: number;
   fpoStarters: number;
   players: Player[];
-  /** When provided, renders an existing mock draft in read-only view. */
+  /** When provided, hydrate from a previously saved draft. */
   initialMockDraft?: {
     id: number;
     myDraftPosition: number;
     picks: { pickNumber: number; teamIndex: number; playerId: number | null }[];
     createdAt: string;
+    /** If "in_progress", the draft is resumed in editable mode; otherwise
+     *  the saved draft is shown as a read-only completed run. */
+    status?: "in_progress" | "complete";
   };
 };
 
@@ -71,8 +75,17 @@ export function MockDraft({
   players,
   initialMockDraft,
 }: Props) {
-  const isReadOnly = !!initialMockDraft;
-  const [phase, setPhase] = useState<Phase>(initialMockDraft ? "complete" : "setup");
+  // A completed initial draft is shown read-only; an in-progress one is
+  // resumed in editable mode.
+  const isReadOnly = !!initialMockDraft && initialMockDraft.status !== "in_progress";
+  const isResuming = !!initialMockDraft && initialMockDraft.status === "in_progress";
+
+  const totalPicks = numTeams * rosterSize;
+
+  const [phase, setPhase] = useState<Phase>(() => {
+    if (!initialMockDraft) return "setup";
+    return initialMockDraft.status === "in_progress" ? "drafting" : "complete";
+  });
   const [myDraftPosition, setMyDraftPosition] = useState<number>(initialMockDraft?.myDraftPosition ?? 1);
   const [picks, setPicks] = useState<Pick[]>(() => {
     if (!initialMockDraft) return [];
@@ -83,7 +96,12 @@ export function MockDraft({
       playerId: p.playerId,
     }));
   });
-  const [currentPickIndex, setCurrentPickIndex] = useState<number>(initialMockDraft ? numTeams * rosterSize : 0);
+  const [currentPickIndex, setCurrentPickIndex] = useState<number>(() => {
+    if (!initialMockDraft) return 0;
+    // Resume from the first slot that hasn't been filled yet.
+    const firstEmpty = initialMockDraft.picks.findIndex((p) => p.playerId == null);
+    return firstEmpty === -1 ? numTeams * rosterSize : firstEmpty;
+  });
   const [divTab, setDivTab] = useState<DivisionTab>("all");
   const [bottomTab, setBottomTab] = useState<BottomTab>(isReadOnly ? "team" : "available");
   const [search, setSearch] = useState<string>("");
@@ -92,9 +110,11 @@ export function MockDraft({
   const [saveError, setSaveError] = useState<string | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
   const botTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasSavedRef = useRef(!!initialMockDraft);
-
-  const totalPicks = numTeams * rosterSize;
+  const hasSavedRef = useRef(!!initialMockDraft && initialMockDraft.status === "complete");
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftIdRef = useRef<number | null>(initialMockDraft?.id ?? null);
+  const router = useRouter();
+  const [exiting, setExiting] = useState(false);
 
   // Build a sorted master list of players by overallRank (then fallback worldRanking, then name)
   const sortedAll = useMemo(() => {
@@ -189,13 +209,18 @@ export function MockDraft({
     if (row) row.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [currentRound, phase]);
 
-  // Auto-save when a fresh draft completes
+  // Autosave during drafting (debounced) and once on completion. The first
+  // save creates the row; subsequent saves update it via its stored id.
   useEffect(() => {
-    if (phase !== "complete" || hasSavedRef.current || isReadOnly) return;
-    hasSavedRef.current = true;
-    (async () => {
+    if (isReadOnly) return;
+    if (phase === "setup") return;
+    if (phase === "complete" && hasSavedRef.current) return;
+
+    const completed = phase === "complete";
+    const persist = async () => {
       try {
         const res = await saveMockDraft(leagueId, {
+          id: draftIdRef.current ?? undefined,
           myDraftPosition,
           numTeams,
           rosterSize,
@@ -204,17 +229,66 @@ export function MockDraft({
             teamIndex: p.teamIndex,
             playerId: p.playerId,
           })),
+          status: completed ? "complete" : "in_progress",
         });
+        draftIdRef.current = res.id;
         setSavedId(res.id);
+        if (completed) hasSavedRef.current = true;
       } catch (err) {
-        hasSavedRef.current = false;
         setSaveError(err instanceof Error ? err.message : "Save failed");
       }
-    })();
+    };
+
+    // Fire immediately on completion; otherwise debounce a bit so we don't
+    // hammer the DB on every bot pick.
+    if (completed) {
+      persist();
+      return;
+    }
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(persist, 600);
+    return () => {
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    };
   }, [phase, isReadOnly, leagueId, myDraftPosition, numTeams, rosterSize, picks]);
+
+  // Saves the current state immediately and navigates to the mock-draft hub.
+  // Works at any time — bots may have a pick in flight, but their pending
+  // timer is cancelled and we persist exactly what's been picked so far.
+  async function exitDraft() {
+    if (exiting) return;
+    setExiting(true);
+    if (botTimer.current) clearTimeout(botTimer.current);
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    try {
+      if (phase === "drafting") {
+        await saveMockDraft(leagueId, {
+          id: draftIdRef.current ?? undefined,
+          myDraftPosition,
+          numTeams,
+          rosterSize,
+          picks: picks.map((p) => ({
+            pickNumber: p.pickNumber,
+            teamIndex: p.teamIndex,
+            playerId: p.playerId,
+          })),
+          status: "in_progress",
+        });
+      }
+    } catch (err) {
+      // Best-effort save; still let the user out either way.
+      console.error("Failed to save mock draft on exit", err);
+    }
+    router.push(`/league/${leagueId}/mock-draft`);
+  }
 
   function reset() {
     if (botTimer.current) clearTimeout(botTimer.current);
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    // Forget the saved row so the next run creates a new one.
+    draftIdRef.current = null;
+    hasSavedRef.current = false;
+    setSavedId(null);
     setPicks([]);
     setCurrentPickIndex(0);
     setPhase("setup");
@@ -289,12 +363,23 @@ export function MockDraft({
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <Link
-            href={`/league/${leagueId}/mock-draft`}
-            className="text-gray-400 hover:text-white text-sm transition inline-block mb-1"
-          >
-            ← Mock Drafts
-          </Link>
+          {isReadOnly ? (
+            <Link
+              href={`/league/${leagueId}/mock-draft`}
+              className="text-gray-400 hover:text-white text-sm transition inline-block mb-1"
+            >
+              ← Mock Drafts
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={exitDraft}
+              disabled={exiting}
+              className="text-gray-400 hover:text-white text-sm transition inline-block mb-1 disabled:opacity-50"
+            >
+              {exiting ? "Saving..." : "← Exit Mock Draft"}
+            </button>
+          )}
           <h2 className="text-white font-bold text-lg">
             {isReadOnly && initialMockDraft ? (
               <>
@@ -314,15 +399,6 @@ export function MockDraft({
           <span className="text-gray-400 text-xs bg-white/5 px-3 py-1.5 rounded-full">
             Your pick: <span className="text-white font-semibold">#{myDraftPosition}</span>
           </span>
-          {!isReadOnly && (
-            <button
-              type="button"
-              onClick={reset}
-              className="text-gray-400 hover:text-white text-xs border border-white/10 hover:border-white/30 px-3 py-1.5 rounded-full transition"
-            >
-              Reset
-            </button>
-          )}
         </div>
       </div>
 
@@ -454,7 +530,7 @@ export function MockDraft({
         style={{ height: panelHeight }}
       >
           {/* Tab header */}
-          <div className="flex items-center gap-2 px-3 lg:px-6 py-2 border-b border-white/5 shrink-0">
+          <div className="flex items-center flex-wrap gap-2 px-3 lg:px-6 py-2 border-b border-white/5 shrink-0">
             <div className="flex flex-col -my-1">
               <button
                 type="button"
@@ -501,14 +577,14 @@ export function MockDraft({
             </div>
 
             {bottomTab === "available" && (
-              <>
-                <div className="flex gap-1 bg-[#1a1d23] rounded-lg p-0.5 ml-auto">
+              <div className="ml-auto flex flex-col-reverse sm:flex-row sm:items-center gap-2">
+                <div className="flex gap-1 bg-[#1a1d23] rounded-lg p-0.5 w-48 sm:w-auto">
                   {(["all", "mpo", "fpo"] as DivisionTab[]).map((t) => (
                     <button
                       key={t}
                       type="button"
                       onClick={() => setDivTab(t)}
-                      className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider transition ${
+                      className={`flex-1 sm:flex-initial px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider transition ${
                         t === divTab
                           ? t === "mpo"
                             ? "bg-[#4B3DFF] text-white"
@@ -527,9 +603,9 @@ export function MockDraft({
                   placeholder="Search..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="bg-[#1a1d23] border border-white/10 rounded-lg px-3 py-1 text-white text-xs placeholder-gray-600 focus:outline-none focus:border-[#4B3DFF] w-32"
+                  className="bg-[#1a1d23] border border-white/10 rounded-lg px-3 py-1 text-white text-xs placeholder-gray-600 focus:outline-none focus:border-[#4B3DFF] w-48 sm:w-32"
                 />
-              </>
+              </div>
             )}
 
             {isMyTurn && (
