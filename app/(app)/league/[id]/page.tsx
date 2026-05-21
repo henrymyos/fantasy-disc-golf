@@ -9,6 +9,7 @@ import {
   formatEventLocation,
 } from "@/lib/dgpt-2026-schedule";
 import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
+import { applyProjectionVariance } from "@/lib/projections";
 
 export default async function LeagueDashboard({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -55,7 +56,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   const { data: matchups } = await supabase
     .from("matchups")
     .select(`
-      id, week, team1_score, team2_score, is_final,
+      id, week, team1_id, team2_id, team1_score, team2_score, is_final,
       team1:league_members!matchups_team1_id_fkey(id, team_name),
       team2:league_members!matchups_team2_id_fkey(id, team_name)
     `)
@@ -118,6 +119,55 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
     .sort((a, b) => b.wins - a.wins || b.points - a.points);
 
   const myMembership = (members ?? []).find((m) => m.user_id === user.id);
+
+  // Compute each team's projected total for the next calendar event so we can
+  // surface it on each matchup row + the detail page.
+  let projectedByTeam = new Map<number, number>();
+  if ((matchups ?? []).length > 0) {
+    const { data: nextTournament } = activeTournament
+      ? { data: activeTournament }
+      : await supabase
+          .from("tournaments")
+          .select("id")
+          .gte("start_date", today)
+          .order("start_date", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+    const nextTournamentId = (nextTournament as any)?.id ?? null;
+
+    const { data: starters } = await supabase
+      .from("rosters")
+      .select("team_id, player_id")
+      .eq("league_id", id)
+      .eq("is_starter", true);
+    const { data: allResults } = await supabase
+      .from("tournament_results")
+      .select("player_id, tournament_id, fantasy_points");
+    const totalByPlayer = new Map<number, { sum: number; count: number }>();
+    const weekActualByPlayer = new Map<number, number>();
+    (allResults ?? []).forEach((r: any) => {
+      const cur = totalByPlayer.get(r.player_id) ?? { sum: 0, count: 0 };
+      cur.sum += Number(r.fantasy_points ?? 0);
+      cur.count += 1;
+      totalByPlayer.set(r.player_id, cur);
+      if (nextTournamentId != null && r.tournament_id === nextTournamentId) {
+        weekActualByPlayer.set(r.player_id, (weekActualByPlayer.get(r.player_id) ?? 0) + Number(r.fantasy_points ?? 0));
+      }
+    });
+    for (const s of starters ?? []) {
+      const actual = weekActualByPlayer.get((s as any).player_id);
+      let perEvent = 0;
+      if (actual != null) {
+        perEvent = actual;
+      } else {
+        const t = totalByPlayer.get((s as any).player_id);
+        if (t && t.count > 0) {
+          perEvent = applyProjectionVariance(t.sum / t.count, (s as any).player_id, 3);
+        }
+      }
+      projectedByTeam.set((s as any).team_id, (projectedByTeam.get((s as any).team_id) ?? 0) + perEvent);
+    }
+  }
 
   return (
     <div className="grid lg:grid-cols-3 gap-6">
@@ -201,7 +251,14 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
           ) : (
             <div className="space-y-3">
               {(matchups as unknown as Matchup[]).map((m) => (
-                <MatchupRow key={m.id} matchup={m} myTeamId={myMembership?.id} />
+                <MatchupRow
+                  key={m.id}
+                  leagueId={id}
+                  matchup={m}
+                  myTeamId={myMembership?.id}
+                  team1Projected={projectedByTeam.get(m.team1_id) ?? null}
+                  team2Projected={projectedByTeam.get(m.team2_id) ?? null}
+                />
               ))}
             </div>
           )}
@@ -243,15 +300,32 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   );
 }
 
-function MatchupRow({ matchup, myTeamId }: { matchup: Matchup; myTeamId?: number }) {
+function MatchupRow({
+  leagueId,
+  matchup,
+  myTeamId,
+  team1Projected,
+  team2Projected,
+}: {
+  leagueId: string;
+  matchup: Matchup;
+  myTeamId?: number;
+  team1Projected: number | null;
+  team2Projected: number | null;
+}) {
   const isMyMatchup = matchup.team1_id === myTeamId || matchup.team2_id === myTeamId;
   return (
-    <div className={`flex items-center justify-between p-4 rounded-xl border ${
-      isMyMatchup ? "border-[#4B3DFF]/40 bg-[#4B3DFF]/5" : "border-white/5 bg-[#0f1117]"
-    }`}>
+    <Link
+      href={`/league/${leagueId}/matchups/${matchup.id}`}
+      className={`flex items-center justify-between p-4 rounded-xl border transition hover:bg-white/[0.03] ${
+        isMyMatchup ? "border-[#4B3DFF]/40 bg-[#4B3DFF]/5" : "border-white/5 bg-[#0f1117]"
+      }`}
+    >
       <TeamScore
         name={(matchup.team1 as any)?.team_name ?? "TBD"}
         score={matchup.team1_score}
+        projected={team1Projected}
+        isFinal={matchup.is_final}
         isWinner={matchup.is_final && matchup.team1_score > matchup.team2_score}
       />
       <div className="text-center">
@@ -260,14 +334,30 @@ function MatchupRow({ matchup, myTeamId }: { matchup: Matchup; myTeamId?: number
       <TeamScore
         name={(matchup.team2 as any)?.team_name ?? "TBD"}
         score={matchup.team2_score}
+        projected={team2Projected}
+        isFinal={matchup.is_final}
         isWinner={matchup.is_final && matchup.team2_score > matchup.team1_score}
         right
       />
-    </div>
+    </Link>
   );
 }
 
-function TeamScore({ name, score, isWinner, right }: { name: string; score: number; isWinner: boolean; right?: boolean }) {
+function TeamScore({
+  name,
+  score,
+  projected,
+  isFinal,
+  isWinner,
+  right,
+}: {
+  name: string;
+  score: number;
+  projected: number | null;
+  isFinal: boolean;
+  isWinner: boolean;
+  right?: boolean;
+}) {
   return (
     <div className={`flex items-center gap-3 ${right ? "flex-row-reverse" : ""}`}>
       <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${
@@ -278,6 +368,9 @@ function TeamScore({ name, score, isWinner, right }: { name: string; score: numb
       <div className={right ? "text-right" : ""}>
         <p className={`font-semibold text-sm ${isWinner ? "text-white" : "text-gray-400"}`}>{name}</p>
         <p className={`text-lg font-bold ${isWinner ? "text-[#36D7B7]" : "text-white"}`}>{score.toFixed(1)}</p>
+        {!isFinal && projected != null && projected > 0 && (
+          <p className="text-gray-500 text-[10px] mt-0.5">~{projected.toFixed(1)} proj</p>
+        )}
       </div>
     </div>
   );

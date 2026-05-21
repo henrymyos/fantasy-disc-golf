@@ -134,18 +134,27 @@ export async function advanceWeek(leagueId: number): Promise<void> {
   const { data: members } = await admin.from("league_members").select("id").eq("league_id", leagueId).order("joined_at");
   if (!members || members.length < 2) return;
 
-  const pairs = generateMatchups(members.map((m) => m.id), nextWeek);
-
-  await admin.from("matchups").insert(
-    pairs.map(([t1, t2]) => ({
-      league_id: leagueId,
-      week: nextWeek,
-      team1_id: t1,
-      team2_id: t2,
-      team1_score: 0,
-      team2_score: 0,
-    }))
-  );
+  // Only generate matchups if none exist yet for next week (the season-wide
+  // generator runs on draft completion, so this is just a fallback for old
+  // leagues or hand-rolled flows).
+  const { count: existing } = await admin
+    .from("matchups")
+    .select("id", { count: "exact", head: true })
+    .eq("league_id", leagueId)
+    .eq("week", nextWeek);
+  if ((existing ?? 0) === 0) {
+    const pairs = generateMatchups(members.map((m) => m.id), nextWeek);
+    await admin.from("matchups").insert(
+      pairs.map(([t1, t2]) => ({
+        league_id: leagueId,
+        week: nextWeek,
+        team1_id: t1,
+        team2_id: t2,
+        team1_score: 0,
+        team2_score: 0,
+      }))
+    );
+  }
 
   await admin.from("leagues").update({ current_week: nextWeek }).eq("id", leagueId);
 

@@ -1,7 +1,9 @@
 import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveTournament } from "@/lib/lineup-lock";
 import { LiveScoreRefresher } from "@/components/live-score-refresher";
+import { applyProjectionVariance } from "@/lib/projections";
 
 export default async function MatchupsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -22,12 +24,36 @@ export default async function MatchupsPage({ params }: { params: Promise<{ id: s
   const { data: allMatchups } = await supabase
     .from("matchups")
     .select(`
-      id, week, team1_score, team2_score, is_final,
+      id, week, team1_id, team2_id, team1_score, team2_score, is_final,
       team1:league_members!matchups_team1_id_fkey(id, team_name, user_id),
       team2:league_members!matchups_team2_id_fkey(id, team_name, user_id)
     `)
     .eq("league_id", id)
     .order("week", { ascending: false });
+
+  // Compute each team's projected total based on starter pace.
+  const projectedByTeam = new Map<number, number>();
+  const { data: starters } = await supabase
+    .from("rosters")
+    .select("team_id, player_id")
+    .eq("league_id", id)
+    .eq("is_starter", true);
+  const { data: allResults } = await supabase
+    .from("tournament_results")
+    .select("player_id, fantasy_points");
+  const totalByPlayer = new Map<number, { sum: number; count: number }>();
+  (allResults ?? []).forEach((r: any) => {
+    const cur = totalByPlayer.get(r.player_id) ?? { sum: 0, count: 0 };
+    cur.sum += Number(r.fantasy_points ?? 0);
+    cur.count += 1;
+    totalByPlayer.set(r.player_id, cur);
+  });
+  for (const s of starters ?? []) {
+    const t = totalByPlayer.get((s as any).player_id);
+    if (!t || t.count === 0) continue;
+    const perEvent = applyProjectionVariance(t.sum / t.count, (s as any).player_id, 3);
+    projectedByTeam.set((s as any).team_id, (projectedByTeam.get((s as any).team_id) ?? 0) + perEvent);
+  }
 
   const byWeek: Record<number, typeof allMatchups> = {};
   (allMatchups ?? []).forEach((m) => {
@@ -62,10 +88,13 @@ export default async function MatchupsPage({ params }: { params: Promise<{ id: s
                 const t1 = m.team1 as any;
                 const t2 = m.team2 as any;
                 const isMine = t1?.id === myMembership?.id || t2?.id === myMembership?.id;
+                const proj1 = projectedByTeam.get(m.team1_id) ?? 0;
+                const proj2 = projectedByTeam.get(m.team2_id) ?? 0;
                 return (
-                  <div
+                  <Link
                     key={m.id}
-                    className={`flex items-center justify-between p-4 rounded-xl border ${
+                    href={`/league/${id}/matchups/${m.id}`}
+                    className={`flex items-center justify-between p-4 rounded-xl border transition hover:bg-white/[0.03] ${
                       isMine ? "border-[#4B3DFF]/40 bg-[#4B3DFF]/5" : "border-white/5 bg-[#0f1117]"
                     }`}
                   >
@@ -78,6 +107,9 @@ export default async function MatchupsPage({ params }: { params: Promise<{ id: s
                       <div>
                         <p className="text-white text-sm font-medium">{t1?.team_name}</p>
                         <p className="text-xl font-bold text-white">{m.team1_score.toFixed(1)}</p>
+                        {!m.is_final && proj1 > 0 && (
+                          <p className="text-gray-500 text-[10px]">~{proj1.toFixed(1)} proj</p>
+                        )}
                       </div>
                     </div>
 
@@ -94,9 +126,12 @@ export default async function MatchupsPage({ params }: { params: Promise<{ id: s
                       <div className="text-right">
                         <p className="text-white text-sm font-medium">{t2?.team_name}</p>
                         <p className="text-xl font-bold text-white">{m.team2_score.toFixed(1)}</p>
+                        {!m.is_final && proj2 > 0 && (
+                          <p className="text-gray-500 text-[10px]">~{proj2.toFixed(1)} proj</p>
+                        )}
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 );
               })
             )}

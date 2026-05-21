@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { regenerateLeagueMatchups } from "@/actions/matchups";
 
 export async function startDraft(leagueId: number): Promise<void> {
   const supabase = await createClient();
@@ -262,6 +263,8 @@ export async function makeDraftPick(leagueId: number, playerId: number): Promise
   if (nextPick > totalPicks) {
     await admin.from("drafts").update({ status: "complete", current_pick: nextPick }).eq("id", draft.id);
     await admin.from("leagues").update({ draft_status: "complete" }).eq("id", leagueId);
+    // Auto-generate the regular-season schedule so matchups exist from week 1.
+    await regenerateLeagueMatchups(leagueId);
   } else {
     await admin.from("drafts").update({ current_pick: nextPick }).eq("id", draft.id);
   }
