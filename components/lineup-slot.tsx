@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { swapStarter, swapStarterPositions, moveStarterToSlot, toggleStarter } from "@/actions/rosters";
-import { ConfirmDropButton } from "@/components/confirm-drop-button";
 
 type RosterSpot = {
   id: number;
@@ -18,6 +17,30 @@ function divColor(div: string) {
   return div === "MPO" ? "#4B3DFF" : "#36D7B7";
 }
 
+type WeekPoints = { projected: number | null; actual: number | null } | null;
+
+function WeekPointsBadge({ wp }: { wp: WeekPoints }) {
+  if (!wp || (wp.actual == null && wp.projected == null)) return null;
+  if (wp.actual != null) {
+    return (
+      <span
+        className="ml-2 text-xs font-bold tabular-nums text-[#36D7B7] shrink-0"
+        title="Actual points this week"
+      >
+        {wp.actual.toFixed(1)}
+      </span>
+    );
+  }
+  return (
+    <span
+      className="ml-2 text-xs font-semibold tabular-nums text-gray-400 shrink-0"
+      title="Projected points this week"
+    >
+      ~{wp.projected?.toFixed(1)}
+    </span>
+  );
+}
+
 // ── Starter slot row ─────────────────────────────────────────────────────────
 
 export function LineupSlot({
@@ -28,6 +51,7 @@ export function LineupSlot({
   benchPlayers,
   otherStarters,
   locked = false,
+  weekPoints = null,
 }: {
   leagueId: number;
   division: "MPO" | "FPO";
@@ -36,6 +60,7 @@ export function LineupSlot({
   benchPlayers: RosterSpot[];
   otherStarters: SlotEntry[];
   locked?: boolean;
+  weekPoints?: WeekPoints;
 }) {
   const [open, setOpen] = useState(false);
   const color = divColor(division);
@@ -74,23 +99,7 @@ export function LineupSlot({
           <p className="flex-1 text-gray-600 text-sm italic">Empty</p>
         )}
 
-        {occupant && (
-          <div className="flex items-center gap-2 shrink-0">
-            <form action={toggleStarter.bind(null, leagueId, occupant.id, false)}>
-              <button
-                type="submit"
-                className="text-xs text-gray-400 hover:text-white border border-white/10 hover:border-white/30 px-3 py-1 rounded-full transition"
-              >
-                Bench
-              </button>
-            </form>
-            <ConfirmDropButton
-              leagueId={leagueId}
-              playerId={occupant.player_id}
-              playerName={occupant.players?.name ?? "Player"}
-            />
-          </div>
-        )}
+        {occupant && <WeekPointsBadge wp={weekPoints} />}
       </div>
 
       {open && (
@@ -165,9 +174,19 @@ function StarterPickerModal({
     });
   }
 
+  function sendToBench() {
+    if (!occupant) return;
+    setLoadingKey("send-bench");
+    startTransition(async () => {
+      await toggleStarter(leagueId, occupant.id, false);
+      onClose();
+    });
+  }
+
   const hasBench        = benchPlayers.length > 0;
   const hasFilledOthers = filledOthers.length > 0;
   const hasEmptyOthers  = emptyOthers.length > 0 && occupant !== null;
+  const canSendToBench  = occupant !== null;
 
   return (
     <div
@@ -275,7 +294,29 @@ function StarterPickerModal({
             </section>
           )}
 
-          {!hasBench && !hasFilledOthers && !hasEmptyOthers && (
+          {canSendToBench && (
+            <section>
+              <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold px-1 mb-1.5">
+                Send to bench
+              </p>
+              <button
+                type="button"
+                onClick={sendToBench}
+                disabled={pending}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-dashed border-white/15 hover:border-white/30 hover:bg-white/5 transition disabled:opacity-50 text-left"
+              >
+                <span className="text-xs font-bold uppercase w-10 shrink-0 text-center py-0.5 rounded text-gray-400 bg-white/5">
+                  —
+                </span>
+                <span className="flex-1 text-sm italic text-gray-400">
+                  {loadingKey === "send-bench" ? "Moving..." : "Empty bench spot"}
+                </span>
+                <span className="text-xs text-gray-500 shrink-0">Bench</span>
+              </button>
+            </section>
+          )}
+
+          {!hasBench && !hasFilledOthers && !hasEmptyOthers && !canSendToBench && (
             <p className="text-gray-600 text-sm text-center py-4">
               No {division} players available — visit Free Agency to add more.
             </p>
@@ -293,11 +334,13 @@ export function BenchSlot({
   benchSpot,
   starterSlots,
   locked = false,
+  weekPoints = null,
 }: {
   leagueId: number;
   benchSpot: RosterSpot;
   starterSlots: (RosterSpot | null)[];
   locked?: boolean;
+  weekPoints?: WeekPoints;
 }) {
   const [open, setOpen] = useState(false);
   const player = benchSpot.players;
@@ -326,24 +369,18 @@ export function BenchSlot({
             {player?.name}
           </Link>
         </div>
-        <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition">
-          {!slotsFull && !locked && (
-            <form action={toggleStarter.bind(null, leagueId, benchSpot.id, true)}>
-              <button
-                type="submit"
-                className="text-xs font-semibold px-3 py-1 rounded-full border transition"
-                style={{ color, borderColor: `${color}50` }}
-              >
-                Start
-              </button>
-            </form>
-          )}
-          <ConfirmDropButton
-            leagueId={leagueId}
-            playerId={benchSpot.player_id}
-            playerName={player?.name ?? "Player"}
-          />
-        </div>
+        <WeekPointsBadge wp={weekPoints} />
+        {!slotsFull && !locked && (
+          <form action={toggleStarter.bind(null, leagueId, benchSpot.id, true)} className="shrink-0 opacity-0 group-hover:opacity-100 transition">
+            <button
+              type="submit"
+              className="text-xs font-semibold px-3 py-1 rounded-full border transition"
+              style={{ color, borderColor: `${color}50` }}
+            >
+              Start
+            </button>
+          </form>
+        )}
       </div>
 
       {open && (

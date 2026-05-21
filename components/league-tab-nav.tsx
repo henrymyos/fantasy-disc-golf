@@ -8,12 +8,17 @@ const NAV_TABS = [
   { label: "Team", href: "/lineups" },
   { label: "Players", href: "/free-agency" },
   { label: "Draft", href: "/draft" },
+  { label: "Playoffs", href: "/playoffs" },
 ];
 
 export function LeagueTabNav({ base, isCommissioner, draftComplete }: { base: string; isCommissioner: boolean; draftComplete?: boolean }) {
   const pathname = usePathname();
 
-  const tabs = NAV_TABS.filter((t) => !(t.href === "/draft" && draftComplete));
+  const tabs = NAV_TABS.filter((t) => {
+    if (t.href === "/draft" && draftComplete) return false;
+    if (t.href === "/playoffs" && !draftComplete) return false;
+    return true;
+  });
 
   return (
     <nav className="flex gap-1 mb-6 border-b border-white/5 pb-0 -mx-0 overflow-x-auto">

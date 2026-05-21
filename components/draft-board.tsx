@@ -209,15 +209,15 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
           <div
             key={`${round}-${m.id}`}
             style={{ background: divBg(pick.playerDivision), color: "var(--pick-fg)" }}
-            className="flex flex-col p-2 min-h-[80px] rounded-lg overflow-hidden"
+            className="flex flex-col p-2 min-h-[80px] rounded-lg"
           >
             <div className="flex justify-between items-center">
               <span className="text-[10px] font-semibold" style={{ color: "var(--pick-fg-muted)" }}>{pick.playerDivision}</span>
               <span className="text-[10px] font-mono" style={{ color: "var(--pick-fg-muted)", opacity: 0.7 }}>{pickLabel}</span>
             </div>
             <div className="flex-1 flex flex-col justify-end mt-1">
-              {first && <p className="text-[11px] leading-tight truncate" style={{ color: "var(--pick-fg-muted)" }}>{first}</p>}
-              <p className="font-bold text-sm leading-tight truncate" style={{ color: "var(--pick-fg)" }}>{last}</p>
+              {first && <p className="text-[11px] leading-tight break-words" style={{ color: "var(--pick-fg-muted)" }}>{first}</p>}
+              <p className="font-bold text-sm leading-tight break-words" style={{ color: "var(--pick-fg)" }}>{last}</p>
             </div>
           </div>
         );

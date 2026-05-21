@@ -18,6 +18,7 @@ type FreeAgent = Player & { totalPoints: number };
 
 type LeaderboardPlayer = Player & {
   totalPoints: number;
+  projectedPoints: number | null;
   ownerTeamId: number | null;
   ownerTeamName: string | null;
 };
@@ -243,9 +244,19 @@ export function FreeAgencyList({
             );
 
             const rightSlot = (
-              <span className="text-white font-bold text-sm tabular-nums w-12 text-right shrink-0">
-                {player.totalPoints.toFixed(1)}
-              </span>
+              <div className="flex flex-col items-end shrink-0 w-16 text-right">
+                <span className="text-white font-bold text-sm tabular-nums leading-tight">
+                  {player.totalPoints.toFixed(1)}
+                </span>
+                {player.projectedPoints != null && (
+                  <span
+                    className="text-gray-500 text-[10px] tabular-nums leading-tight"
+                    title="Projected season total at current pace"
+                  >
+                    proj {player.projectedPoints.toFixed(0)}
+                  </span>
+                )}
+              </div>
             );
 
             return (

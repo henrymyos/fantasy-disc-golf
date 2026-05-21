@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { FreeAgencyList } from "@/components/free-agency-list";
 import { setWaiversLocked, processWaivers } from "@/actions/rosters";
+import { applyProjectionVariance } from "@/lib/projections";
 
 export default async function FreeAgencyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -12,7 +13,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, roster_size, waivers_locked, commissioner_id")
+    .select("id, roster_size, waivers_locked, commissioner_id, selected_event_slugs")
     .eq("id", id)
     .single();
 
@@ -68,17 +69,31 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
 
   const { data: resultRows } = await supabase
     .from("tournament_results")
-    .select("player_id, fantasy_points");
+    .select("player_id, fantasy_points, tournament_id");
 
   const pointsByPlayer = new Map<number, number>();
+  const eventsPlayedByPlayer = new Map<number, number>();
   (resultRows ?? []).forEach((r: any) => {
     pointsByPlayer.set(
       r.player_id,
       (pointsByPlayer.get(r.player_id) ?? 0) + Number(r.fantasy_points ?? 0),
     );
+    eventsPlayedByPlayer.set(r.player_id, (eventsPlayedByPlayer.get(r.player_id) ?? 0) + 1);
   });
 
   const seasonStarted = (resultRows ?? []).length > 0;
+
+  // Total events in the league's selected season (fall back to whatever
+  // tournaments exist in DB if no selection is stored).
+  const selectedCount = ((league as any).selected_event_slugs?.length as number | undefined);
+  const totalEventsInSeason = selectedCount ?? new Set((resultRows ?? []).map((r: any) => r.tournament_id)).size;
+
+  function projectionFor(playerId: number): number | null {
+    const total = pointsByPlayer.get(playerId) ?? 0;
+    const played = eventsPlayedByPlayer.get(playerId) ?? 0;
+    if (played === 0 || totalEventsInSeason === 0) return null;
+    return applyProjectionVariance((total / played) * totalEventsInSeason, playerId);
+  }
 
   const freeAgents = (allPlayers ?? [])
     .filter((p) => !rosteredIds.has(p.id))
@@ -101,6 +116,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
         worldRanking: p.world_ranking as number | null,
         overallRank: (p as any).overall_rank as number | null,
         totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
+        projectedPoints: projectionFor(p.id),
         ownerTeamId: owner?.teamId ?? null,
         ownerTeamName: owner?.teamName ?? null,
       };

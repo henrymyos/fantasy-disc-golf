@@ -1,5 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveTournament } from "@/lib/lineup-lock";
+import { LiveScoreRefresher } from "@/components/live-score-refresher";
 
 export default async function MatchupsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -40,8 +42,13 @@ export default async function MatchupsPage({ params }: { params: Promise<{ id: s
     .eq("user_id", user.id)
     .single();
 
+  const activeTournament = await getActiveTournament(supabase);
+
   return (
     <div className="max-w-2xl space-y-6">
+      {activeTournament && (
+        <LiveScoreRefresher tournamentName={activeTournament.name} />
+      )}
       {weeks.map((week) => (
         <div key={week} className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
           <h2 className="font-semibold text-gray-400 text-sm mb-4 uppercase tracking-wide">

@@ -44,6 +44,7 @@ function StarterCounter({
 }
 
 type WaiverOrderMode = "reverse_standings" | "reverse_last_add";
+type ScoringMode = "head_to_head" | "all_play" | "median";
 
 type Props = {
   leagueId: string;
@@ -54,6 +55,7 @@ type Props = {
     mpoStarters: number;
     fpoStarters: number;
     waiverOrderMode: WaiverOrderMode;
+    scoringMode: ScoringMode;
   };
 };
 
@@ -133,6 +135,22 @@ export function LeagueSettingsForm({ leagueId, initial }: Props) {
       {state?.errors?.fpoStarters && (
         <p className="text-red-400 text-xs">{state.errors.fpoStarters[0]}</p>
       )}
+
+      <div>
+        <label className="block text-sm text-gray-400 mb-1">Weekly scoring</label>
+        <select
+          name="scoringMode"
+          defaultValue={initial.scoringMode}
+          className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#4B3DFF] transition"
+        >
+          <option value="head_to_head">Head-to-head (matchups)</option>
+          <option value="all_play">All-play (vs every team each week)</option>
+          <option value="median">Median (vs league median each week)</option>
+        </select>
+        <p className="text-gray-600 text-xs mt-1">
+          Determines how weekly wins and losses are counted in the standings.
+        </p>
+      </div>
 
       <div>
         <label className="block text-sm text-gray-400 mb-1">Waiver order</label>

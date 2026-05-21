@@ -8,6 +8,7 @@ import {
   formatEventDateRange,
   formatEventLocation,
 } from "@/lib/dgpt-2026-schedule";
+import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
 
 export default async function LeagueDashboard({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -17,7 +18,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, name, current_week, starters_count, selected_event_slugs, waivers_locked")
+    .select("id, name, current_week, starters_count, selected_event_slugs, waivers_locked, scoring_mode")
     .eq("id", id)
     .single();
 
@@ -68,22 +69,49 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
     .eq("league_id", id)
     .eq("is_final", true);
 
+  const scoringMode = (((league as any).scoring_mode ?? "head_to_head") as
+    | "head_to_head"
+    | "all_play"
+    | "median");
+
   const winsMap: Record<number, { wins: number; losses: number; points: number }> = {};
   (members ?? []).forEach((m) => { winsMap[m.id] = { wins: 0, losses: 0, points: 0 }; });
 
+  // Total points always come from finalized matchups (or the alt total below).
   (allMatchups ?? []).forEach((m) => {
     if (!winsMap[m.team1_id]) winsMap[m.team1_id] = { wins: 0, losses: 0, points: 0 };
     if (!winsMap[m.team2_id]) winsMap[m.team2_id] = { wins: 0, losses: 0, points: 0 };
     winsMap[m.team1_id].points += m.team1_score;
     winsMap[m.team2_id].points += m.team2_score;
-    if (m.team1_score > m.team2_score) {
-      winsMap[m.team1_id].wins++;
-      winsMap[m.team2_id].losses++;
-    } else if (m.team2_score > m.team1_score) {
-      winsMap[m.team2_id].wins++;
-      winsMap[m.team1_id].losses++;
+    if (scoringMode === "head_to_head") {
+      if (m.team1_score > m.team2_score) {
+        winsMap[m.team1_id].wins++;
+        winsMap[m.team2_id].losses++;
+      } else if (m.team2_score > m.team1_score) {
+        winsMap[m.team2_id].wins++;
+        winsMap[m.team1_id].losses++;
+      }
     }
   });
+
+  // For non-H2H modes, derive W/L (and supplement points) from the per-week
+  // team totals computed on the fly from rosters + tournament_results.
+  if (scoringMode !== "head_to_head") {
+    const weeklyTotals = await getTeamWeeklyTotals(supabase, Number(id));
+    const alt = computeAltRecords(weeklyTotals, scoringMode);
+    for (const [teamId, rec] of alt) {
+      if (!winsMap[teamId]) winsMap[teamId] = { wins: 0, losses: 0, points: 0 };
+      winsMap[teamId].wins = rec.wins;
+      winsMap[teamId].losses = rec.losses;
+      // If matchups haven't accumulated points (e.g. no H2H run), fall back
+      // to summed weekly totals so the points column isn't all zeros.
+      if (winsMap[teamId].points === 0) {
+        let sum = 0;
+        for (const v of (weeklyTotals.get(teamId)?.values() ?? [])) sum += v;
+        winsMap[teamId].points = sum;
+      }
+    }
+  }
 
   const standings = (members ?? [])
     .map((m) => ({ ...m, ...winsMap[m.id] }))

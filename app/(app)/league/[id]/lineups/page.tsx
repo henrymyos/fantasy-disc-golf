@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { LineupSlot, BenchSlot } from "@/components/lineup-slot";
 import { TeamActionsPanel } from "@/components/team-actions-panel";
 import { getActiveTournament } from "@/lib/lineup-lock";
+import { applyProjectionVariance } from "@/lib/projections";
+import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
 
 export default async function LineupsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -12,7 +14,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, starters_count, roster_size")
+    .select("id, starters_count, roster_size, current_week")
     .eq("id", id)
     .single();
 
@@ -20,12 +22,16 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
 
   const { data: divData } = await supabase
     .from("leagues")
-    .select("mpo_starters, fpo_starters")
+    .select("mpo_starters, fpo_starters, scoring_mode")
     .eq("id", id)
     .single();
 
   const mpoSlots: number = (divData as any)?.mpo_starters ?? 4;
   const fpoSlots: number = (divData as any)?.fpo_starters ?? 2;
+  const scoringMode = (((divData as any)?.scoring_mode ?? "head_to_head") as
+    | "head_to_head"
+    | "all_play"
+    | "median");
 
   const { data: myMember } = await supabase
     .from("league_members")
@@ -48,6 +54,55 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
 
   const activeTournament = await getActiveTournament(supabase);
   const lineupLocked = activeTournament !== null;
+
+  // Per-player projected and actual points for the next calendar event on
+  // the schedule (the in-progress event if one is happening, else the
+  // earliest upcoming event by start_date).
+  const playerIds = roster.map((r: any) => r.player_id);
+  const todayIso = new Date().toISOString().slice(0, 10);
+  let nextTournamentId: number | null = activeTournament?.id ?? null;
+  if (!nextTournamentId) {
+    const { data: upcoming } = await supabase
+      .from("tournaments")
+      .select("id")
+      .gte("start_date", todayIso)
+      .order("start_date", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    nextTournamentId = (upcoming as any)?.id ?? null;
+  }
+
+  const { data: allResults } = playerIds.length > 0
+    ? await supabase
+        .from("tournament_results")
+        .select("player_id, tournament_id, fantasy_points")
+        .in("player_id", playerIds)
+    : { data: [] };
+  const totalsByPlayer = new Map<number, number>();
+  const eventsByPlayer = new Map<number, number>();
+  const weekActualByPlayer = new Map<number, number>();
+  (allResults ?? []).forEach((r: any) => {
+    totalsByPlayer.set(r.player_id, (totalsByPlayer.get(r.player_id) ?? 0) + Number(r.fantasy_points ?? 0));
+    eventsByPlayer.set(r.player_id, (eventsByPlayer.get(r.player_id) ?? 0) + 1);
+    if (nextTournamentId != null && r.tournament_id === nextTournamentId) {
+      weekActualByPlayer.set(r.player_id, (weekActualByPlayer.get(r.player_id) ?? 0) + Number(r.fantasy_points ?? 0));
+    }
+  });
+
+  // playerId → { projected, actual }
+  const weekPointsByPlayer = new Map<number, { projected: number | null; actual: number | null }>();
+  for (const pid of playerIds) {
+    const total = totalsByPlayer.get(pid) ?? 0;
+    const events = eventsByPlayer.get(pid) ?? 0;
+    const projected = events > 0
+      ? applyProjectionVariance(total / events, pid, 3)
+      : null;
+    const actual = weekActualByPlayer.get(pid) ?? null;
+    weekPointsByPlayer.set(pid, {
+      projected,
+      actual: actual != null ? Math.round(actual * 10) / 10 : null,
+    });
+  }
 
   function buildSlotArray(starters: any[], numSlots: number): (any | null)[] {
     const result: (any | null)[] = new Array(numSlots).fill(null);
@@ -90,6 +145,34 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
   const overRoster = roster.length > league.roster_size;
   const toDrop = roster.length - league.roster_size;
   const lineupsDisabled = overRoster || lineupLocked;
+
+  // Compute the team's current W-L for the header.
+  const { data: allMatchups } = await supabase
+    .from("matchups")
+    .select("team1_id, team2_id, team1_score, team2_score, is_final")
+    .eq("league_id", id)
+    .eq("is_final", true);
+  let myWins = 0;
+  let myLosses = 0;
+  if (scoringMode === "head_to_head") {
+    (allMatchups ?? []).forEach((m: any) => {
+      if (m.team1_id === myMember.id) {
+        if (m.team1_score > m.team2_score) myWins++;
+        else if (m.team2_score > m.team1_score) myLosses++;
+      } else if (m.team2_id === myMember.id) {
+        if (m.team2_score > m.team1_score) myWins++;
+        else if (m.team1_score > m.team2_score) myLosses++;
+      }
+    });
+  } else {
+    const weekly = await getTeamWeeklyTotals(supabase, Number(id));
+    const alt = computeAltRecords(weekly, scoringMode);
+    const rec = alt.get(myMember.id);
+    if (rec) {
+      myWins = rec.wins;
+      myLosses = rec.losses;
+    }
+  }
 
   // Fetch transaction history
   const { data: txRows } = await supabase
@@ -182,7 +265,27 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
       <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
         <div className="flex items-center justify-between mb-5">
           <h2 className="font-bold text-white text-lg">{myMember.team_name}</h2>
-          <span className="text-gray-500 text-sm">{totalFilledStarters}/{totalSlots} starters</span>
+          {(() => {
+            const starterSpots = [...mpoSlotArray, ...fpoSlotArray].filter(Boolean) as any[];
+            let projTotal = 0;
+            let actualTotal = 0;
+            let anyActual = false;
+            for (const s of starterSpots) {
+              const wp = weekPointsByPlayer.get(s.player_id);
+              if (!wp) continue;
+              if (wp.actual != null) { actualTotal += wp.actual; anyActual = true; }
+              if (wp.projected != null) projTotal += wp.projected;
+            }
+            const displayTotal = anyActual ? actualTotal : projTotal;
+            return (
+              <div className="text-right">
+                <p className="text-white font-semibold text-sm tabular-nums">{myWins}-{myLosses}</p>
+                <p className="text-gray-500 text-xs mt-0.5">
+                  {anyActual ? "" : "~"}{displayTotal.toFixed(1)} pts {anyActual ? "this event" : "projected"}
+                </p>
+              </div>
+            );
+          })()}
         </div>
 
         <div className="space-y-2 mb-6">
@@ -196,6 +299,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
               benchPlayers={mpoBench as any}
               otherStarters={otherSlotsFor(mpoSlotArray, i)}
               locked={lineupsDisabled}
+              weekPoints={occupant ? weekPointsByPlayer.get(occupant.player_id) ?? null : null}
             />
           ))}
           {fpoSlotArray.map((occupant: any, i: number) => (
@@ -208,6 +312,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
               benchPlayers={fpoBench as any}
               otherStarters={otherSlotsFor(fpoSlotArray, i)}
               locked={lineupsDisabled}
+              weekPoints={occupant ? weekPointsByPlayer.get(occupant.player_id) ?? null : null}
             />
           ))}
         </div>
@@ -225,6 +330,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
                     benchSpot={spot as any}
                     starterSlots={div === "MPO" ? mpoSlotArray : fpoSlotArray}
                     locked={lineupsDisabled}
+                    weekPoints={weekPointsByPlayer.get(spot.player_id) ?? null}
                   />
                 );
               })}

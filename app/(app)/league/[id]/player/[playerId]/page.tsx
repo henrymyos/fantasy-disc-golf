@@ -3,7 +3,9 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { BackLink } from "@/components/back-link";
 import { AddWithDropModal } from "@/components/add-with-drop-modal";
+import { ConfirmDropButton } from "@/components/confirm-drop-button";
 import { placeWaiverClaim } from "@/actions/rosters";
+import { applyProjectionVariance } from "@/lib/projections";
 
 export default async function PlayerPage({
   params,
@@ -47,7 +49,7 @@ export default async function PlayerPage({
   // and the user's current roster.
   const { data: league } = await supabase
     .from("leagues")
-    .select("roster_size, waivers_locked")
+    .select("roster_size, waivers_locked, selected_event_slugs")
     .eq("id", id)
     .single();
   const { data: draft } = await supabase
@@ -174,6 +176,17 @@ export default async function PlayerPage({
       )
     : null;
 
+  // Player projection: extrapolate current per-event pace across every event
+  // in the league's selected season.
+  const totalEventsInSeason = ((league as any).selected_event_slugs?.length as number | undefined)
+    ?? (events ?? []).length;
+  const projectedTotal = playedEvents.length > 0
+    ? applyProjectionVariance(
+        (totalPts / playedEvents.length) * totalEventsInSeason,
+        player.id,
+      )
+    : null;
+
   return (
     <div className="max-w-2xl space-y-6">
       {/* Back + header */}
@@ -231,7 +244,16 @@ export default async function PlayerPage({
             {player.name[0]?.toUpperCase()}
           </div>
           <div className="min-w-0">
-            <h1 className="text-white font-bold text-xl truncate">{player.name}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-white font-bold text-xl truncate">{player.name}</h1>
+              {isMine && (
+                <ConfirmDropButton
+                  leagueId={Number(id)}
+                  playerId={player.id}
+                  playerName={player.name}
+                />
+              )}
+            </div>
             <div className="flex items-center gap-2 mt-1">
               <span
                 className="text-xs font-bold uppercase px-2 py-0.5 rounded"
@@ -260,6 +282,12 @@ export default async function PlayerPage({
                 <p className="text-white font-bold text-lg">{playedEvents.length}</p>
                 <p className="text-gray-500 text-xs">Events</p>
               </div>
+              {projectedTotal != null && playedEvents.length < totalEventsInSeason && (
+                <div className="text-center">
+                  <p className="text-white font-bold text-lg">{projectedTotal.toFixed(0)}</p>
+                  <p className="text-gray-500 text-xs">Projected</p>
+                </div>
+              )}
             </div>
           )}
         </div>
