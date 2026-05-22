@@ -38,7 +38,7 @@ export async function startDraft(leagueId: number): Promise<void> {
 
   await admin
     .from("drafts")
-    .update({ status: "in_progress", started_at: new Date().toISOString(), current_pick: 1 })
+    .update({ status: "in_progress", started_at: new Date().toISOString(), current_pick: 1, current_pick_started_at: new Date().toISOString() })
     .eq("league_id", leagueId);
 
   await admin.from("leagues").update({ draft_status: "in_progress" }).eq("id", leagueId);
@@ -261,12 +261,12 @@ export async function makeDraftPick(leagueId: number, playerId: number): Promise
   const totalPicks = numTeams * draft.total_rounds;
 
   if (nextPick > totalPicks) {
-    await admin.from("drafts").update({ status: "complete", current_pick: nextPick }).eq("id", draft.id);
+    await admin.from("drafts").update({ status: "complete", current_pick: nextPick, current_pick_started_at: null }).eq("id", draft.id);
     await admin.from("leagues").update({ draft_status: "complete" }).eq("id", leagueId);
     // Auto-generate the regular-season schedule so matchups exist from week 1.
     await regenerateLeagueMatchups(leagueId);
   } else {
-    await admin.from("drafts").update({ current_pick: nextPick }).eq("id", draft.id);
+    await admin.from("drafts").update({ current_pick: nextPick, current_pick_started_at: new Date().toISOString() }).eq("id", draft.id);
   }
 
   revalidatePath(`/league/${leagueId}/draft`);

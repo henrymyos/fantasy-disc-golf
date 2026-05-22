@@ -1,11 +1,18 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { startDraft, pauseDraft, resumeDraft, makeDraftPick } from "@/actions/drafts";
-import { autoPickFromRankings } from "@/actions/rankings";
+import { autoPickFromRankings, autoPickExpired } from "@/actions/rankings";
 
-type DraftInfo = { id: number; status: string; currentPick: number; totalRounds: number };
+type DraftInfo = {
+  id: number;
+  status: string;
+  currentPick: number;
+  totalRounds: number;
+  secondsPerPick?: number;
+  currentPickStartedAt?: string | null;
+};
 type Member = { id: number; teamName: string; draftPosition: number };
 type PickInfo = { pickNumber: number; teamId: number; playerName: string; playerDivision: string };
 type AvailablePlayer = { id: number; name: string; division: string; worldRanking: number | null; overallRank: number | null };
@@ -95,6 +102,49 @@ function DraftBenchEmptyRow() {
       </span>
       <span className="flex-1 text-gray-600 text-sm italic">Empty bench</span>
     </div>
+  );
+}
+
+function PickCountdown({
+  leagueId,
+  secondsPerPick,
+  startedAt,
+  pickNumber,
+}: {
+  leagueId: number;
+  secondsPerPick: number;
+  startedAt: string | null;
+  pickNumber: number;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  const firedRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    firedRef.current = null;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [pickNumber, startedAt]);
+
+  if (!startedAt) return null;
+  const startedMs = Date.parse(startedAt);
+  if (!Number.isFinite(startedMs)) return null;
+  const remaining = Math.max(0, secondsPerPick - Math.floor((now - startedMs) / 1000));
+
+  // Auto-fire the expire action once per pick when the timer hits zero.
+  if (remaining === 0 && firedRef.current !== pickNumber) {
+    firedRef.current = pickNumber;
+    void autoPickExpired(leagueId);
+  }
+
+  const mm = Math.floor(remaining / 60);
+  const ss = remaining % 60;
+  const display = `${mm}:${ss.toString().padStart(2, "0")}`;
+  const tone =
+    remaining <= 10 ? "text-red-400" : remaining <= 30 ? "text-yellow-300" : "text-gray-400";
+  return (
+    <span className={`text-xs font-mono ${tone}`} title="Time remaining on this pick">
+      {display}
+    </span>
   );
 }
 
@@ -283,7 +333,15 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
         <div className="flex items-center gap-3">
           {draft?.status === "pending" && <span className="text-gray-400 text-sm">Draft has not started</span>}
           {draft?.status === "in_progress" && (
-            <span className="text-white text-sm font-semibold">Round {currentRound} · Pick {currentPick} of {N * totalRounds}</span>
+            <>
+              <span className="text-white text-sm font-semibold">Round {currentRound} · Pick {currentPick} of {N * totalRounds}</span>
+              <PickCountdown
+                leagueId={leagueId}
+                secondsPerPick={draft.secondsPerPick ?? 90}
+                startedAt={draft.currentPickStartedAt ?? null}
+                pickNumber={currentPick}
+              />
+            </>
           )}
           {draft?.status === "paused" && (
             <span className="text-yellow-400 text-sm font-semibold">Paused — Round {currentRound}, Pick {currentPick}</span>

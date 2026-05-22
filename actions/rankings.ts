@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { regenerateLeagueMatchups } from "@/actions/matchups";
 
 /** Replace a user's ranking list for this league with the given ordered ids. */
 export async function setRankings(leagueId: number, playerIds: number[]): Promise<void> {
@@ -132,10 +133,126 @@ export async function autoPickFromRankings(leagueId: number): Promise<void> {
   const nextPick = pick + 1;
   const totalPicks = numTeams * draft.total_rounds;
   if (nextPick > totalPicks) {
-    await admin.from("drafts").update({ status: "complete", current_pick: nextPick }).eq("id", draft.id);
+    await admin.from("drafts").update({ status: "complete", current_pick: nextPick, current_pick_started_at: null }).eq("id", draft.id);
     await admin.from("leagues").update({ draft_status: "complete" }).eq("id", leagueId);
   } else {
-    await admin.from("drafts").update({ current_pick: nextPick }).eq("id", draft.id);
+    await admin.from("drafts").update({ current_pick: nextPick, current_pick_started_at: new Date().toISOString() }).eq("id", draft.id);
+  }
+
+  revalidatePath(`/league/${leagueId}/draft`);
+  revalidatePath(`/league/${leagueId}/lineups`);
+}
+
+/**
+ * Auto-pick when the current pick's timer has expired. Any signed-in league
+ * member can call this — it validates that:
+ *   - the draft is in_progress,
+ *   - the elapsed time since current_pick_started_at exceeds seconds_per_pick.
+ *
+ * The on-clock team gets the highest-ranked available player from their
+ * owner's rankings (falling back to overall_rank).
+ */
+export async function autoPickExpired(leagueId: number): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const admin = createAdminClient();
+
+  // Caller must be a league member.
+  const { data: caller } = await admin
+    .from("league_members")
+    .select("id")
+    .eq("league_id", leagueId)
+    .eq("user_id", user.id)
+    .single();
+  if (!caller) return;
+
+  const { data: draft } = await admin
+    .from("drafts")
+    .select("id, status, current_pick, total_rounds, seconds_per_pick, current_pick_started_at")
+    .eq("league_id", leagueId)
+    .single();
+  if (!draft || draft.status !== "in_progress") return;
+  if (!draft.current_pick_started_at) return;
+
+  const startedMs = Date.parse(draft.current_pick_started_at);
+  const elapsedSec = (Date.now() - startedMs) / 1000;
+  if (elapsedSec < (draft.seconds_per_pick ?? 90)) return;
+
+  // Find the on-clock team.
+  const { data: members } = await admin
+    .from("league_members")
+    .select("id, user_id, draft_position")
+    .eq("league_id", leagueId)
+    .not("draft_position", "is", null)
+    .order("draft_position");
+  const numTeams = members?.length ?? 0;
+  if (numTeams === 0) return;
+
+  const pick = draft.current_pick;
+  const round = Math.ceil(pick / numTeams);
+  const positionInRound = pick - (round - 1) * numTeams;
+  const isReversed = round % 2 === 0;
+  const draftSlot = isReversed ? numTeams - positionInRound + 1 : positionInRound;
+  const onClock = members?.find((m: any) => m.draft_position === draftSlot);
+  if (!onClock) return;
+
+  // Who currently owns this team (whose rankings should drive the pick).
+  const ownerUserId = (onClock as any).user_id as string;
+
+  const { data: drafted } = await admin
+    .from("rosters")
+    .select("player_id")
+    .eq("league_id", leagueId);
+  const draftedIds = new Set((drafted ?? []).map((r: any) => r.player_id));
+
+  let pickedPlayerId: number | null = null;
+  if (ownerUserId) {
+    const { data: rankings } = await admin
+      .from("user_player_rankings")
+      .select("player_id, rank")
+      .eq("user_id", ownerUserId)
+      .eq("league_id", leagueId)
+      .order("rank", { ascending: true });
+    for (const r of rankings ?? []) {
+      if (!draftedIds.has(r.player_id)) { pickedPlayerId = r.player_id; break; }
+    }
+  }
+  if (pickedPlayerId == null) {
+    const { data: players } = await admin
+      .from("players")
+      .select("id, overall_rank")
+      .order("overall_rank", { ascending: true, nullsFirst: false })
+      .limit(500);
+    for (const p of players ?? []) {
+      if (!draftedIds.has(p.id)) { pickedPlayerId = p.id; break; }
+    }
+  }
+  if (pickedPlayerId == null) return;
+
+  await admin.from("rosters").insert({
+    league_id: leagueId,
+    team_id: onClock.id,
+    player_id: pickedPlayerId,
+    acquired_week: 1,
+  });
+  await admin.from("draft_picks").insert({
+    draft_id: draft.id,
+    pick_number: pick,
+    round,
+    team_id: onClock.id,
+    player_id: pickedPlayerId,
+  });
+
+  const nextPick = pick + 1;
+  const totalPicks = numTeams * draft.total_rounds;
+  if (nextPick > totalPicks) {
+    await admin.from("drafts").update({ status: "complete", current_pick: nextPick, current_pick_started_at: null }).eq("id", draft.id);
+    await admin.from("leagues").update({ draft_status: "complete" }).eq("id", leagueId);
+    await regenerateLeagueMatchups(leagueId);
+  } else {
+    await admin.from("drafts").update({ current_pick: nextPick, current_pick_started_at: new Date().toISOString() }).eq("id", draft.id);
   }
 
   revalidatePath(`/league/${leagueId}/draft`);

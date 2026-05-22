@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { DraftBoard } from "@/components/draft-board";
 import { DraftScheduleForm } from "@/components/draft-schedule-form";
 import { randomizeDraftOrder } from "@/actions/drafts";
-import { setDraftConfig } from "@/actions/draft-config";
+import { setDraftConfig, setSecondsPerPick } from "@/actions/draft-config";
 
 export default async function DraftPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -28,7 +28,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
 
   const { data: draft } = await supabase
     .from("drafts")
-    .select("id, status, current_pick, total_rounds, scheduled_at, type, auction_budget")
+    .select("id, status, current_pick, total_rounds, scheduled_at, type, auction_budget, seconds_per_pick, current_pick_started_at")
     .eq("league_id", id)
     .single();
 
@@ -140,6 +140,8 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
                 hour: "numeric",
                 minute: "2-digit",
               })}
+              {" · "}
+              <span className="text-gray-500">commissioner starts manually</span>
             </p>
           </div>
         </div>
@@ -153,6 +155,38 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
           </div>
 
           <DraftScheduleForm leagueId={Number(id)} scheduledAt={scheduledAt} />
+
+          {/* Seconds per pick */}
+          <form
+            action={async (formData: FormData) => {
+              "use server";
+              const seconds = Number(formData.get("secondsPerPick") ?? 90);
+              await setSecondsPerPick(Number(id), seconds);
+            }}
+            className="flex flex-wrap items-end gap-3 pt-3 border-t border-white/5"
+          >
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Seconds per pick</label>
+              <input
+                type="number"
+                name="secondsPerPick"
+                min={15}
+                max={3600}
+                step={5}
+                defaultValue={(draft as any)?.seconds_per_pick ?? 90}
+                className="bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white text-sm w-32"
+              />
+            </div>
+            <button
+              type="submit"
+              className="bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
+            >
+              Save timer
+            </button>
+            <p className="w-full text-gray-500 text-xs">
+              If a pick isn't made within this window, the highest-ranked available player is auto-picked.
+            </p>
+          </form>
 
           {/* Draft type + auction budget */}
           <form
@@ -233,7 +267,14 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
 
       <DraftBoard
         leagueId={Number(id)}
-        draft={draft ? { id: draft.id, status: draft.status, currentPick: draft.current_pick, totalRounds: draft.total_rounds } : null}
+        draft={draft ? {
+          id: draft.id,
+          status: draft.status,
+          currentPick: draft.current_pick,
+          totalRounds: draft.total_rounds,
+          secondsPerPick: (draft as any).seconds_per_pick ?? 90,
+          currentPickStartedAt: (draft as any).current_pick_started_at ?? null,
+        } : null}
         members={members}
         picks={picks}
         availablePlayers={availablePlayers}

@@ -39,3 +39,24 @@ export async function setDraftConfig(
 
   revalidatePath(`/league/${leagueId}/draft`);
 }
+
+/** Commissioner sets the per-pick timer in seconds. Picks that exceed this
+ *  duration auto-fire to the top available player. */
+export async function setSecondsPerPick(leagueId: number, seconds: number): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const admin = createAdminClient();
+  const { data: league } = await admin
+    .from("leagues")
+    .select("commissioner_id")
+    .eq("id", leagueId)
+    .single();
+  if (!league || league.commissioner_id !== user.id) return;
+
+  const safe = Math.max(15, Math.min(3600, Math.round(seconds) || 90));
+  await admin.from("drafts").update({ seconds_per_pick: safe }).eq("league_id", leagueId);
+
+  revalidatePath(`/league/${leagueId}/draft`);
+}
