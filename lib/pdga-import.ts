@@ -34,6 +34,40 @@ const BONUS_POINTS = { hotRound: 10, bogeyFree: 5, ace: 20 } as const;
 
 type RoundBonus = { hot: number; bogey: number; ace: number };
 
+/**
+ * Pulls the earliest scheduled tee time for round 1 from PDGA Live (across
+ * both divisions). Combined with the tournament's start_date this gives us a
+ * concrete lock-at timestamp so lineups freeze the moment players tee off.
+ *
+ * PDGA returns tee times as local "HH:MM:SS" strings without a timezone.
+ * We assume US Eastern (UTC-4 during DST) as a default offset; non-US events
+ * will be off by a few hours, but the resulting lock is still close enough
+ * to "first tee" to be useful. Commissioners can override via the UI later.
+ */
+async function fetchFirstTeeTime(pdgaId: number, startDate: string | null): Promise<string | null> {
+  if (!startDate) return null;
+  const [mpo, fpo] = await Promise.all([
+    fetchRoundJson(pdgaId, "MPO", 1),
+    fetchRoundJson(pdgaId, "FPO", 1),
+  ]);
+  const teeTimes: string[] = [];
+  for (const data of [mpo, fpo]) {
+    for (const s of (data?.scores ?? []) as any[]) {
+      if (typeof s?.TeeTime === "string" && /^\d{2}:\d{2}:\d{2}$/.test(s.TeeTime)) {
+        teeTimes.push(s.TeeTime);
+      }
+    }
+  }
+  if (teeTimes.length === 0) return null;
+  teeTimes.sort();
+  const earliest = teeTimes[0];
+  // Treat as US Eastern (UTC-4). Convert to UTC ISO.
+  const localIso = `${startDate}T${earliest}-04:00`;
+  const ms = Date.parse(localIso);
+  if (!Number.isFinite(ms)) return null;
+  return new Date(ms).toISOString();
+}
+
 async function fetchRoundJson(pdgaId: number, division: "MPO" | "FPO", round: number): Promise<any | null> {
   const url = `https://www.pdga.com/apps/tournament/live-api/live_results_fetch_round?TournID=${pdgaId}&Division=${division}&Round=${round}`;
   try {
@@ -182,13 +216,14 @@ export type ImportResult = {
 export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportResult> {
   const { data: tournaments } = await supabase
     .from("tournaments")
-    .select("id, name, pdga_event_id")
+    .select("id, name, pdga_event_id, start_date")
     .not("pdga_event_id", "is", null);
 
   const events = (tournaments ?? []).map((t: any) => ({
     dbId: t.id as number,
     pdgaId: t.pdga_event_id as number,
     name: t.name as string,
+    startDate: t.start_date as string | null,
   }));
 
   const { data: players } = await supabase
@@ -226,6 +261,15 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
 
     // Pull per-player hot rounds, bogey-free rounds, and aces for this event.
     const bonusByPdga = await computeBonusesForEvent(event.pdgaId);
+
+    // Update the lock-at timestamp from PDGA's round 1 tee times.
+    const lockAtIso = await fetchFirstTeeTime(event.pdgaId, event.startDate);
+    if (lockAtIso) {
+      await supabase
+        .from("tournaments")
+        .update({ lock_at: lockAtIso })
+        .eq("id", event.dbId);
+    }
 
     const sections = [
       { rows: mpo, division: "MPO" as const },

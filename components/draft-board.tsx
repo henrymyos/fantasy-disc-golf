@@ -3,6 +3,7 @@
 import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { startDraft, pauseDraft, resumeDraft, makeDraftPick } from "@/actions/drafts";
+import { autoPickFromRankings } from "@/actions/rankings";
 
 type DraftInfo = { id: number; status: string; currentPick: number; totalRounds: number };
 type Member = { id: number; teamName: string; draftPosition: number };
@@ -298,6 +299,13 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
         </div>
         {!readOnly && (
           <div className="flex gap-2">
+            {isMyPick && (
+              <form action={autoPickFromRankings.bind(null, leagueId)}>
+                <button className="border border-[#36D7B7]/40 hover:bg-[#36D7B7]/10 text-[#36D7B7] hover:text-white font-semibold px-3 py-1.5 rounded-lg text-sm transition">
+                  Auto-pick
+                </button>
+              </form>
+            )}
             {isCommissioner && draft?.status === "pending" && (
               <form action={startDraft.bind(null, leagueId)}>
                 <button className="bg-[#36D7B7] hover:bg-[#2bc4a6] text-black font-bold px-5 py-1.5 rounded-lg text-sm transition">

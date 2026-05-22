@@ -11,11 +11,20 @@ export type TradeMovement = {
   toTeamId: number;
 };
 
+export type PickMovement = {
+  seasonYear: number;
+  round: number;
+  originalTeamId: number;
+  fromTeamId: number;
+  toTeamId: number;
+};
+
 export async function proposeTrade(
   leagueId: number,
   receiverTeamIds: number[],
   movements: TradeMovement[],
   message: string,
+  pickMovements: PickMovement[] = [],
 ): Promise<void> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -31,11 +40,11 @@ export async function proposeTrade(
     .single();
 
   if (!proposer) return;
-  if (receiverTeamIds.length === 0 || movements.length === 0) return;
-
-  // Reject any movement that doesn't actually move a player (same from = to).
+  if (receiverTeamIds.length === 0) return;
+  // A trade must move at least one player or pick.
   const filtered = movements.filter((m) => m.fromTeamId !== m.toTeamId);
-  if (filtered.length === 0) return;
+  const filteredPicks = pickMovements.filter((p) => p.fromTeamId !== p.toTeamId);
+  if (filtered.length === 0 && filteredPicks.length === 0) return;
 
   const { data: trade, error } = await admin
     .from("trades")
@@ -50,14 +59,29 @@ export async function proposeTrade(
 
   if (error || !trade) return;
 
-  await admin.from("trade_players").insert(
-    filtered.map((m) => ({
-      trade_id: trade.id,
-      player_id: m.playerId,
-      from_team_id: m.fromTeamId,
-      to_team_id: m.toTeamId,
-    })),
-  );
+  if (filtered.length > 0) {
+    await admin.from("trade_players").insert(
+      filtered.map((m) => ({
+        trade_id: trade.id,
+        player_id: m.playerId,
+        from_team_id: m.fromTeamId,
+        to_team_id: m.toTeamId,
+      })),
+    );
+  }
+
+  if (filteredPicks.length > 0) {
+    await admin.from("trade_picks").insert(
+      filteredPicks.map((p) => ({
+        trade_id: trade.id,
+        season_year: p.seasonYear,
+        round: p.round,
+        original_team_id: p.originalTeamId,
+        from_team_id: p.fromTeamId,
+        to_team_id: p.toTeamId,
+      })),
+    );
+  }
 
   await admin.from("trade_participants").insert(
     receiverTeamIds.map((teamId) => ({
@@ -146,6 +170,25 @@ export async function respondToTrade(tradeId: number, accept: boolean): Promise<
       .eq("league_id", trade.league_id)
       .eq("player_id", tp.player_id)
       .eq("team_id", tp.from_team_id);
+  }
+
+  // Execute pick swaps: the to_team_id becomes the current owner of each
+  // (season, round, original) entry.
+  const { data: tradePicks } = await admin
+    .from("trade_picks")
+    .select("season_year, round, original_team_id, to_team_id")
+    .eq("trade_id", tradeId);
+  for (const tp of tradePicks ?? []) {
+    await admin.from("traded_draft_picks").upsert(
+      {
+        league_id: trade.league_id,
+        season_year: (tp as any).season_year,
+        round: (tp as any).round,
+        original_team_id: (tp as any).original_team_id,
+        current_team_id: (tp as any).to_team_id,
+      },
+      { onConflict: "league_id,season_year,round,original_team_id" },
+    );
   }
 
   await admin

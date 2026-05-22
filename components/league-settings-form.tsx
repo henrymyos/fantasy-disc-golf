@@ -56,6 +56,7 @@ type Props = {
     fpoStarters: number;
     waiverOrderMode: WaiverOrderMode;
     scoringMode: ScoringMode;
+    keepersPerTeam: number;
   };
 };
 
@@ -149,6 +150,21 @@ export function LeagueSettingsForm({ leagueId, initial }: Props) {
         </select>
         <p className="text-gray-600 text-xs mt-1">
           Determines how weekly wins and losses are counted in the standings.
+        </p>
+      </div>
+
+      <div>
+        <label className="block text-sm text-gray-400 mb-1">Keepers per team</label>
+        <input
+          type="number"
+          name="keepersPerTeam"
+          min={0}
+          max={10}
+          defaultValue={initial.keepersPerTeam}
+          className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#4B3DFF] transition"
+        />
+        <p className="text-gray-600 text-xs mt-1">
+          Number of players each team can carry into next season's draft (0 disables keepers).
         </p>
       </div>
 

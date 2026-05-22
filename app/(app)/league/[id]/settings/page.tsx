@@ -40,7 +40,7 @@ export default async function LeagueSettingsPage({
 
   const { data: divData } = await supabase
     .from("leagues")
-    .select("mpo_starters, fpo_starters, waiver_order_mode, scoring_mode")
+    .select("mpo_starters, fpo_starters, waiver_order_mode, scoring_mode, keepers_per_team")
     .eq("id", id)
     .single();
 
@@ -53,6 +53,7 @@ export default async function LeagueSettingsPage({
     | "head_to_head"
     | "all_play"
     | "median";
+  const keepersPerTeam: number = (divData as any)?.keepers_per_team ?? 0;
 
   const { data: completedDrafts } = await supabase
     .from("drafts")
@@ -96,6 +97,7 @@ export default async function LeagueSettingsPage({
                 fpoStarters,
                 waiverOrderMode,
                 scoringMode,
+                keepersPerTeam,
               }}
             />
           ) : (
@@ -137,6 +139,27 @@ export default async function LeagueSettingsPage({
       )}
 
       {isCommissioner && <DivisionsAndMatchupsSection leagueId={id} />}
+
+
+      {keepersPerTeam > 0 && (
+        <div>
+          <h2 className="text-white font-bold text-lg mb-5">Keepers</h2>
+          <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-white font-medium text-sm">Pick your keepers</p>
+              <p className="text-gray-500 text-xs mt-0.5">
+                Up to {keepersPerTeam} players to carry into next season's draft.
+              </p>
+            </div>
+            <Link
+              href={`/league/${id}/settings/keepers`}
+              className="bg-[#4B3DFF]/15 hover:bg-[#4B3DFF]/25 border border-[#4B3DFF]/30 text-[#4B3DFF] hover:text-white text-sm font-semibold px-4 py-2 rounded-lg transition shrink-0"
+            >
+              Select keepers
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div>
         <h2 className="text-white font-bold text-lg mb-5">Scoring</h2>

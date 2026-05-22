@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { DraftBoard } from "@/components/draft-board";
 import { DraftScheduleForm } from "@/components/draft-schedule-form";
 import { randomizeDraftOrder } from "@/actions/drafts";
+import { setDraftConfig } from "@/actions/draft-config";
 
 export default async function DraftPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -27,7 +28,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
 
   const { data: draft } = await supabase
     .from("drafts")
-    .select("id, status, current_pick, total_rounds, scheduled_at")
+    .select("id, status, current_pick, total_rounds, scheduled_at, type, auction_budget")
     .eq("league_id", id)
     .single();
 
@@ -109,7 +110,14 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-end gap-2">
+        <Link
+          href={`/league/${id}/rankings`}
+          className="flex items-center gap-2 text-sm bg-[#36D7B7]/15 hover:bg-[#36D7B7]/25 border border-[#36D7B7]/30 text-[#36D7B7] hover:text-white font-semibold px-3 py-1.5 rounded-lg transition"
+        >
+          <span>⭐</span>
+          <span>My Rankings</span>
+        </Link>
         <Link
           href={`/league/${id}/mock-draft`}
           className="flex items-center gap-2 text-sm bg-[#4B3DFF]/15 hover:bg-[#4B3DFF]/25 border border-[#4B3DFF]/30 text-[#4B3DFF] hover:text-white font-semibold px-3 py-1.5 rounded-lg transition"
@@ -145,6 +153,52 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
           </div>
 
           <DraftScheduleForm leagueId={Number(id)} scheduledAt={scheduledAt} />
+
+          {/* Draft type + auction budget */}
+          <form
+            action={async (formData: FormData) => {
+              "use server";
+              const type = (formData.get("draftType") as string) === "auction" ? "auction" : "snake";
+              const budget = Number(formData.get("auctionBudget") ?? 200);
+              await setDraftConfig(Number(id), type as "snake" | "auction", budget);
+            }}
+            className="flex flex-wrap items-end gap-3 pt-3 border-t border-white/5"
+          >
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Draft type</label>
+              <select
+                name="draftType"
+                defaultValue={(draft as any)?.type ?? "snake"}
+                className="bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white text-sm"
+              >
+                <option value="snake">Snake</option>
+                <option value="auction">Auction (preview)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Auction budget ($)</label>
+              <input
+                type="number"
+                name="auctionBudget"
+                min={50}
+                max={1000}
+                step={10}
+                defaultValue={(draft as any)?.auction_budget ?? 200}
+                className="bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white text-sm w-32"
+              />
+            </div>
+            <button
+              type="submit"
+              className="bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
+            >
+              Save draft type
+            </button>
+            {(draft as any)?.type === "auction" && (
+              <p className="text-yellow-300 text-xs w-full">
+                Auction mode is a preview — the live bidding UI is on the roadmap. Snake-style picking still runs until that ships.
+              </p>
+            )}
+          </form>
 
           {/* Order */}
           <div className="flex flex-wrap items-end gap-3">
