@@ -10,6 +10,7 @@ import {
 } from "@/lib/dgpt-2026-schedule";
 import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
 import { applyProjectionVariance } from "@/lib/projections";
+import { LeagueChat } from "@/components/league-chat";
 
 export default async function LeagueDashboard({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -240,6 +241,21 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
               <span className="text-gray-600 text-lg shrink-0">→</span>
             </div>
           </Link>
+        )}
+
+        {myMembership && (
+          <div>
+            <h2 className="font-bold text-white mb-2 px-1 text-sm uppercase tracking-wider">Chat</h2>
+            <LeagueChat
+              leagueId={Number(id)}
+              myMemberId={myMembership.id}
+              members={(members ?? []).map((m: any) => ({
+                id: m.id,
+                team_name: m.team_name,
+                user_id: m.user_id ?? null,
+              }))}
+            />
+          </div>
         )}
 
         <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
