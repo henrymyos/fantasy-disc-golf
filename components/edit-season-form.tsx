@@ -188,7 +188,7 @@ export function EditSeasonForm({ leagueId, events, initialSelected }: Props) {
       </div>
 
       {/* Sticky save footer */}
-      <div className="fixed bottom-0 left-0 md:left-14 lg:left-56 right-0 z-40 bg-[#0f1117]/95 backdrop-blur-sm border-t border-white/5 px-4 lg:px-6 py-4">
+      <div className="fixed bottom-16 md:bottom-0 left-0 md:left-14 lg:left-56 right-0 z-40 bg-[#0f1117]/95 backdrop-blur-sm border-t border-white/5 px-4 lg:px-6 py-4">
         <div className="max-w-2xl flex items-center justify-between gap-3">
           <div className="text-sm">
             <p className="text-white font-semibold">

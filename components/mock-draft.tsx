@@ -526,7 +526,7 @@ export function MockDraft({
 
       {/* Tabbed bottom panel: Available / My Team — visible whenever drafting or complete */}
       <div
-        className="fixed bottom-0 left-0 md:left-14 lg:left-56 right-0 z-40 bg-[#0f1117]/95 backdrop-blur-sm border-t border-white/5 flex flex-col transition-[height] duration-200"
+        className="fixed bottom-16 md:bottom-0 left-0 md:left-14 lg:left-56 right-0 z-40 bg-[#0f1117]/95 backdrop-blur-sm border-t border-white/5 flex flex-col transition-[height] duration-200"
         style={{ height: panelHeight }}
       >
           {/* Tab header */}

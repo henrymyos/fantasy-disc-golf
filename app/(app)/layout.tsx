@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/actions/auth";
 import { SidebarNav } from "@/components/sidebar-nav";
 import { MobileTopBar } from "@/components/mobile-top-bar";
+import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -64,9 +65,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main content */}
-      <main className="md:ml-14 lg:ml-56 p-4 lg:p-6 min-h-screen">
+      <main className="md:ml-14 lg:ml-56 p-4 lg:p-6 pb-24 md:pb-6 min-h-screen">
         {children}
       </main>
+
+      <MobileBottomNav />
     </div>
   );
 }

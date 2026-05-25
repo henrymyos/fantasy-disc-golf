@@ -21,7 +21,7 @@ export function LeagueTabNav({ base, isCommissioner, draftComplete }: { base: st
   });
 
   return (
-    <nav className="flex gap-1 mb-6 border-b border-white/5 pb-0 -mx-0 overflow-x-auto">
+    <nav className="flex gap-1 mb-6 border-b border-white/5 pb-0 overflow-x-auto sticky top-[57px] md:top-0 z-20 bg-[var(--background)] -mx-4 px-4 md:-mx-0 md:px-0">
       {tabs.map((tab) => {
         const href = `${base}${tab.href}`;
         const isActive = pathname === href;
