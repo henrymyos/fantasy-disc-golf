@@ -11,6 +11,7 @@ import {
 import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
 import { applyProjectionVariance } from "@/lib/projections";
 import { LeagueChat } from "@/components/league-chat";
+import { getActivityFeed } from "@/lib/activity-feed";
 
 export default async function LeagueDashboard({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -120,6 +121,8 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
     .sort((a, b) => b.wins - a.wins || b.points - a.points);
 
   const myMembership = (members ?? []).find((m) => m.user_id === user.id);
+
+  const activity = await getActivityFeed(supabase, Number(id), 15);
 
   // Compute each team's projected total for the next calendar event so we can
   // surface it on each matchup row + the detail page.
@@ -279,6 +282,47 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
             </div>
           )}
         </div>
+
+        {/* Activity feed */}
+        {activity.length > 0 && (
+          <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
+            <h2 className="font-bold text-white mb-4">Recent Activity</h2>
+            <ul className="space-y-2">
+              {activity.map((item) => (
+                <li key={item.id} className="flex items-start gap-3 text-sm">
+                  <span
+                    className="shrink-0 mt-0.5 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
+                    style={(() => {
+                      switch (item.kind) {
+                        case "add":
+                          return { background: "rgba(54,215,183,0.15)", color: "#36D7B7" };
+                        case "drop":
+                          return { background: "rgba(248,113,113,0.15)", color: "#f87171" };
+                        case "trade":
+                          return { background: "rgba(75,61,255,0.18)", color: "#a09aff" };
+                        default:
+                          return { background: "rgba(245,165,36,0.15)", color: "#F5A524" };
+                      }
+                    })()}
+                  >
+                    {item.kind === "add" ? "+" : item.kind === "drop" ? "−" : item.kind === "trade" ? "⇄" : "!"}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-white text-sm leading-snug">{item.description}</p>
+                    <p className="text-gray-500 text-[10px] mt-0.5">
+                      {new Date(item.ts).toLocaleString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Upcoming tournaments */}
         {upcomingEvents.length > 0 && (

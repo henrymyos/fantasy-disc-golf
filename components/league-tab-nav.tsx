@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const NAV_TABS = [
   { label: "League", href: "" },
   { label: "Team", href: "/lineups" },
+  { label: "Matchup", href: "/matchup" },
   { label: "Players", href: "/free-agency" },
   { label: "Draft", href: "/draft" },
   { label: "Playoffs", href: "/playoffs" },
@@ -17,6 +18,7 @@ export function LeagueTabNav({ base, isCommissioner, draftComplete }: { base: st
   const tabs = NAV_TABS.filter((t) => {
     if (t.href === "/draft" && draftComplete) return false;
     if (t.href === "/playoffs" && !draftComplete) return false;
+    if (t.href === "/matchup" && !draftComplete) return false;
     return true;
   });
 
