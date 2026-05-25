@@ -21,6 +21,12 @@ export async function startDraft(leagueId: number): Promise<void> {
 
   if (!league || league.commissioner_id !== user.id) return;
 
+  const { data: draftRow } = await admin
+    .from("drafts")
+    .select("type, auction_budget")
+    .eq("league_id", leagueId)
+    .single();
+
   const { data: members } = await admin
     .from("league_members")
     .select("id")
@@ -29,16 +35,54 @@ export async function startDraft(leagueId: number): Promise<void> {
 
   if (!members || members.length < 2) return;
 
-  const shuffled = [...members].sort(() => Math.random() - 0.5);
-  await Promise.all(
-    shuffled.map((m, i) =>
-      admin.from("league_members").update({ draft_position: i + 1 }).eq("id", m.id)
-    )
-  );
+  // Only randomize draft positions if they haven't already been set (so the
+  // commissioner's manual order — set via the pre-draft Randomize button —
+  // doesn't get overwritten if they click Start without re-randomizing).
+  const { data: existingPositions } = await admin
+    .from("league_members")
+    .select("id, draft_position")
+    .eq("league_id", leagueId);
+  const allSet = (existingPositions ?? []).every((m: any) => m.draft_position != null);
+  if (!allSet) {
+    const shuffled = [...members].sort(() => Math.random() - 0.5);
+    await Promise.all(
+      shuffled.map((m, i) =>
+        admin.from("league_members").update({ draft_position: i + 1 }).eq("id", m.id)
+      )
+    );
+  }
+
+  // Seed auction budgets if this is an auction draft.
+  if ((draftRow as any)?.type === "auction") {
+    const budget = (draftRow as any)?.auction_budget ?? 200;
+    await admin
+      .from("league_members")
+      .update({ auction_budget_remaining: budget })
+      .eq("league_id", leagueId);
+  }
+
+  const nominatorTeam = (draftRow as any)?.type === "auction"
+    ? (await admin
+        .from("league_members")
+        .select("id")
+        .eq("league_id", leagueId)
+        .eq("draft_position", 1)
+        .single()).data
+    : null;
 
   await admin
     .from("drafts")
-    .update({ status: "in_progress", started_at: new Date().toISOString(), current_pick: 1, current_pick_started_at: new Date().toISOString() })
+    .update({
+      status: "in_progress",
+      started_at: new Date().toISOString(),
+      current_pick: 1,
+      current_pick_started_at: new Date().toISOString(),
+      auction_nominator_team_id: (nominatorTeam as any)?.id ?? null,
+      auction_current_player_id: null,
+      auction_current_bid: null,
+      auction_high_bidder_team_id: null,
+      auction_ends_at: null,
+    })
     .eq("league_id", leagueId);
 
   await admin.from("leagues").update({ draft_status: "in_progress" }).eq("id", leagueId);

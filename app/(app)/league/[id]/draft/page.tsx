@@ -4,7 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import { DraftBoard } from "@/components/draft-board";
 import { DraftScheduleForm } from "@/components/draft-schedule-form";
 import { randomizeDraftOrder } from "@/actions/drafts";
-import { setDraftConfig, setSecondsPerPick } from "@/actions/draft-config";
+import { setSecondsPerPick } from "@/actions/draft-config";
+import { DraftTypeForm } from "@/components/draft-type-form";
+import { AuctionPanel } from "@/components/auction-panel";
 
 export default async function DraftPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -188,51 +190,11 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
             </p>
           </form>
 
-          {/* Draft type + auction budget */}
-          <form
-            action={async (formData: FormData) => {
-              "use server";
-              const type = (formData.get("draftType") as string) === "auction" ? "auction" : "snake";
-              const budget = Number(formData.get("auctionBudget") ?? 200);
-              await setDraftConfig(Number(id), type as "snake" | "auction", budget);
-            }}
-            className="flex flex-wrap items-end gap-3 pt-3 border-t border-white/5"
-          >
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Draft type</label>
-              <select
-                name="draftType"
-                defaultValue={(draft as any)?.type ?? "snake"}
-                className="bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white text-sm"
-              >
-                <option value="snake">Snake</option>
-                <option value="auction">Auction (preview)</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Auction budget ($)</label>
-              <input
-                type="number"
-                name="auctionBudget"
-                min={50}
-                max={1000}
-                step={10}
-                defaultValue={(draft as any)?.auction_budget ?? 200}
-                className="bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white text-sm w-32"
-              />
-            </div>
-            <button
-              type="submit"
-              className="bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
-            >
-              Save draft type
-            </button>
-            {(draft as any)?.type === "auction" && (
-              <p className="text-yellow-300 text-xs w-full">
-                Auction mode is a preview — the live bidding UI is on the roadmap. Snake-style picking still runs until that ships.
-              </p>
-            )}
-          </form>
+          <DraftTypeForm
+            leagueId={Number(id)}
+            initialType={((draft as any)?.type ?? "snake") as "snake" | "auction"}
+            initialBudget={(draft as any)?.auction_budget ?? 200}
+          />
 
           {/* Order */}
           <div className="flex flex-wrap items-end gap-3">
@@ -263,6 +225,10 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
             </form>
           </div>
         </div>
+      )}
+
+      {(draft as any)?.type === "auction" && draft?.status === "in_progress" && (
+        <AuctionPanel leagueId={Number(id)} myUserId={user.id} />
       )}
 
       <DraftBoard
