@@ -275,6 +275,135 @@ export async function dropPlayer(leagueId: number, playerId: number): Promise<vo
   revalidatePath(`/league/${leagueId}/lineups`);
 }
 
+// ── Commissioner roster overrides ───────────────────────────────────────────
+
+/**
+ * Commissioner-only: move a player to a different team in this league, or
+ * drop them entirely. `newTeamId === null` means "remove from all rosters",
+ * any other value means assign or move to that team. No-op when the player
+ * is already on the target team.
+ *
+ * Mirrors the slot-fill logic from claim_draft_pick: when assigned to a team
+ * with an open starter slot in the player's division, fills that slot; else
+ * lands on the bench.
+ */
+export async function commissionerSetPlayerTeam(
+  leagueId: number,
+  playerId: number,
+  newTeamId: number | null,
+): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const admin = createAdminClient();
+  const { data: league } = await admin
+    .from("leagues")
+    .select("commissioner_id, mpo_starters, fpo_starters, current_week")
+    .eq("id", leagueId)
+    .single();
+  if (!league || (league as any).commissioner_id !== user.id) return;
+
+  const { data: existing } = await admin
+    .from("rosters")
+    .select("id, team_id")
+    .eq("league_id", leagueId)
+    .eq("player_id", playerId)
+    .maybeSingle();
+
+  // Drop case.
+  if (newTeamId == null) {
+    if (existing) {
+      await admin.from("rosters").delete().eq("id", existing.id);
+      await admin.from("roster_transactions").insert({
+        league_id: leagueId,
+        team_id: (existing as any).team_id,
+        player_id: playerId,
+        action: "drop",
+      });
+    }
+    revalidatePath(`/league/${leagueId}/settings/rosters`);
+    revalidatePath(`/league/${leagueId}/lineups`);
+    revalidatePath(`/league/${leagueId}/free-agency`);
+    return;
+  }
+
+  if (existing && (existing as any).team_id === newTeamId) return;
+
+  // Verify target team is in this league (defense in depth).
+  const { data: targetTeam } = await admin
+    .from("league_members")
+    .select("id")
+    .eq("id", newTeamId)
+    .eq("league_id", leagueId)
+    .maybeSingle();
+  if (!targetTeam) return;
+
+  const { data: player } = await admin
+    .from("players")
+    .select("division")
+    .eq("id", playerId)
+    .single();
+  const division = ((player as any)?.division ?? "MPO") as "MPO" | "FPO";
+  const slotLimit =
+    division === "MPO"
+      ? (league as any).mpo_starters ?? 4
+      : (league as any).fpo_starters ?? 2;
+
+  const { data: divStarters } = await admin
+    .from("rosters")
+    .select("lineup_order, players!inner(division)")
+    .eq("league_id", leagueId)
+    .eq("team_id", newTeamId)
+    .eq("is_starter", true)
+    .eq("players.division", division);
+  const taken = new Set(
+    (divStarters ?? []).map((r: any) => r.lineup_order).filter((o: number | null) => o != null),
+  );
+  let assignedOrder: number | null = null;
+  for (let i = 1; i <= slotLimit; i++) {
+    if (!taken.has(i)) { assignedOrder = i; break; }
+  }
+
+  if (existing) {
+    await admin
+      .from("rosters")
+      .update({
+        team_id: newTeamId,
+        is_starter: assignedOrder !== null,
+        lineup_order: assignedOrder,
+        acquired_week: (league as any).current_week ?? 1,
+      })
+      .eq("id", (existing as any).id);
+    await admin.from("roster_transactions").insert({
+      league_id: leagueId,
+      team_id: (existing as any).team_id,
+      player_id: playerId,
+      action: "drop",
+    });
+  } else {
+    await admin.from("rosters").insert({
+      league_id: leagueId,
+      team_id: newTeamId,
+      player_id: playerId,
+      acquired_week: (league as any).current_week ?? 1,
+      is_starter: assignedOrder !== null,
+      lineup_order: assignedOrder,
+    });
+  }
+
+  await admin.from("roster_transactions").insert({
+    league_id: leagueId,
+    team_id: newTeamId,
+    player_id: playerId,
+    action: "add",
+  });
+
+  revalidatePath(`/league/${leagueId}/settings/rosters`);
+  revalidatePath(`/league/${leagueId}/lineups`);
+  revalidatePath(`/league/${leagueId}/free-agency`);
+}
+
 // ── Waivers ─────────────────────────────────────────────────────────────────
 
 export async function placeWaiverClaim(

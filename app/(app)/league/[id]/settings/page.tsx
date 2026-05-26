@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { deleteLeague } from "@/actions/leagues";
+import { CopyButton } from "@/components/copy-button";
 import { DGPT_2026_SCHEDULE, effectiveSelection, getPlayoffSlugs } from "@/lib/dgpt-2026-schedule";
 
 export default async function LeagueSettingsPage({
@@ -61,9 +62,12 @@ export default async function LeagueSettingsPage({
         {inviteCode && (
           <div className="bg-[#1a1d23] rounded-2xl border border-white/5 p-4 min-h-[120px] flex flex-col justify-between">
             <p className="text-white font-bold text-base leading-tight">Invite Code</p>
-            <span className="font-mono text-white font-bold text-lg tracking-widest border border-white/10 rounded-lg px-3 py-2 bg-white/5 select-all text-center">
-              {inviteCode}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="flex-1 min-w-0 font-mono text-white font-bold text-lg tracking-widest border border-white/10 rounded-lg px-3 py-2 bg-white/5 select-all text-center truncate">
+                {inviteCode}
+              </span>
+              <CopyButton value={inviteCode} label="Copy invite code" />
+            </div>
           </div>
         )}
 
@@ -86,6 +90,14 @@ export default async function LeagueSettingsPage({
             href={`${base}/divisions`}
             title="Divisions & Matchups"
             subtitle="Set divisions and edit the schedule"
+          />
+        )}
+
+        {isCommissioner && (
+          <Tile
+            href={`${base}/rosters`}
+            title="Rosters"
+            subtitle="Move players between teams"
           />
         )}
 
