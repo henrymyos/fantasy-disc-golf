@@ -46,101 +46,66 @@ export async function autoPickFromRankings(leagueId: number): Promise<void> {
   const admin = createAdminClient();
   const { data: member } = await admin
     .from("league_members")
-    .select("id, draft_position")
+    .select("id")
     .eq("league_id", leagueId)
     .eq("user_id", user.id)
     .single();
   if (!member) return;
 
-  const { data: draft } = await admin
-    .from("drafts")
-    .select("id, current_pick, total_rounds, status")
-    .eq("league_id", leagueId)
-    .single();
-  if (!draft || draft.status !== "in_progress") return;
+  const pickedPlayerId = await pickBestAvailableForUser(admin, leagueId, user.id);
+  if (pickedPlayerId == null) return;
 
-  const { data: members } = await admin
-    .from("league_members")
-    .select("id, draft_position")
-    .eq("league_id", leagueId)
-    .not("draft_position", "is", null)
-    .order("draft_position");
-  const numTeams = members?.length ?? 0;
-  if (numTeams === 0) return;
+  const { data: result } = await admin.rpc("claim_draft_pick", {
+    p_league_id: leagueId,
+    p_team_id: member.id,
+    p_player_id: pickedPlayerId,
+  });
 
-  const pick = draft.current_pick;
-  const round = Math.ceil(pick / numTeams);
-  const positionInRound = pick - (round - 1) * numTeams;
-  const isReversed = round % 2 === 0;
-  const draftSlot = isReversed ? numTeams - positionInRound + 1 : positionInRound;
-  const currentTeam = members?.find((m: any) => m.draft_position === draftSlot);
-  if (!currentTeam || currentTeam.id !== member.id) return;
+  if ((result as any)?.complete) {
+    await regenerateLeagueMatchups(leagueId);
+  }
 
-  // Gather already-drafted player ids.
+  revalidatePath(`/league/${leagueId}/draft`);
+  revalidatePath(`/league/${leagueId}/lineups`);
+}
+
+/**
+ * Best available player for `forUserId`: walks their personal ranking list
+ * first, then falls back to global overall_rank. Returns null if every player
+ * we considered is already drafted in this league.
+ */
+async function pickBestAvailableForUser(
+  admin: ReturnType<typeof createAdminClient>,
+  leagueId: number,
+  forUserId: string | null,
+): Promise<number | null> {
   const { data: drafted } = await admin
     .from("rosters")
     .select("player_id")
     .eq("league_id", leagueId);
   const draftedIds = new Set((drafted ?? []).map((r: any) => r.player_id));
 
-  // Try user's ranking list first.
-  const { data: rankings } = await admin
-    .from("user_player_rankings")
-    .select("player_id, rank")
-    .eq("user_id", user.id)
-    .eq("league_id", leagueId)
-    .order("rank", { ascending: true });
-  let pickedPlayerId: number | null = null;
-  for (const r of rankings ?? []) {
-    if (!draftedIds.has(r.player_id)) {
-      pickedPlayerId = r.player_id;
-      break;
+  if (forUserId) {
+    const { data: rankings } = await admin
+      .from("user_player_rankings")
+      .select("player_id, rank")
+      .eq("user_id", forUserId)
+      .eq("league_id", leagueId)
+      .order("rank", { ascending: true });
+    for (const r of rankings ?? []) {
+      if (!draftedIds.has(r.player_id)) return r.player_id;
     }
   }
 
-  // Fall back to global best-available by overall_rank.
-  if (pickedPlayerId == null) {
-    const { data: players } = await admin
-      .from("players")
-      .select("id, overall_rank")
-      .order("overall_rank", { ascending: true, nullsFirst: false })
-      .limit(500);
-    for (const p of players ?? []) {
-      if (!draftedIds.has(p.id)) {
-        pickedPlayerId = p.id;
-        break;
-      }
-    }
+  const { data: players } = await admin
+    .from("players")
+    .select("id, overall_rank")
+    .order("overall_rank", { ascending: true, nullsFirst: false })
+    .limit(500);
+  for (const p of players ?? []) {
+    if (!draftedIds.has(p.id)) return p.id;
   }
-  if (pickedPlayerId == null) return;
-
-  // Reuse the regular makeDraftPick by calling it directly through Supabase.
-  // (Easier to just inline the same insert + advance logic.)
-  await admin.from("rosters").insert({
-    league_id: leagueId,
-    team_id: member.id,
-    player_id: pickedPlayerId,
-    acquired_week: 1,
-  });
-  await admin.from("draft_picks").insert({
-    draft_id: draft.id,
-    pick_number: pick,
-    round,
-    team_id: member.id,
-    player_id: pickedPlayerId,
-  });
-
-  const nextPick = pick + 1;
-  const totalPicks = numTeams * draft.total_rounds;
-  if (nextPick > totalPicks) {
-    await admin.from("drafts").update({ status: "complete", current_pick: nextPick, current_pick_started_at: null }).eq("id", draft.id);
-    await admin.from("leagues").update({ draft_status: "complete" }).eq("id", leagueId);
-  } else {
-    await admin.from("drafts").update({ current_pick: nextPick, current_pick_started_at: new Date().toISOString() }).eq("id", draft.id);
-  }
-
-  revalidatePath(`/league/${leagueId}/draft`);
-  revalidatePath(`/league/${leagueId}/lineups`);
+  return null;
 }
 
 /**
@@ -159,7 +124,6 @@ export async function autoPickExpired(leagueId: number): Promise<void> {
 
   const admin = createAdminClient();
 
-  // Caller must be a league member.
   const { data: caller } = await admin
     .from("league_members")
     .select("id")
@@ -170,7 +134,7 @@ export async function autoPickExpired(leagueId: number): Promise<void> {
 
   const { data: draft } = await admin
     .from("drafts")
-    .select("id, status, current_pick, total_rounds, seconds_per_pick, current_pick_started_at")
+    .select("status, current_pick, seconds_per_pick, current_pick_started_at")
     .eq("league_id", leagueId)
     .single();
   if (!draft || draft.status !== "in_progress") return;
@@ -180,7 +144,7 @@ export async function autoPickExpired(leagueId: number): Promise<void> {
   const elapsedSec = (Date.now() - startedMs) / 1000;
   if (elapsedSec < (draft.seconds_per_pick ?? 90)) return;
 
-  // Find the on-clock team.
+  // Find the on-clock team to pick FOR.
   const { data: members } = await admin
     .from("league_members")
     .select("id, user_id, draft_position")
@@ -198,61 +162,21 @@ export async function autoPickExpired(leagueId: number): Promise<void> {
   const onClock = members?.find((m: any) => m.draft_position === draftSlot);
   if (!onClock) return;
 
-  // Who currently owns this team (whose rankings should drive the pick).
-  const ownerUserId = (onClock as any).user_id as string;
-
-  const { data: drafted } = await admin
-    .from("rosters")
-    .select("player_id")
-    .eq("league_id", leagueId);
-  const draftedIds = new Set((drafted ?? []).map((r: any) => r.player_id));
-
-  let pickedPlayerId: number | null = null;
-  if (ownerUserId) {
-    const { data: rankings } = await admin
-      .from("user_player_rankings")
-      .select("player_id, rank")
-      .eq("user_id", ownerUserId)
-      .eq("league_id", leagueId)
-      .order("rank", { ascending: true });
-    for (const r of rankings ?? []) {
-      if (!draftedIds.has(r.player_id)) { pickedPlayerId = r.player_id; break; }
-    }
-  }
-  if (pickedPlayerId == null) {
-    const { data: players } = await admin
-      .from("players")
-      .select("id, overall_rank")
-      .order("overall_rank", { ascending: true, nullsFirst: false })
-      .limit(500);
-    for (const p of players ?? []) {
-      if (!draftedIds.has(p.id)) { pickedPlayerId = p.id; break; }
-    }
-  }
+  const pickedPlayerId = await pickBestAvailableForUser(
+    admin,
+    leagueId,
+    (onClock as any).user_id ?? null,
+  );
   if (pickedPlayerId == null) return;
 
-  await admin.from("rosters").insert({
-    league_id: leagueId,
-    team_id: onClock.id,
-    player_id: pickedPlayerId,
-    acquired_week: 1,
-  });
-  await admin.from("draft_picks").insert({
-    draft_id: draft.id,
-    pick_number: pick,
-    round,
-    team_id: onClock.id,
-    player_id: pickedPlayerId,
+  const { data: result } = await admin.rpc("claim_draft_pick", {
+    p_league_id: leagueId,
+    p_team_id: onClock.id,
+    p_player_id: pickedPlayerId,
   });
 
-  const nextPick = pick + 1;
-  const totalPicks = numTeams * draft.total_rounds;
-  if (nextPick > totalPicks) {
-    await admin.from("drafts").update({ status: "complete", current_pick: nextPick, current_pick_started_at: null }).eq("id", draft.id);
-    await admin.from("leagues").update({ draft_status: "complete" }).eq("id", leagueId);
+  if ((result as any)?.complete) {
     await regenerateLeagueMatchups(leagueId);
-  } else {
-    await admin.from("drafts").update({ current_pick: nextPick, current_pick_started_at: new Date().toISOString() }).eq("id", draft.id);
   }
 
   revalidatePath(`/league/${leagueId}/draft`);
