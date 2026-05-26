@@ -167,6 +167,18 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
     }
     const paceDivisor = Math.max(progressFrac, 0.1);
 
+    // Registered players for the target tournament; non-registered = OUT.
+    let registeredSet: Set<number> | null = null;
+    if (nextTournamentId != null) {
+      const { data: regRow } = await supabase
+        .from("tournaments")
+        .select("registered_player_ids")
+        .eq("id", nextTournamentId)
+        .maybeSingle();
+      const ids = (regRow as any)?.registered_player_ids as number[] | null;
+      if (ids && ids.length > 0) registeredSet = new Set(ids);
+    }
+
     const { data: starters } = await supabase
       .from("rosters")
       .select("team_id, player_id")
@@ -194,16 +206,20 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
       const seasonProj = t && t.count > 0
         ? applyProjectionVariance(t.sum / t.count, pid, 3)
         : 0;
+      // Players not on the registered list (and who haven't already scored)
+      // are OUT — they contribute 0, matching the matchup pages.
+      const isOut = registeredSet != null && !registeredSet.has(pid) && actual == null;
+      const effectiveProj = isOut ? 0 : seasonProj;
 
       // For the matchup row display: actual when in-progress, else projection.
-      const displayPts = actual != null ? actual : seasonProj;
+      const displayPts = actual != null ? actual : effectiveProj;
       projectedByTeam.set(tid, (projectedByTeam.get(tid) ?? 0) + displayPts);
 
       // For win %: pace extrapolation if the player has already scored,
-      // otherwise the pre-event projection.
+      // otherwise the pre-event projection (0 when OUT).
       const finishingPts = inProgress && actual != null
         ? actual / paceDivisor
-        : seasonProj;
+        : effectiveProj;
       finishingByTeam.set(tid, (finishingByTeam.get(tid) ?? 0) + finishingPts);
     }
   }
