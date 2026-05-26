@@ -14,11 +14,12 @@ type Player = {
   overallRank: number | null;
 };
 
-type FreeAgent = Player & { totalPoints: number };
+type FreeAgent = Player & { totalPoints: number; nextWeekPoints: number | null };
 
 type LeaderboardPlayer = Player & {
   totalPoints: number;
   projectedPoints: number | null;
+  nextWeekPoints: number | null;
   ownerTeamId: number | null;
   ownerTeamName: string | null;
 };
@@ -30,6 +31,7 @@ type RosterPlayer = {
 
 type DivisionTab = "all" | "mpo" | "fpo";
 type ViewTab = "available" | "leaders";
+type SortKey = "points" | "projected" | "rank";
 
 type PendingClaim = {
   id: number;
@@ -119,8 +121,13 @@ export function FreeAgencyList({
   const view: ViewTab = searchParams.get("view") === "leaders" ? "leaders" : "available";
   const divParam = searchParams.get("div");
   const tab: DivisionTab = divParam === "mpo" || divParam === "fpo" ? divParam : "all";
+  const sortParam = searchParams.get("sort");
+  const sort: SortKey =
+    sortParam === "projected" || sortParam === "rank" || sortParam === "points"
+      ? sortParam
+      : (seasonStarted ? "points" : "rank");
 
-  function pushParams(next: { view?: ViewTab; tab?: DivisionTab }) {
+  function pushParams(next: { view?: ViewTab; tab?: DivisionTab; sort?: SortKey }) {
     const sp = new URLSearchParams(searchParams.toString());
     if (next.view !== undefined) {
       if (next.view === "available") sp.delete("view");
@@ -130,6 +137,7 @@ export function FreeAgencyList({
       if (next.tab === "all") sp.delete("div");
       else sp.set("div", next.tab);
     }
+    if (next.sort !== undefined) sp.set("sort", next.sort);
     const qs = sp.toString();
     router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
@@ -141,20 +149,32 @@ export function FreeAgencyList({
     if (next === tab) return;
     pushParams({ tab: next });
   }
+  function setSort(next: SortKey) {
+    if (next === sort) return;
+    pushParams({ sort: next });
+  }
 
   const divisionFilter = (p: { division: string }) =>
     tab === "all" || (tab === "mpo" ? p.division === "MPO" : p.division === "FPO");
 
-  const filteredAgents = freeAgents.filter(divisionFilter).sort((a, b) => {
-    if (seasonStarted) return b.totalPoints - a.totalPoints;
+  function compareBySort<T extends { totalPoints: number; nextWeekPoints: number | null; overallRank: number | null; worldRanking: number | null; name: string }>(a: T, b: T): number {
+    if (sort === "points") return b.totalPoints - a.totalPoints;
+    if (sort === "projected") {
+      const av = a.nextWeekPoints ?? -1;
+      const bv = b.nextWeekPoints ?? -1;
+      if (av !== bv) return bv - av;
+      return b.totalPoints - a.totalPoints;
+    }
+    // sort === "rank"
     if (tab === "all") return (a.overallRank ?? 9999) - (b.overallRank ?? 9999);
     if (a.worldRanking == null && b.worldRanking == null) return a.name.localeCompare(b.name);
     if (a.worldRanking == null) return 1;
     if (b.worldRanking == null) return -1;
     return a.worldRanking - b.worldRanking;
-  });
+  }
 
-  const filteredLeaders = leaderboard.filter(divisionFilter);
+  const filteredAgents = freeAgents.filter(divisionFilter).sort(compareBySort);
+  const filteredLeaders = leaderboard.filter(divisionFilter).sort(compareBySort);
 
   return (
     <div className="space-y-3">
@@ -178,25 +198,40 @@ export function FreeAgencyList({
         </button>
       </div>
 
-      {/* Division filter */}
-      <div className="flex gap-1 bg-[#1a1d23] border border-white/5 rounded-xl p-1 w-fit">
-        {(["all", "mpo", "fpo"] as DivisionTab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition ${
-              t === tab
-                ? t === "mpo"
-                  ? "bg-[#4B3DFF] text-white"
-                  : t === "fpo"
-                  ? "bg-[#36D7B7] text-black"
-                  : "bg-white/10 text-white"
-                : "text-gray-400 hover:text-gray-300"
-            }`}
+      {/* Division filter + sort selector */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex gap-1 bg-[#1a1d23] border border-white/5 rounded-xl p-1 w-fit">
+          {(["all", "mpo", "fpo"] as DivisionTab[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition ${
+                t === tab
+                  ? t === "mpo"
+                    ? "bg-[#4B3DFF] text-white"
+                    : t === "fpo"
+                    ? "bg-[#36D7B7] text-black"
+                    : "bg-white/10 text-white"
+                  : "text-gray-400 hover:text-gray-300"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+
+        <label className="flex items-center gap-2 text-xs text-gray-400 ml-auto">
+          <span className="uppercase tracking-wide font-semibold">Sort</span>
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SortKey)}
+            className="bg-[#1a1d23] border border-white/10 hover:border-white/30 rounded-lg px-2 py-1.5 text-white text-xs cursor-pointer transition"
           >
-            {t}
-          </button>
-        ))}
+            <option value="points">Total points</option>
+            <option value="projected">Projected (next event)</option>
+            <option value="rank">Ranking</option>
+          </select>
+        </label>
       </div>
 
       {/* Body */}
@@ -207,20 +242,34 @@ export function FreeAgencyList({
           </div>
         ) : (
           <div className="space-y-1">
-            {filteredAgents.map((player) => (
-              <PlayerRow
-                key={player.id}
-                player={player}
-                leagueId={leagueId}
-                rank={seasonStarted
-                  ? player.totalPoints.toFixed(1)
-                  : (tab === "all"
-                      ? (player.overallRank != null ? `#${player.overallRank}` : null)
-                      : (player.worldRanking != null ? `#${player.worldRanking}` : null))}
-                rightSlot={null}
-                addControl={actionButton(player)}
-              />
-            ))}
+            {filteredAgents.map((player) => {
+              let primary: string | null = null;
+              if (sort === "projected") {
+                primary = player.nextWeekPoints != null
+                  ? `~${player.nextWeekPoints.toFixed(1)}`
+                  : "—";
+              } else if (sort === "rank") {
+                primary = tab === "all"
+                  ? (player.overallRank != null ? `#${player.overallRank}` : null)
+                  : (player.worldRanking != null ? `#${player.worldRanking}` : null);
+              } else if (seasonStarted) {
+                primary = player.totalPoints.toFixed(1);
+              } else {
+                primary = tab === "all"
+                  ? (player.overallRank != null ? `#${player.overallRank}` : null)
+                  : (player.worldRanking != null ? `#${player.worldRanking}` : null);
+              }
+              return (
+                <PlayerRow
+                  key={player.id}
+                  player={player}
+                  leagueId={leagueId}
+                  rank={primary}
+                  rightSlot={null}
+                  addControl={actionButton(player)}
+                />
+              );
+            })}
           </div>
         )
       ) : (
@@ -243,17 +292,24 @@ export function FreeAgencyList({
               </Link>
             );
 
+            const primary = sort === "projected"
+              ? (player.nextWeekPoints != null ? `~${player.nextWeekPoints.toFixed(1)}` : "—")
+              : player.totalPoints.toFixed(1);
+            const subLabel = sort === "projected" ? "total" : "next";
+            const subValue = sort === "projected"
+              ? player.totalPoints.toFixed(1)
+              : (player.nextWeekPoints != null ? `~${player.nextWeekPoints.toFixed(1)}` : null);
             const rightSlot = (
               <div className="flex flex-col items-end shrink-0 w-16 text-right">
                 <span className="text-white font-bold text-sm tabular-nums leading-tight">
-                  {player.totalPoints.toFixed(1)}
+                  {primary}
                 </span>
-                {player.projectedPoints != null && (
+                {subValue != null && (
                   <span
                     className="text-gray-400 text-[10px] tabular-nums leading-tight"
-                    title="Projected season total at current pace"
+                    title={sort === "projected" ? "Season total" : "Projected for the next event"}
                   >
-                    proj {player.projectedPoints.toFixed(0)}
+                    {subLabel} {subValue}
                   </span>
                 )}
               </div>

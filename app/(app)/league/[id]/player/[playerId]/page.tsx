@@ -6,6 +6,8 @@ import { AddWithDropModal } from "@/components/add-with-drop-modal";
 import { ConfirmDropButton } from "@/components/confirm-drop-button";
 import { placeWaiverClaim } from "@/actions/rosters";
 import { applyProjectionVariance } from "@/lib/projections";
+import { getActiveTournament } from "@/lib/lineup-lock";
+import { LiveScoreRefresher } from "@/components/live-score-refresher";
 
 export default async function PlayerPage({
   params,
@@ -59,13 +61,7 @@ export default async function PlayerPage({
     .single();
   const draftComplete = draft?.status === "complete";
 
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const { data: activeTournament } = await supabase
-    .from("tournaments")
-    .select("id")
-    .lte("start_date", todayIso)
-    .gte("end_date", todayIso)
-    .maybeSingle();
+  const activeTournament = await getActiveTournament(supabase);
   const waiversActive = ((league as any)?.waivers_locked === true) || activeTournament !== null;
 
   const { data: myRosterRows } = await supabase
@@ -189,6 +185,10 @@ export default async function PlayerPage({
 
   return (
     <div className="max-w-2xl space-y-6">
+      {activeTournament && (
+        <LiveScoreRefresher tournamentName={activeTournament.name} />
+      )}
+
       {/* Back + header */}
       <div>
         <BackLink fallbackHref={`/league/${id}/lineups`} />

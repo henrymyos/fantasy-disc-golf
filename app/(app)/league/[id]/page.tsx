@@ -209,7 +209,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   }
 
   // Residual variance shrinks as the active tournament progresses.
-  const baseSigma = 12;
+  const baseSigma = 28;
   const sigma = baseSigma * Math.sqrt(Math.max(0.05, 1 - progressFrac));
   const matchupSpread = Math.sqrt(2 * sigma * sigma);
   function winPctFor(t1Id: number, t2Id: number): number {

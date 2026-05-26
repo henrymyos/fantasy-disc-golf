@@ -13,6 +13,7 @@ type StarterRow = {
   actual: number | null;
   projected: number | null;
   paceProjected: number | null;
+  isOut: boolean;
 };
 
 // Standard-normal CDF via Abramowitz & Stegun 7.1.26 approximation.
@@ -119,7 +120,7 @@ export default async function MyMatchupPage({
   const t1Id = (matchup as any).team1_id;
   const t2Id = (matchup as any).team2_id;
 
-  // Active/upcoming tournament for the actual-vs-projected split.
+  // Active/upcoming tournament for the actual-vs-projected split + registration.
   const activeTournament = await getActiveTournament(supabase);
   const todayIso = new Date().toISOString().slice(0, 10);
   let weekTournamentId: number | null = activeTournament?.id ?? null;
@@ -132,6 +133,19 @@ export default async function MyMatchupPage({
       .limit(1)
       .maybeSingle();
     weekTournamentId = (upcomingT as any)?.id ?? null;
+  }
+
+  // Registered-player set for the target tournament. When populated, any
+  // roster player NOT in this set is OUT for the event (projected 0).
+  let registeredSet: Set<number> | null = null;
+  if (weekTournamentId != null) {
+    const { data: regRow } = await supabase
+      .from("tournaments")
+      .select("registered_player_ids")
+      .eq("id", weekTournamentId)
+      .maybeSingle();
+    const ids = (regRow as any)?.registered_player_ids as number[] | null;
+    if (ids && ids.length > 0) registeredSet = new Set(ids);
   }
 
   // When a tournament is active, estimate how far through it we are so we
@@ -189,11 +203,16 @@ export default async function MyMatchupPage({
     const actual = actuals.has(s.player_id)
       ? Math.round(actuals.get(s.player_id)! * 10) / 10
       : null;
-    const projected = t && t.count > 0
+    const seasonProjected = t && t.count > 0
       ? applyProjectionVariance(t.sum / t.count, s.player_id, 3)
       : null;
-    // Pace projection: extrapolate the current actual to the tournament's
-    // finish based on how much of the event has elapsed.
+    // OUT: player is not registered for the target event (and hasn't already
+    // posted a score this event).
+    const isOut =
+      registeredSet != null
+      && !registeredSet.has(s.player_id)
+      && actual == null;
+    const projected = isOut ? 0 : seasonProjected;
     let paceProjected: number | null = null;
     if (inProgress && actual != null) {
       paceProjected = Math.round((actual / paceDivisor) * 10) / 10;
@@ -207,6 +226,7 @@ export default async function MyMatchupPage({
       actual,
       projected,
       paceProjected,
+      isOut,
     };
   }
 
@@ -275,7 +295,7 @@ export default async function MyMatchupPage({
 
   // Win % uses each team's *finishing* estimate (pace where available),
   // and the residual variance shrinks as the tournament progresses.
-  const baseSigma = 12;
+  const baseSigma = 28;
   const sigma = baseSigma * Math.sqrt(Math.max(0.05, 1 - progressFrac));
   const z = (t1Finishing - t2Finishing) / Math.sqrt(2 * sigma * sigma);
   const t1WinPct = Math.round(normalCdf(z) * 100);
@@ -485,10 +505,15 @@ function NameCell({
       </span>
       <Link
         href={`/league/${leagueId}/player/${row.playerId}`}
-        className="text-white text-sm font-medium truncate hover:underline min-w-0"
+        className={`text-sm font-medium truncate hover:underline min-w-0 ${row.isOut ? "text-gray-400" : "text-white"}`}
       >
         {row.name}
       </Link>
+      {row.isOut && (
+        <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0 text-red-400 bg-red-500/15">
+          OUT
+        </span>
+      )}
     </div>
   );
 }
@@ -503,8 +528,15 @@ function PointsCell({
   if (!row) return <div />;
   const alignClass = align === "right" ? "text-right" : "text-left";
 
-  // Pre-event: just show projected.
+  // Pre-event: just show projected (0.0 in red when the player is OUT).
   if (row.actual == null) {
+    if (row.isOut) {
+      return (
+        <p className={`text-sm tabular-nums font-semibold text-red-400 ${alignClass}`}>
+          0.0
+        </p>
+      );
+    }
     return (
       <p className={`text-sm tabular-nums font-semibold text-gray-400 ${alignClass}`}>
         {row.projected != null ? `~${row.projected.toFixed(1)}` : "—"}

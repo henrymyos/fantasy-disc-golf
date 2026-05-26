@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { FreeAgencyList } from "@/components/free-agency-list";
 import { setWaiversLocked, processWaivers } from "@/actions/rosters";
 import { applyProjectionVariance } from "@/lib/projections";
+import { getActiveTournament } from "@/lib/lineup-lock";
 
 export default async function FreeAgencyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -95,6 +96,41 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
     return applyProjectionVariance((total / played) * totalEventsInSeason, playerId);
   }
 
+  // Per-event projection for the next/active tournament. Returns 0 when the
+  // target tournament has a populated registration list and the player isn't
+  // on it (OUT), null when we have no signal to project from.
+  const activeT = await getActiveTournament(supabase);
+  const todayIsoNext = new Date().toISOString().slice(0, 10);
+  let nextTournamentId: number | null = activeT?.id ?? null;
+  if (!nextTournamentId) {
+    const { data: upcomingT } = await supabase
+      .from("tournaments")
+      .select("id")
+      .gte("start_date", todayIsoNext)
+      .order("start_date", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    nextTournamentId = (upcomingT as any)?.id ?? null;
+  }
+  let nextRegisteredSet: Set<number> | null = null;
+  if (nextTournamentId != null) {
+    const { data: regRow } = await supabase
+      .from("tournaments")
+      .select("registered_player_ids")
+      .eq("id", nextTournamentId)
+      .maybeSingle();
+    const ids = (regRow as any)?.registered_player_ids as number[] | null;
+    if (ids && ids.length > 0) nextRegisteredSet = new Set(ids);
+  }
+
+  function nextProjectionFor(playerId: number): number | null {
+    if (nextRegisteredSet != null && !nextRegisteredSet.has(playerId)) return 0;
+    const total = pointsByPlayer.get(playerId) ?? 0;
+    const played = eventsPlayedByPlayer.get(playerId) ?? 0;
+    if (played === 0) return null;
+    return applyProjectionVariance(total / played, playerId, 3);
+  }
+
   const freeAgents = (allPlayers ?? [])
     .filter((p) => !rosteredIds.has(p.id))
     .map((p) => ({
@@ -104,6 +140,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
       worldRanking: p.world_ranking as number | null,
       overallRank: (p as any).overall_rank as number | null,
       totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
+      nextWeekPoints: nextProjectionFor(p.id),
     }));
 
   const leaderboard = (allPlayers ?? [])
@@ -117,6 +154,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
         overallRank: (p as any).overall_rank as number | null,
         totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
         projectedPoints: projectionFor(p.id),
+        nextWeekPoints: nextProjectionFor(p.id),
         ownerTeamId: owner?.teamId ?? null,
         ownerTeamName: owner?.teamName ?? null,
       };

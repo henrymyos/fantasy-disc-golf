@@ -17,10 +17,10 @@ function divColor(div: string) {
   return div === "MPO" ? "#4B3DFF" : "#36D7B7";
 }
 
-type WeekPoints = { projected: number | null; actual: number | null } | null;
+type WeekPoints = { projected: number | null; actual: number | null; isOut?: boolean } | null;
 
 function WeekPointsBadge({ wp }: { wp: WeekPoints }) {
-  if (!wp || (wp.actual == null && wp.projected == null)) return null;
+  if (!wp || (wp.actual == null && wp.projected == null && !wp.isOut)) return null;
   if (wp.actual != null) {
     return (
       <span
@@ -28,6 +28,16 @@ function WeekPointsBadge({ wp }: { wp: WeekPoints }) {
         title="Actual points this week"
       >
         {wp.actual.toFixed(1)}
+      </span>
+    );
+  }
+  if (wp.isOut) {
+    return (
+      <span className="ml-2 flex items-center gap-1.5 shrink-0">
+        <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded text-red-400 bg-red-500/15">
+          OUT
+        </span>
+        <span className="text-xs font-semibold tabular-nums text-red-400">0.0</span>
       </span>
     );
   }
@@ -52,6 +62,7 @@ export function LineupSlot({
   otherStarters,
   locked = false,
   weekPoints = null,
+  pointsByPlayerId,
 }: {
   leagueId: number;
   division: "MPO" | "FPO";
@@ -61,6 +72,7 @@ export function LineupSlot({
   otherStarters: SlotEntry[];
   locked?: boolean;
   weekPoints?: WeekPoints;
+  pointsByPlayerId?: Record<number, WeekPoints>;
 }) {
   const [open, setOpen] = useState(false);
   const color = divColor(division);
@@ -112,6 +124,7 @@ export function LineupSlot({
           otherStarters={otherStarters}
           color={color}
           onClose={() => setOpen(false)}
+          pointsByPlayerId={pointsByPlayerId}
         />
       )}
     </>
@@ -127,6 +140,7 @@ function StarterPickerModal({
   otherStarters,
   color,
   onClose,
+  pointsByPlayerId,
 }: {
   leagueId: number;
   division: string;
@@ -136,6 +150,7 @@ function StarterPickerModal({
   otherStarters: SlotEntry[];
   color: string;
   onClose: () => void;
+  pointsByPlayerId?: Record<number, WeekPoints>;
 }) {
   const [pending, startTransition] = useTransition();
   const [loadingKey, setLoadingKey] = useState<string | null>(null);
@@ -198,12 +213,17 @@ function StarterPickerModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-white/5">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase px-2 py-0.5 rounded" style={{ color, background: `${color}20` }}>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xs font-bold uppercase px-2 py-0.5 rounded shrink-0" style={{ color, background: `${color}20` }}>
               {division}
             </span>
-            <span className="text-white font-bold">Slot {slotIndex}</span>
-            {occupant?.players && <span className="text-gray-400 text-xs">· {occupant.players.name}</span>}
+            <span className="text-white font-bold shrink-0">Slot {slotIndex}</span>
+            {occupant?.players && (
+              <span className="text-gray-400 text-xs truncate">· {occupant.players.name}</span>
+            )}
+            {occupant && (
+              <WeekPointsBadge wp={pointsByPlayerId?.[occupant.player_id] ?? null} />
+            )}
           </div>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none transition ml-3">×</button>
         </div>
@@ -230,6 +250,7 @@ function StarterPickerModal({
                     <span className="flex-1 text-sm font-medium text-white truncate">
                       {loadingKey === `s-${spot.id}` ? "Moving..." : spot.players?.name}
                     </span>
+                    <WeekPointsBadge wp={pointsByPlayerId?.[spot.player_id] ?? null} />
                     <span className="text-xs text-gray-400 shrink-0">
                       {occupant ? `${otherIdx} ⇄ ${slotIndex}` : `Slot ${otherIdx} → ${slotIndex}`}
                     </span>
@@ -287,6 +308,7 @@ function StarterPickerModal({
                     <span className="flex-1 text-sm font-medium text-white truncate">
                       {loadingKey === `b-${spot.id}` ? "Moving..." : spot.players?.name}
                     </span>
+                    <WeekPointsBadge wp={pointsByPlayerId?.[spot.player_id] ?? null} />
                     <span className="text-xs text-gray-400 shrink-0">→ Slot {slotIndex}</span>
                   </button>
                 ))}
@@ -335,12 +357,14 @@ export function BenchSlot({
   starterSlots,
   locked = false,
   weekPoints = null,
+  pointsByPlayerId,
 }: {
   leagueId: number;
   benchSpot: RosterSpot;
   starterSlots: (RosterSpot | null)[];
   locked?: boolean;
   weekPoints?: WeekPoints;
+  pointsByPlayerId?: Record<number, WeekPoints>;
 }) {
   const [open, setOpen] = useState(false);
   const player = benchSpot.players;
@@ -390,6 +414,7 @@ export function BenchSlot({
           starterSlots={starterSlots}
           color={color}
           onClose={() => setOpen(false)}
+          pointsByPlayerId={pointsByPlayerId}
         />
       )}
     </>
@@ -402,12 +427,14 @@ function BenchPickerModal({
   starterSlots,
   color,
   onClose,
+  pointsByPlayerId,
 }: {
   leagueId: number;
   benchSpot: RosterSpot;
   starterSlots: (RosterSpot | null)[];
   color: string;
   onClose: () => void;
+  pointsByPlayerId?: Record<number, WeekPoints>;
 }) {
   const [pending, startTransition] = useTransition();
   const [loadingIdx, setLoadingIdx] = useState<number | null>(null);
@@ -433,16 +460,17 @@ function BenchPickerModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-white/5">
-          <div>
+          <div className="min-w-0">
             <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-1">Moving to lineup</p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <span
-                className="text-xs font-bold uppercase px-2 py-0.5 rounded"
+                className="text-xs font-bold uppercase px-2 py-0.5 rounded shrink-0"
                 style={{ color, background: `${color}20` }}
               >
                 {div}
               </span>
-              <span className="text-white font-bold">{player?.name}</span>
+              <span className="text-white font-bold truncate">{player?.name}</span>
+              <WeekPointsBadge wp={pointsByPlayerId?.[benchSpot.player_id] ?? null} />
             </div>
           </div>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none transition ml-3">×</button>
@@ -474,6 +502,7 @@ function BenchPickerModal({
                 <span className="flex-1 text-sm font-medium truncate" style={{ color: occupant ? undefined : color }}>
                   {isLoading ? "Moving..." : occupant ? (occupant as any).players?.name : "Empty slot"}
                 </span>
+                {occupant && <WeekPointsBadge wp={pointsByPlayerId?.[occupant.player_id] ?? null} />}
                 <span className="text-xs text-gray-400 shrink-0">Slot {i + 1}</span>
               </button>
             );

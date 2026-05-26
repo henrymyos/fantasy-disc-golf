@@ -89,17 +89,36 @@ async function fetchRoundJson(pdgaId: number, division: "MPO" | "FPO", round: nu
  * - Bogey-free = no hole's score exceeds par in that round.
  * - Ace        = a hole scored 1 on a par >= 2 hole.
  */
-async function computeBonusesForEvent(pdgaId: number): Promise<Map<string, RoundBonus>> {
+async function computeBonusesForEvent(pdgaId: number): Promise<{
+  bonus: Map<string, RoundBonus>;
+  registered: Array<{ pdgaNum: number | null; name: string }>;
+}> {
   const bonus = new Map<string, RoundBonus>();
+  const registeredKeys = new Set<string>();
+  const registered: Array<{ pdgaNum: number | null; name: string }> = [];
 
   for (const division of ["MPO", "FPO"] as const) {
-    // Probe rounds 1..6 in parallel (events have 3–4; extras come back empty).
     const roundResponses = await Promise.all(
       [1, 2, 3, 4, 5, 6].map((r) => fetchRoundJson(pdgaId, division, r)),
     );
 
     for (const data of roundResponses) {
       if (!data?.scores) continue;
+      // Anyone appearing in any round JSON counts as registered for the event
+      // — they show up even when no scores are posted yet. Capture name so
+      // we can fall back to name-matching when pdga_number is unknown.
+      for (const s of data.scores as any[]) {
+        const pdgaNum = typeof s.PDGANum === "number" && s.PDGANum > 0 ? s.PDGANum : null;
+        const name = typeof s.Name === "string" && s.Name.trim()
+          ? s.Name.trim()
+          : [s.FirstName, s.LastName].filter(Boolean).join(" ").trim();
+        if (!pdgaNum && !name) continue;
+        const key = pdgaNum != null ? `p:${pdgaNum}` : `n:${normalizeName(name)}`;
+        if (registeredKeys.has(key)) continue;
+        registeredKeys.add(key);
+        registered.push({ pdgaNum, name });
+      }
+
       const holesInRound = data.layouts?.[0]?.Holes ?? 18;
 
       // Only count players who actually completed the round.
@@ -138,7 +157,7 @@ async function computeBonusesForEvent(pdgaId: number): Promise<Map<string, Round
     }
   }
 
-  return bonus;
+  return { bonus, registered };
 }
 
 type ParsedRow = { place: number; pdgaNumber: number; name: string };
@@ -259,8 +278,9 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
       fpoRows: fpo.length,
     });
 
-    // Pull per-player hot rounds, bogey-free rounds, and aces for this event.
-    const bonusByPdga = await computeBonusesForEvent(event.pdgaId);
+    // Pull per-player hot rounds, bogey-free rounds, aces — and the set of
+    // every PDGA# / name that appears in any round (= registered field).
+    const { bonus: bonusByPdga, registered } = await computeBonusesForEvent(event.pdgaId);
 
     // Update the lock-at timestamp from PDGA's round 1 tee times.
     const lockAtIso = await fetchFirstTeeTime(event.pdgaId, event.startDate);
@@ -269,6 +289,26 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
         .from("tournaments")
         .update({ lock_at: lockAtIso })
         .eq("id", event.dbId);
+    }
+
+    // Persist the registered players for this event so the UI can mark
+    // unregistered players as OUT (projected = 0). Match by pdga# when
+    // possible; fall back to normalized name so players in our DB without
+    // a stored pdga_number can still be detected.
+    if (registered.length > 0) {
+      const registeredIdSet = new Set<number>();
+      for (const r of registered) {
+        const p =
+          (r.pdgaNum != null ? byPdga.get(String(r.pdgaNum)) : undefined)
+          ?? (r.name ? byName.get(normalizeName(r.name)) : undefined);
+        if (p) registeredIdSet.add(p.id);
+      }
+      if (registeredIdSet.size > 0) {
+        await supabase
+          .from("tournaments")
+          .update({ registered_player_ids: Array.from(registeredIdSet) })
+          .eq("id", event.dbId);
+      }
     }
 
     const sections = [

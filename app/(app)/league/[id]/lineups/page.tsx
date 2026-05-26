@@ -89,19 +89,40 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
     }
   });
 
-  // playerId → { projected, actual }
-  const weekPointsByPlayer = new Map<number, { projected: number | null; actual: number | null }>();
+  // Registered set for the target tournament — anyone not in it is OUT.
+  let registeredSet: Set<number> | null = null;
+  if (nextTournamentId != null) {
+    const { data: regRow } = await supabase
+      .from("tournaments")
+      .select("registered_player_ids")
+      .eq("id", nextTournamentId)
+      .maybeSingle();
+    const ids = (regRow as any)?.registered_player_ids as number[] | null;
+    if (ids && ids.length > 0) registeredSet = new Set(ids);
+  }
+
+  // playerId → { projected, actual, isOut }. Also build a serializable
+  // object form for passing to client components.
+  const pointsByPlayerId: Record<number, { projected: number | null; actual: number | null; isOut: boolean }> = {};
+  const weekPointsByPlayer = new Map<number, { projected: number | null; actual: number | null; isOut: boolean }>();
   for (const pid of playerIds) {
     const total = totalsByPlayer.get(pid) ?? 0;
     const events = eventsByPlayer.get(pid) ?? 0;
-    const projected = events > 0
+    const seasonProj = events > 0
       ? applyProjectionVariance(total / events, pid, 3)
       : null;
     const actual = weekActualByPlayer.get(pid) ?? null;
-    weekPointsByPlayer.set(pid, {
-      projected,
+    const isOut =
+      registeredSet != null
+      && !registeredSet.has(pid)
+      && actual == null;
+    const entry = {
+      projected: isOut ? 0 : seasonProj,
       actual: actual != null ? Math.round(actual * 10) / 10 : null,
-    });
+      isOut,
+    };
+    weekPointsByPlayer.set(pid, entry);
+    pointsByPlayerId[pid] = entry;
   }
 
   function buildSlotArray(starters: any[], numSlots: number): (any | null)[] {
@@ -300,6 +321,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
               otherStarters={otherSlotsFor(mpoSlotArray, i)}
               locked={lineupsDisabled}
               weekPoints={occupant ? weekPointsByPlayer.get(occupant.player_id) ?? null : null}
+              pointsByPlayerId={pointsByPlayerId}
             />
           ))}
           {fpoSlotArray.map((occupant: any, i: number) => (
@@ -313,6 +335,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
               otherStarters={otherSlotsFor(fpoSlotArray, i)}
               locked={lineupsDisabled}
               weekPoints={occupant ? weekPointsByPlayer.get(occupant.player_id) ?? null : null}
+              pointsByPlayerId={pointsByPlayerId}
             />
           ))}
         </div>
@@ -331,6 +354,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
                     starterSlots={div === "MPO" ? mpoSlotArray : fpoSlotArray}
                     locked={lineupsDisabled}
                     weekPoints={weekPointsByPlayer.get(spot.player_id) ?? null}
+                    pointsByPlayerId={pointsByPlayerId}
                   />
                 );
               })}
