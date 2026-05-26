@@ -10,8 +10,24 @@ import {
 } from "@/lib/dgpt-2026-schedule";
 import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
 import { applyProjectionVariance } from "@/lib/projections";
+import { getActiveTournament } from "@/lib/lineup-lock";
 import { LeagueChat } from "@/components/league-chat";
 import { getActivityFeed } from "@/lib/activity-feed";
+
+// Standard-normal CDF via Abramowitz & Stegun 7.1.26 approximation.
+function normalCdfOnDashboard(x: number): number {
+  const a1 = 0.254829592;
+  const a2 = -0.284496736;
+  const a3 = 1.421413741;
+  const a4 = -1.453152027;
+  const a5 = 1.061405429;
+  const p = 0.3275911;
+  const sign = x < 0 ? -1 : 1;
+  const ax = Math.abs(x) / Math.SQRT2;
+  const t = 1 / (1 + p * ax);
+  const y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-ax * ax);
+  return 0.5 * (1 + sign * y);
+}
 
 export default async function LeagueDashboard({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -27,12 +43,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   if (!league) notFound();
 
-  const { data: activeTournament } = await supabase
-    .from("tournaments")
-    .select("id")
-    .lte("start_date", new Date().toISOString().slice(0, 10))
-    .gte("end_date", new Date().toISOString().slice(0, 10))
-    .maybeSingle();
+  const activeTournament = await getActiveTournament(supabase);
   const waiversActive = (league as any).waivers_locked === true || activeTournament !== null;
 
   const selectedSlugs = new Set(effectiveSelection((league as any).selected_event_slugs));
@@ -124,20 +135,37 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   const activity = await getActivityFeed(supabase, Number(id), 15);
 
-  // Compute each team's projected total for the next calendar event so we can
-  // surface it on each matchup row + the detail page.
+  // Compute each team's projected total + pace-adjusted finishing estimate
+  // for the active/upcoming event so we can surface them on each matchup row
+  // along with a win-percentage gauge.
   let projectedByTeam = new Map<number, number>();
+  let finishingByTeam = new Map<number, number>();
+  let inProgress = false;
+  let progressFrac = 0;
   if ((matchups ?? []).length > 0) {
     const { data: nextTournament } = activeTournament
       ? { data: activeTournament }
       : await supabase
           .from("tournaments")
-          .select("id")
+          .select("id, start_date, end_date, lock_at")
           .gte("start_date", today)
           .order("start_date", { ascending: true })
           .limit(1)
           .maybeSingle();
     const nextTournamentId = (nextTournament as any)?.id ?? null;
+
+    inProgress = activeTournament !== null;
+    if (inProgress && activeTournament) {
+      const startMs = activeTournament.lock_at
+        ? Date.parse(activeTournament.lock_at)
+        : Date.parse(`${activeTournament.start_date}T00:00:00Z`);
+      const endMs = Date.parse(`${activeTournament.end_date}T23:59:59Z`);
+      const span = endMs - startMs;
+      if (Number.isFinite(span) && span > 0) {
+        progressFrac = Math.min(1, Math.max(0, (Date.now() - startMs) / span));
+      }
+    }
+    const paceDivisor = Math.max(progressFrac, 0.1);
 
     const { data: starters } = await supabase
       .from("rosters")
@@ -159,18 +187,36 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
       }
     });
     for (const s of starters ?? []) {
-      const actual = weekActualByPlayer.get((s as any).player_id);
-      let perEvent = 0;
-      if (actual != null) {
-        perEvent = actual;
-      } else {
-        const t = totalByPlayer.get((s as any).player_id);
-        if (t && t.count > 0) {
-          perEvent = applyProjectionVariance(t.sum / t.count, (s as any).player_id, 3);
-        }
-      }
-      projectedByTeam.set((s as any).team_id, (projectedByTeam.get((s as any).team_id) ?? 0) + perEvent);
+      const pid = (s as any).player_id;
+      const tid = (s as any).team_id;
+      const actual = weekActualByPlayer.get(pid);
+      const t = totalByPlayer.get(pid);
+      const seasonProj = t && t.count > 0
+        ? applyProjectionVariance(t.sum / t.count, pid, 3)
+        : 0;
+
+      // For the matchup row display: actual when in-progress, else projection.
+      const displayPts = actual != null ? actual : seasonProj;
+      projectedByTeam.set(tid, (projectedByTeam.get(tid) ?? 0) + displayPts);
+
+      // For win %: pace extrapolation if the player has already scored,
+      // otherwise the pre-event projection.
+      const finishingPts = inProgress && actual != null
+        ? actual / paceDivisor
+        : seasonProj;
+      finishingByTeam.set(tid, (finishingByTeam.get(tid) ?? 0) + finishingPts);
     }
+  }
+
+  // Residual variance shrinks as the active tournament progresses.
+  const baseSigma = 12;
+  const sigma = baseSigma * Math.sqrt(Math.max(0.05, 1 - progressFrac));
+  const matchupSpread = Math.sqrt(2 * sigma * sigma);
+  function winPctFor(t1Id: number, t2Id: number): number {
+    const t1 = finishingByTeam.get(t1Id) ?? 0;
+    const t2 = finishingByTeam.get(t2Id) ?? 0;
+    if (t1 === 0 && t2 === 0) return 50;
+    return Math.round(normalCdfOnDashboard((t1 - t2) / matchupSpread) * 100);
   }
 
   return (
@@ -269,16 +315,21 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
             </p>
           ) : (
             <div className="space-y-3">
-              {(matchups as unknown as Matchup[]).map((m) => (
-                <MatchupRow
-                  key={m.id}
-                  leagueId={id}
-                  matchup={m}
-                  myTeamId={myMembership?.id}
-                  team1Projected={projectedByTeam.get(m.team1_id) ?? null}
-                  team2Projected={projectedByTeam.get(m.team2_id) ?? null}
-                />
-              ))}
+              {(matchups as unknown as Matchup[]).map((m) => {
+                const t1WinPct = winPctFor(m.team1_id, m.team2_id);
+                return (
+                  <MatchupRow
+                    key={m.id}
+                    leagueId={id}
+                    matchup={m}
+                    myTeamId={myMembership?.id}
+                    team1Projected={projectedByTeam.get(m.team1_id) ?? null}
+                    team2Projected={projectedByTeam.get(m.team2_id) ?? null}
+                    team1WinPct={t1WinPct}
+                    team2WinPct={100 - t1WinPct}
+                  />
+                );
+              })}
             </div>
           )}
         </div>
@@ -366,39 +417,58 @@ function MatchupRow({
   myTeamId,
   team1Projected,
   team2Projected,
+  team1WinPct,
+  team2WinPct,
 }: {
   leagueId: string;
   matchup: Matchup;
   myTeamId?: number;
   team1Projected: number | null;
   team2Projected: number | null;
+  team1WinPct: number;
+  team2WinPct: number;
 }) {
   const isMyMatchup = matchup.team1_id === myTeamId || matchup.team2_id === myTeamId;
   return (
     <Link
       href={`/league/${leagueId}/matchups/${matchup.id}`}
-      className={`flex items-center justify-between p-4 rounded-xl border transition hover:bg-white/[0.03] ${
+      className={`block p-4 rounded-xl border transition hover:bg-white/[0.03] ${
         isMyMatchup ? "border-[#4B3DFF]/40 bg-[#4B3DFF]/5" : "border-white/5 bg-[#0f1117]"
       }`}
     >
-      <TeamScore
-        name={(matchup.team1 as any)?.team_name ?? "TBD"}
-        score={matchup.team1_score}
-        projected={team1Projected}
-        isFinal={matchup.is_final}
-        isWinner={matchup.is_final && matchup.team1_score > matchup.team2_score}
-      />
-      <div className="text-center">
-        <span className="text-gray-400 text-xs font-medium">{matchup.is_final ? "FINAL" : "vs"}</span>
+      <div className="flex items-center justify-between">
+        <TeamScore
+          name={(matchup.team1 as any)?.team_name ?? "TBD"}
+          score={matchup.team1_score}
+          projected={team1Projected}
+          isFinal={matchup.is_final}
+          isWinner={matchup.is_final && matchup.team1_score > matchup.team2_score}
+        />
+        <div className="text-center">
+          <span className="text-gray-400 text-xs font-medium">{matchup.is_final ? "FINAL" : "vs"}</span>
+        </div>
+        <TeamScore
+          name={(matchup.team2 as any)?.team_name ?? "TBD"}
+          score={matchup.team2_score}
+          projected={team2Projected}
+          isFinal={matchup.is_final}
+          isWinner={matchup.is_final && matchup.team2_score > matchup.team1_score}
+          right
+        />
       </div>
-      <TeamScore
-        name={(matchup.team2 as any)?.team_name ?? "TBD"}
-        score={matchup.team2_score}
-        projected={team2Projected}
-        isFinal={matchup.is_final}
-        isWinner={matchup.is_final && matchup.team2_score > matchup.team1_score}
-        right
-      />
+
+      {!matchup.is_final && (
+        <div className="mt-3">
+          <div className="h-1.5 rounded-full bg-white/5 overflow-hidden flex">
+            <div className="h-full bg-[#4B3DFF]" style={{ width: `${team1WinPct}%` }} />
+            <div className="h-full bg-[#36D7B7]" style={{ width: `${team2WinPct}%` }} />
+          </div>
+          <div className="flex justify-between text-[10px] uppercase tracking-wider mt-1.5">
+            <span className="text-[#4B3DFF] font-semibold">{team1WinPct}%</span>
+            <span className="text-[#36D7B7] font-semibold">{team2WinPct}%</span>
+          </div>
+        </div>
+      )}
     </Link>
   );
 }
