@@ -2,11 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { deleteLeague } from "@/actions/leagues";
-import { LeagueSettingsForm } from "@/components/league-settings-form";
-import { ScoringRules } from "@/components/scoring-rules";
 import { DGPT_2026_SCHEDULE, effectiveSelection, getPlayoffSlugs } from "@/lib/dgpt-2026-schedule";
-import { DivisionsEditor } from "@/components/divisions-editor";
-import { regenerateMatchupsAction } from "@/actions/matchups";
 
 export default async function LeagueSettingsPage({
   params,
@@ -20,179 +16,101 @@ export default async function LeagueSettingsPage({
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, name, commissioner_id, max_teams, roster_size, starters_count, invite_code, selected_event_slugs")
+    .select("id, name, commissioner_id, invite_code, selected_event_slugs")
     .eq("id", id)
     .single();
-
   if (!league) notFound();
 
-  // Must be a league member to view this page
   const { data: member } = await supabase
     .from("league_members")
     .select("id")
     .eq("league_id", id)
     .eq("user_id", user.id)
     .single();
-
   if (!member) redirect(`/league/${id}`);
 
   const isCommissioner = league.commissioner_id === user.id;
 
   const { data: divData } = await supabase
     .from("leagues")
-    .select("mpo_starters, fpo_starters, waiver_order_mode, scoring_mode, keepers_per_team")
+    .select("keepers_per_team")
     .eq("id", id)
     .single();
-
-  const mpoStarters: number = (divData as any)?.mpo_starters ?? 4;
-  const fpoStarters: number = (divData as any)?.fpo_starters ?? 2;
-  const waiverOrderMode = ((divData as any)?.waiver_order_mode ?? "reverse_standings") as
-    | "reverse_standings"
-    | "reverse_last_add";
-  const scoringMode = ((divData as any)?.scoring_mode ?? "head_to_head") as
-    | "head_to_head"
-    | "all_play"
-    | "median";
   const keepersPerTeam: number = (divData as any)?.keepers_per_team ?? 0;
 
-  const { data: completedDrafts } = await supabase
+  const { count: completedDraftCount } = await supabase
     .from("drafts")
-    .select("id, total_rounds, started_at")
+    .select("id", { count: "exact", head: true })
     .eq("league_id", id)
-    .eq("status", "complete")
-    .order("started_at", { ascending: false });
+    .eq("status", "complete");
 
   const inviteCode = (league as any).invite_code as string | null;
   const selectedSlugs = effectiveSelection((league as any).selected_event_slugs);
-  const totalEvents = DGPT_2026_SCHEDULE.length;
-  const validSelected = selectedSlugs.filter((s) => DGPT_2026_SCHEDULE.some((e) => e.slug === s));
+  const validSelected = selectedSlugs.filter((s) =>
+    DGPT_2026_SCHEDULE.some((e) => e.slug === s),
+  );
   const selectedCount = validSelected.length;
   const playoffCount = getPlayoffSlugs(validSelected).length;
-  const regularCount = Math.max(0, selectedCount - playoffCount);
+  const totalEvents = DGPT_2026_SCHEDULE.length;
+
+  const base = `/league/${id}/settings`;
 
   return (
-    <div className="max-w-xl space-y-8">
-      {inviteCode && (
-        <div>
-          <h2 className="text-white font-bold text-lg mb-5">Invite Code</h2>
-          <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5 flex items-center justify-between gap-4">
-            <span className="text-gray-400 text-sm">Share this code to invite players</span>
-            <span className="font-mono text-white font-bold text-base tracking-widest border border-white/10 rounded-lg px-4 py-2 bg-white/5 select-all">
+    <div className="max-w-2xl space-y-5">
+      <div className="grid grid-cols-2 gap-3">
+        {inviteCode && (
+          <div className="bg-[#1a1d23] rounded-2xl border border-white/5 p-4 min-h-[120px] flex flex-col justify-between">
+            <p className="text-white font-bold text-base leading-tight">Invite Code</p>
+            <span className="font-mono text-white font-bold text-lg tracking-widest border border-white/10 rounded-lg px-3 py-2 bg-white/5 select-all text-center">
               {inviteCode}
             </span>
           </div>
-        </div>
-      )}
-      <div>
-        <h2 className="text-white font-bold text-lg mb-5">League Settings</h2>
-        <div className="bg-[#1a1d23] rounded-2xl p-6 border border-white/5">
-          {isCommissioner ? (
-            <LeagueSettingsForm
-              leagueId={id}
-              initial={{
-                name: league.name,
-                maxTeams: league.max_teams,
-                rosterSize: league.roster_size,
-                mpoStarters,
-                fpoStarters,
-                waiverOrderMode,
-                scoringMode,
-                keepersPerTeam,
-              }}
-            />
-          ) : (
-            <ReadOnlySettings
-              name={league.name}
-              maxTeams={league.max_teams}
-              rosterSize={league.roster_size}
-              mpoStarters={mpoStarters}
-              fpoStarters={fpoStarters}
-            />
-          )}
-        </div>
+        )}
+
+        <Tile
+          href={`${base}/league`}
+          title="League Settings"
+          subtitle={isCommissioner ? "Name, roster, scoring mode" : "View league details"}
+        />
+
+        {isCommissioner && (
+          <Tile
+            href={`${base}/season`}
+            title="Season"
+            subtitle={`${selectedCount} of ${totalEvents} events · ${playoffCount} playoff${playoffCount !== 1 ? "s" : ""}`}
+          />
+        )}
+
+        {isCommissioner && (
+          <Tile
+            href={`${base}/divisions`}
+            title="Divisions & Matchups"
+            subtitle="Set divisions and edit the schedule"
+          />
+        )}
+
+        <Tile
+          href={`${base}/scoring`}
+          title="Scoring"
+          subtitle="Points and bonus rules"
+        />
+
+        {(completedDraftCount ?? 0) > 0 && (
+          <Tile
+            href={`${base}/drafts`}
+            title="Draft Results"
+            subtitle={`${completedDraftCount} completed draft${completedDraftCount !== 1 ? "s" : ""}`}
+          />
+        )}
+
+        {keepersPerTeam > 0 && (
+          <Tile
+            href={`${base}/keepers`}
+            title="Keepers"
+            subtitle={`Up to ${keepersPerTeam} per team`}
+          />
+        )}
       </div>
-
-      {isCommissioner && (
-        <div>
-          <h2 className="text-white font-bold text-lg mb-5">Season</h2>
-          <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5 flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-white font-medium text-sm">2026 DGPT Schedule</p>
-              <p className="text-gray-500 text-xs mt-0.5">
-                <span className="text-white font-semibold tabular-nums">{selectedCount}</span>
-                <span> of {totalEvents} tournaments</span>
-              </p>
-              <p className="text-gray-600 text-xs mt-0.5">
-                <span className="text-gray-400">{regularCount} regular</span>
-                <span> · </span>
-                <span className="text-[#F5A524]">{playoffCount} playoff{playoffCount !== 1 ? "s" : ""}</span>
-              </p>
-            </div>
-            <Link
-              href={`/league/${id}/settings/season`}
-              className="bg-[#4B3DFF]/15 hover:bg-[#4B3DFF]/25 border border-[#4B3DFF]/30 text-[#4B3DFF] hover:text-white text-sm font-semibold px-4 py-2 rounded-lg transition shrink-0"
-            >
-              Edit Season
-            </Link>
-          </div>
-        </div>
-      )}
-
-      {isCommissioner && <DivisionsAndMatchupsSection leagueId={id} />}
-
-
-      {keepersPerTeam > 0 && (
-        <div>
-          <h2 className="text-white font-bold text-lg mb-5">Keepers</h2>
-          <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5 flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-white font-medium text-sm">Pick your keepers</p>
-              <p className="text-gray-500 text-xs mt-0.5">
-                Up to {keepersPerTeam} players to carry into next season's draft.
-              </p>
-            </div>
-            <Link
-              href={`/league/${id}/settings/keepers`}
-              className="bg-[#4B3DFF]/15 hover:bg-[#4B3DFF]/25 border border-[#4B3DFF]/30 text-[#4B3DFF] hover:text-white text-sm font-semibold px-4 py-2 rounded-lg transition shrink-0"
-            >
-              Select keepers
-            </Link>
-          </div>
-        </div>
-      )}
-
-      <div>
-        <h2 className="text-white font-bold text-lg mb-5">Scoring</h2>
-        <div className="bg-[#1a1d23] rounded-2xl p-4 sm:p-6 border border-white/5">
-          <ScoringRules mpoStarters={mpoStarters} fpoStarters={fpoStarters} />
-        </div>
-      </div>
-
-      {completedDrafts && completedDrafts.length > 0 && (
-        <div>
-          <h2 className="text-white font-bold text-lg mb-5">Draft Results</h2>
-          <div className="bg-[#1a1d23] rounded-2xl border border-white/5 overflow-hidden">
-            {completedDrafts.map((d, i) => {
-              const date = d.started_at
-                ? new Date(d.started_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                : "Draft";
-              return (
-                <Link
-                  key={d.id}
-                  href={`/league/${id}/draft/${d.id}`}
-                  className={`flex items-center justify-between px-5 py-4 hover:bg-white/5 transition ${i !== 0 ? "border-t border-white/5" : ""}`}
-                >
-                  <div>
-                    <p className="text-white font-medium text-sm">{date}</p>
-                    <p className="text-gray-500 text-xs mt-0.5">{d.total_rounds} rounds</p>
-                  </div>
-                  <span className="text-gray-600 text-sm">→</span>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {isCommissioner && (
         <div className="border border-red-500/30 rounded-xl p-5 bg-red-500/5">
@@ -220,82 +138,27 @@ export default async function LeagueSettingsPage({
   );
 }
 
-async function DivisionsAndMatchupsSection({ leagueId }: { leagueId: string }) {
-  const supabase = await createClient();
-  const { data: membersRaw } = await supabase
-    .from("league_members")
-    .select("id, team_name, division_name, joined_at")
-    .eq("league_id", leagueId)
-    .order("joined_at");
-  const members = (membersRaw ?? []) as Array<{ id: number; team_name: string; division_name: string | null }>;
-
-  return (
-    <div>
-      <h2 className="text-white font-bold text-lg mb-5">Divisions & Matchups</h2>
-      <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5 space-y-5">
-        <div>
-          <p className="text-white font-semibold text-sm mb-3">Team divisions</p>
-          <DivisionsEditor leagueId={Number(leagueId)} initialMembers={members} />
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/5">
-          <div className="min-w-0">
-            <p className="text-white font-medium text-sm">Weekly matchups</p>
-            <p className="text-gray-500 text-xs mt-0.5">
-              Regenerate the full season schedule from divisions, or edit individual weeks.
-            </p>
-          </div>
-          <div className="flex gap-2 shrink-0">
-            <Link
-              href={`/league/${leagueId}/settings/matchups`}
-              className="border border-white/10 hover:border-white/30 text-gray-300 text-sm font-medium px-3 py-2 rounded-lg transition"
-            >
-              Edit matchups
-            </Link>
-            <form action={regenerateMatchupsAction.bind(null, Number(leagueId))}>
-              <button
-                type="submit"
-                className="bg-[#4B3DFF]/15 hover:bg-[#4B3DFF]/25 border border-[#4B3DFF]/30 text-[#4B3DFF] hover:text-white text-sm font-semibold px-3 py-2 rounded-lg transition"
-              >
-                Regenerate
-              </button>
-            </form>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ReadOnlySettings({
-  name,
-  maxTeams,
-  rosterSize,
-  mpoStarters,
-  fpoStarters,
+function Tile({
+  href,
+  title,
+  subtitle,
 }: {
-  name: string;
-  maxTeams: number;
-  rosterSize: number;
-  mpoStarters: number;
-  fpoStarters: number;
+  href: string;
+  title: string;
+  subtitle?: string;
 }) {
-  const rows = [
-    { label: "League Name", value: name },
-    { label: "Max Teams", value: maxTeams },
-    { label: "Roster Size", value: rosterSize },
-    { label: "MPO Starters", value: mpoStarters },
-    { label: "FPO Starters", value: fpoStarters },
-  ];
   return (
-    <div className="space-y-3">
-      <p className="text-xs text-gray-600 mb-4">Only the commissioner can edit league settings.</p>
-      {rows.map(({ label, value }) => (
-        <div key={label} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
-          <span className="text-gray-400 text-sm">{label}</span>
-          <span className="text-white text-sm font-medium">{value}</span>
-        </div>
-      ))}
-    </div>
+    <Link
+      href={href}
+      className="bg-[#1a1d23] hover:bg-[#1f2329] rounded-2xl border border-white/5 hover:border-white/15 p-4 min-h-[120px] flex flex-col justify-between transition group"
+    >
+      <p className="text-white font-bold text-base leading-tight">{title}</p>
+      <div className="flex items-end justify-between gap-2">
+        {subtitle && (
+          <p className="text-gray-400 text-xs leading-snug">{subtitle}</p>
+        )}
+        <span className="text-gray-400 group-hover:text-white text-base shrink-0 transition">→</span>
+      </div>
+    </Link>
   );
 }

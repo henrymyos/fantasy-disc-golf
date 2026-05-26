@@ -38,7 +38,7 @@ export default async function ScoringPage({ params }: { params: Promise<{ id: st
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="font-bold text-white text-lg">Commissioner Panel</h2>
-            <p className="text-gray-500 text-sm">Week {league.current_week}</p>
+            <p className="text-gray-400 text-sm">Week {league.current_week}</p>
           </div>
         </div>
 
@@ -133,7 +133,7 @@ export default async function ScoringPage({ params }: { params: Promise<{ id: st
 
       {currentWeekTournaments.length === 0 && (
         <div className="bg-[#1a1d23] rounded-2xl p-8 border border-white/5 text-center">
-          <p className="text-gray-600 text-sm">Add a tournament above to start entering results</p>
+          <p className="text-gray-400 text-sm">Add a tournament above to start entering results</p>
         </div>
       )}
 
@@ -147,7 +147,7 @@ export default async function ScoringPage({ params }: { params: Promise<{ id: st
               .map((t) => (
                 <div key={t.id} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
                   <p className="text-gray-300 text-sm">{t.name}</p>
-                  <span className="text-gray-500 text-xs">Week {t.week}</span>
+                  <span className="text-gray-400 text-xs">Week {t.week}</span>
                 </div>
               ))}
           </div>

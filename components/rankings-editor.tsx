@@ -74,12 +74,12 @@ export function RankingsEditor({
           </button>
         </div>
         {ranked.length === 0 ? (
-          <p className="text-gray-600 text-sm text-center py-8">Click players on the right to add.</p>
+          <p className="text-gray-400 text-sm text-center py-8">Click players on the right to add.</p>
         ) : (
           <ol className="space-y-1">
             {ranked.map((p, i) => (
               <li key={p.id} className="flex items-center gap-2 px-2 py-1.5 bg-[#0f1117] border border-white/5 rounded-lg">
-                <span className="text-gray-500 text-xs font-mono w-6 text-right">#{i + 1}</span>
+                <span className="text-gray-400 text-xs font-mono w-6 text-right">#{i + 1}</span>
                 <span className="text-white text-sm flex-1 truncate">{p.name}</span>
                 <span
                   className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded"
@@ -94,7 +94,7 @@ export function RankingsEditor({
                   type="button"
                   onClick={() => move(i, -1)}
                   disabled={i === 0}
-                  className="text-gray-500 hover:text-white disabled:opacity-30 text-xs px-1"
+                  className="text-gray-400 hover:text-white disabled:opacity-30 text-xs px-1"
                   title="Move up"
                 >
                   ↑
@@ -103,7 +103,7 @@ export function RankingsEditor({
                   type="button"
                   onClick={() => move(i, 1)}
                   disabled={i === ranked.length - 1}
-                  className="text-gray-500 hover:text-white disabled:opacity-30 text-xs px-1"
+                  className="text-gray-400 hover:text-white disabled:opacity-30 text-xs px-1"
                   title="Move down"
                 >
                   ↓
@@ -142,7 +142,7 @@ export function RankingsEditor({
               onClick={() => add(p)}
               className="w-full flex items-center gap-2 px-2 py-1.5 bg-[#0f1117] border border-white/5 hover:border-white/15 rounded-lg text-left transition"
             >
-              <span className="text-gray-500 text-xs font-mono w-6 text-right">
+              <span className="text-gray-400 text-xs font-mono w-6 text-right">
                 {p.overallRank != null ? `#${p.overallRank}` : ""}
               </span>
               <span className="text-white text-sm flex-1 truncate">{p.name}</span>
@@ -158,7 +158,7 @@ export function RankingsEditor({
             </button>
           ))}
           {filteredUnranked.length === 0 && (
-            <p className="text-gray-600 text-sm text-center py-6">No players match.</p>
+            <p className="text-gray-400 text-sm text-center py-6">No players match.</p>
           )}
         </div>
       </div>

@@ -56,7 +56,7 @@ export default async function KeepersPage({ params }: { params: Promise<{ id: st
           ← Settings
         </Link>
         <h2 className="text-white font-bold text-xl">Keepers</h2>
-        <p className="text-gray-500 text-sm mt-1">
+        <p className="text-gray-400 text-sm mt-1">
           {limit > 0
             ? `Pick up to ${limit} player${limit !== 1 ? "s" : ""} to keep into next season's draft.`
             : "Keepers are disabled for this league. Set keepers per team in settings."}

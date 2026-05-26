@@ -193,7 +193,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-gray-500 text-sm w-4">{i + 1}</span>
+                  <span className="text-gray-400 text-sm w-4">{i + 1}</span>
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
                       <p className="text-white text-sm font-medium truncate">{t.team_name}</p>
@@ -206,18 +206,18 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                         </span>
                       )}
                     </div>
-                    <p className="text-gray-600 text-xs">{(t.profiles as any)?.username}</p>
+                    <p className="text-gray-400 text-xs">{(t.profiles as any)?.username}</p>
                   </div>
                 </div>
                 <div className="text-right">
                   <p className="text-white text-sm font-semibold">{t.wins}-{t.losses}</p>
-                  <p className="text-gray-500 text-xs">{t.points.toFixed(0)} pts</p>
+                  <p className="text-gray-400 text-xs">{t.points.toFixed(0)} pts</p>
                 </div>
               </Link>
             );
           })}
           {standings.length === 0 && (
-            <p className="text-gray-600 text-sm text-center py-4">No teams yet</p>
+            <p className="text-gray-400 text-sm text-center py-4">No teams yet</p>
           )}
         </div>
       </div>
@@ -236,12 +236,12 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                 </div>
                 <div className="min-w-0">
                   <p className="text-white font-bold text-sm">Mock Draft</p>
-                  <p className="text-gray-500 text-xs mt-0.5">
+                  <p className="text-gray-400 text-xs mt-0.5">
                     Practice against bots — pick your draft position and go
                   </p>
                 </div>
               </div>
-              <span className="text-gray-600 text-lg shrink-0">→</span>
+              <span className="text-gray-400 text-lg shrink-0">→</span>
             </div>
           </Link>
         )}
@@ -264,7 +264,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
         <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
           <h2 className="font-bold text-white mb-4">Week {league.current_week} Matchups</h2>
           {(matchups ?? []).length === 0 ? (
-            <p className="text-gray-600 text-sm text-center py-6">
+            <p className="text-gray-400 text-sm text-center py-6">
               No matchups scheduled yet
             </p>
           ) : (
@@ -309,7 +309,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-white text-sm leading-snug">{item.description}</p>
-                    <p className="text-gray-500 text-[10px] mt-0.5">
+                    <p className="text-gray-400 text-[10px] mt-0.5">
                       {new Date(item.ts).toLocaleString("en-US", {
                         month: "short",
                         day: "numeric",
@@ -343,11 +343,11 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                   >
                     <div className="min-w-0 flex-1">
                       <p className="text-white font-medium text-sm truncate">{event.name}</p>
-                      <p className="text-gray-500 text-xs mt-0.5 truncate">
+                      <p className="text-gray-400 text-xs mt-0.5 truncate">
                         {formatEventDateRange(event)} · {formatEventLocation(event)}
                       </p>
                     </div>
-                    <span className="text-gray-600 text-sm shrink-0">→</span>
+                    <span className="text-gray-400 text-sm shrink-0">→</span>
                   </a>
                 );
               })}
@@ -389,7 +389,7 @@ function MatchupRow({
         isWinner={matchup.is_final && matchup.team1_score > matchup.team2_score}
       />
       <div className="text-center">
-        <span className="text-gray-600 text-xs font-medium">{matchup.is_final ? "FINAL" : "vs"}</span>
+        <span className="text-gray-400 text-xs font-medium">{matchup.is_final ? "FINAL" : "vs"}</span>
       </div>
       <TeamScore
         name={(matchup.team2 as any)?.team_name ?? "TBD"}
@@ -429,7 +429,7 @@ function TeamScore({
         <p className={`font-semibold text-sm ${isWinner ? "text-white" : "text-gray-400"}`}>{name}</p>
         <p className={`text-lg font-bold ${isWinner ? "text-[#36D7B7]" : "text-white"}`}>{score.toFixed(1)}</p>
         {!isFinal && projected != null && projected > 0 && (
-          <p className="text-gray-500 text-[10px] mt-0.5">~{projected.toFixed(1)} proj</p>
+          <p className="text-gray-400 text-[10px] mt-0.5">~{projected.toFixed(1)} proj</p>
         )}
       </div>
     </div>

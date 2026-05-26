@@ -40,7 +40,7 @@ export default async function EditMatchupsPage({ params }: { params: Promise<{ i
           ← Settings
         </Link>
         <h2 className="text-white font-bold text-xl">Edit Matchups</h2>
-        <p className="text-gray-500 text-sm mt-1">
+        <p className="text-gray-400 text-sm mt-1">
           Swap teams for any future week. Finalized matchups are locked.
         </p>
       </div>

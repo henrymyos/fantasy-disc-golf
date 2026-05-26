@@ -62,7 +62,7 @@ export default async function ProTourPage() {
         <h2 className="font-bold text-white mb-4">Recent Tournaments</h2>
 
         {recentEvents.length === 0 ? (
-          <p className="text-gray-600 text-sm py-4">No tournaments completed yet this season.</p>
+          <p className="text-gray-400 text-sm py-4">No tournaments completed yet this season.</p>
         ) : (
           <div className="space-y-3">
             {recentEvents.map((event) => (
@@ -121,9 +121,9 @@ function EventRow({ event, date, location, tier }: {
           </span>
         </div>
         <p className="text-white font-medium text-sm truncate">{event.name}</p>
-        <p className="text-gray-500 text-xs mt-0.5 truncate">{date} · {location}</p>
+        <p className="text-gray-400 text-xs mt-0.5 truncate">{date} · {location}</p>
       </div>
-      <span className="text-gray-600 text-sm shrink-0">→</span>
+      <span className="text-gray-400 text-sm shrink-0">→</span>
     </a>
   );
 }
@@ -131,11 +131,11 @@ function EventRow({ event, date, location, tier }: {
 function RankingsList({ division, players }: { division: string; players: string[] }) {
   return (
     <div>
-      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{division}</h3>
+      <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{division}</h3>
       <div className="space-y-1.5">
         {players.map((name, i) => (
           <div key={name} className="flex items-center gap-2">
-            <span className="text-gray-600 text-xs w-4">{i + 1}</span>
+            <span className="text-gray-400 text-xs w-4">{i + 1}</span>
             <span className="text-gray-300 text-sm">{name}</span>
           </div>
         ))}

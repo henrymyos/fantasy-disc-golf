@@ -82,9 +82,9 @@ function DraftLineupRow({
       {pick ? (
         <span className="flex-1 text-white text-sm font-medium truncate">{pick.playerName}</span>
       ) : (
-        <span className="flex-1 text-gray-600 text-sm italic">Empty</span>
+        <span className="flex-1 text-gray-400 text-sm italic">Empty</span>
       )}
-      <span className="text-gray-500 text-xs font-mono shrink-0">
+      <span className="text-gray-400 text-xs font-mono shrink-0">
         {pick ? `#${pick.pickNumber}` : slotIndex ? `Slot ${slotIndex}` : ""}
       </span>
     </div>
@@ -97,10 +97,10 @@ function DraftBenchEmptyRow() {
       className="flex items-center gap-3 p-2.5 rounded-xl border border-dashed"
       style={{ background: "rgba(15,17,23,0.5)", borderColor: "rgba(255,255,255,0.08)" }}
     >
-      <span className="w-12 shrink-0 text-center text-xs font-bold uppercase tracking-wide py-1 rounded-lg text-gray-600 bg-white/5">
+      <span className="w-12 shrink-0 text-center text-xs font-bold uppercase tracking-wide py-1 rounded-lg text-gray-400 bg-white/5">
         —
       </span>
-      <span className="flex-1 text-gray-600 text-sm italic">Empty bench</span>
+      <span className="flex-1 text-gray-400 text-sm italic">Empty bench</span>
     </div>
   );
 }
@@ -222,7 +222,7 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
         <p className={`text-xs font-bold truncate leading-tight ${isMe ? "text-white" : "text-gray-300"}`}>
           {m.teamName}
         </p>
-        <p className="text-gray-600 text-[10px] mt-0.5">#{m.draftPosition}</p>
+        <p className="text-gray-400 text-[10px] mt-0.5">#{m.draftPosition}</p>
         {isOnClock && (
           <p className="text-[10px] text-[#36D7B7] font-semibold animate-pulse mt-1">ON THE CLOCK</p>
         )}
@@ -238,7 +238,7 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
     gridCells.push(
       <div
         key={`round-${round}`}
-        className={`bg-[#0f1117] rounded-lg flex items-center justify-center sticky left-0 z-10 ${isCurrentRound ? "text-white font-bold" : "text-gray-600"}`}
+        className={`bg-[#0f1117] rounded-lg flex items-center justify-center sticky left-0 z-10 ${isCurrentRound ? "text-white font-bold" : "text-gray-400"}`}
       >
         <span className="text-xs font-mono">R{round}</span>
       </div>
@@ -392,7 +392,7 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
       {/* Board grid */}
       <div className="flex-1 overflow-auto rounded-xl border border-white/5">
         {N === 0 ? (
-          <div className="h-full flex items-center justify-center text-gray-600 text-sm">
+          <div className="h-full flex items-center justify-center text-gray-400 text-sm">
             No teams have joined yet
           </div>
         ) : (
@@ -421,7 +421,7 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
               <button
                 onClick={() => canEnlarge && setPanelSize(PANEL_ORDER[panelIdx + 1])}
                 disabled={!canEnlarge}
-                className="text-gray-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed leading-none"
+                className="text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed leading-none"
                 title="Enlarge"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -431,7 +431,7 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
               <button
                 onClick={() => canShrink && setPanelSize(PANEL_ORDER[panelIdx - 1])}
                 disabled={!canShrink}
-                className="text-gray-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed leading-none"
+                className="text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed leading-none"
                 title="Shrink"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -494,7 +494,7 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
           <div className="overflow-y-auto flex-1">
             {bottomTab === "available" ? (
               filtered.length === 0 ? (
-                <p className="text-gray-600 text-xs text-center py-6">No players found</p>
+                <p className="text-gray-400 text-xs text-center py-6">No players found</p>
               ) : (
                 filtered.map((player) => (
                   <div
@@ -517,7 +517,7 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
                     ) : (
                       <span className="w-[60px] shrink-0 -mr-2" />
                     )}
-                    <span className="text-gray-600 text-xs font-mono w-7 text-right shrink-0">
+                    <span className="text-gray-400 text-xs font-mono w-7 text-right shrink-0">
                       {tab === "all"
                         ? player.overallRank != null ? `#${player.overallRank}` : ""
                         : player.worldRanking != null ? `#${player.worldRanking}` : ""}
@@ -532,12 +532,12 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
                 ))
               )
             ) : myPicks.length === 0 ? (
-              <p className="text-gray-600 text-xs text-center py-6">No picks yet</p>
+              <p className="text-gray-400 text-xs text-center py-6">No picks yet</p>
             ) : (
               <div className="px-3 py-2 space-y-2">
                 <div className="flex items-center justify-between px-1">
-                  <span className="text-xs text-gray-500 font-semibold uppercase tracking-wide">Starters</span>
-                  <span className="text-gray-500 text-xs">{filledStarters}/{totalStarterSlots}</span>
+                  <span className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Starters</span>
+                  <span className="text-gray-400 text-xs">{filledStarters}/{totalStarterSlots}</span>
                 </div>
                 <div className="space-y-1.5">
                   {Array.from({ length: mpoSlots }).map((_, i) => (
@@ -560,8 +560,8 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
                 {benchCapacity > 0 && (
                   <>
                     <div className="flex items-center justify-between px-1 pt-2">
-                      <span className="text-xs text-gray-500 font-semibold uppercase tracking-wide">Bench</span>
-                      <span className="text-gray-500 text-xs">{benchPicks.length}/{benchCapacity}</span>
+                      <span className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Bench</span>
+                      <span className="text-gray-400 text-xs">{benchPicks.length}/{benchCapacity}</span>
                     </div>
                     <div className="space-y-1.5">
                       {benchPicks.map((p) => (

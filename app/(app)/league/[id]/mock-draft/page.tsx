@@ -75,7 +75,7 @@ export default async function MockDraftHubPage({
             <span>🎯</span> Start New Mock Draft
           </Link>
         </div>
-        <p className="text-gray-500 text-sm mt-2">
+        <p className="text-gray-400 text-sm mt-2">
           Practice against bots and review your past mock drafts here.
         </p>
       </div>
@@ -84,7 +84,7 @@ export default async function MockDraftHubPage({
         <h3 className="text-white font-semibold mb-3">History</h3>
         {(drafts ?? []).length === 0 ? (
           <div className="bg-[#1a1d23] rounded-2xl p-12 border border-white/5 text-center">
-            <p className="text-gray-600 text-sm">No mock drafts yet — start one above.</p>
+            <p className="text-gray-400 text-sm">No mock drafts yet — start one above.</p>
           </div>
         ) : (
           <div className="bg-[#1a1d23] rounded-2xl border border-white/5 overflow-hidden">
@@ -112,7 +112,7 @@ export default async function MockDraftHubPage({
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-white font-medium text-sm">
-                        {date} <span className="text-gray-600">· {time}</span>
+                        {date} <span className="text-gray-400">· {time}</span>
                       </p>
                       {(d as any).status === "in_progress" ? (
                         <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded text-yellow-300 bg-yellow-400/15 border border-yellow-400/30">
@@ -124,17 +124,17 @@ export default async function MockDraftHubPage({
                         </span>
                       )}
                     </div>
-                    <p className="text-gray-500 text-xs mt-0.5">
+                    <p className="text-gray-400 text-xs mt-0.5">
                       Pick #{d.my_draft_position} of {d.num_teams} · {myPicks.length} players drafted
                     </p>
                   </div>
                   {topPick && (
                     <div className="text-right shrink-0 min-w-0 hidden sm:block">
-                      <p className="text-gray-600 text-[10px] uppercase tracking-wider font-semibold">Top pick</p>
+                      <p className="text-gray-400 text-[10px] uppercase tracking-wider font-semibold">Top pick</p>
                       <p className="text-white text-sm font-medium truncate">{topPick.name}</p>
                     </div>
                   )}
-                  <span className="text-gray-600 text-lg shrink-0">→</span>
+                  <span className="text-gray-400 text-lg shrink-0">→</span>
                 </Link>
               );
             })}

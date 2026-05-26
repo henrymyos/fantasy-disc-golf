@@ -42,7 +42,7 @@ export function AddWithDropModal({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-xs bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white py-1.5 rounded-full font-medium transition shrink-0 ml-2 w-16 text-center"
+        className="text-xs bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white py-2 rounded-full font-medium transition shrink-0 ml-2 w-16 text-center min-h-[40px] md:min-h-0 md:py-1.5 inline-flex items-center justify-center"
       >
         Add
       </button>
@@ -69,7 +69,7 @@ export function AddWithDropModal({
                 <p className="text-white font-bold text-base">{addPlayer.name}</p>
               </div>
               {rosterFull ? (
-                <p className="text-gray-500 text-xs mt-2">Your roster is full. Pick a player to drop.</p>
+                <p className="text-gray-400 text-xs mt-2">Your roster is full. Pick a player to drop.</p>
               ) : (
                 <p className="text-[#36D7B7] text-xs font-medium mt-2 bg-[#36D7B7]/10 border border-[#36D7B7]/20 rounded-lg px-3 py-1.5">
                   You have {openSpots} open spot{openSpots !== 1 ? "s" : ""}. Optionally drop a player.

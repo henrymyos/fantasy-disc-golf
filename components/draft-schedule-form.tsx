@@ -141,7 +141,7 @@ export function DraftScheduleForm({
           {["Month", "Day", "Year", "Hour", "Min", "AM/PM"].map((l) => (
             <p
               key={l}
-              className="text-[10px] text-gray-500 uppercase tracking-wider text-center"
+              className="text-[10px] text-gray-400 uppercase tracking-wider text-center"
             >
               {l}
             </p>

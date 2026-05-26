@@ -115,7 +115,7 @@ export default async function PlayoffsPage({ params }: { params: Promise<{ id: s
     <div className="max-w-3xl space-y-5">
       <div>
         <h2 className="text-white font-bold text-xl">Playoff Bracket</h2>
-        <p className="text-gray-500 text-sm mt-1">
+        <p className="text-gray-400 text-sm mt-1">
           {playoffEvents.length > 0 ? (
             <>
               {playoffEvents.length} event{playoffEvents.length !== 1 ? "s" : ""} ·{" "}
@@ -129,13 +129,13 @@ export default async function PlayoffsPage({ params }: { params: Promise<{ id: s
 
       {seeded.length < 2 ? (
         <div className="bg-[#1a1d23] rounded-2xl p-12 border border-white/5 text-center">
-          <p className="text-gray-600 text-sm">Not enough teams to seed a bracket yet.</p>
+          <p className="text-gray-400 text-sm">Not enough teams to seed a bracket yet.</p>
         </div>
       ) : (
         <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
           <div className="flex items-center justify-between mb-4">
             <p className="text-white font-semibold">Round 1 · Top {bracketSize} seeds</p>
-            <p className="text-gray-500 text-xs">{totalRounds} round{totalRounds !== 1 ? "s" : ""} to a champion</p>
+            <p className="text-gray-400 text-xs">{totalRounds} round{totalRounds !== 1 ? "s" : ""} to a champion</p>
           </div>
 
           <div className="space-y-3">
@@ -143,20 +143,20 @@ export default async function PlayoffsPage({ params }: { params: Promise<{ id: s
               <div key={i} className="bg-[#0f1117] border border-white/5 rounded-xl p-4">
                 <div className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-3">
-                    <span className="text-gray-500 text-xs font-mono w-5">#{standings.indexOf(pair.a!) + 1}</span>
+                    <span className="text-gray-400 text-xs font-mono w-5">#{standings.indexOf(pair.a!) + 1}</span>
                     <span className="text-white font-medium">{pair.a?.team_name}</span>
                   </div>
-                  <span className="text-gray-500 text-xs">{pair.a?.wins}-{pair.a?.losses}</span>
+                  <span className="text-gray-400 text-xs">{pair.a?.wins}-{pair.a?.losses}</span>
                 </div>
-                <div className="text-center text-gray-600 text-xs my-1">vs</div>
+                <div className="text-center text-gray-400 text-xs my-1">vs</div>
                 <div className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-3">
-                    <span className="text-gray-500 text-xs font-mono w-5">
+                    <span className="text-gray-400 text-xs font-mono w-5">
                       {pair.b ? `#${standings.indexOf(pair.b) + 1}` : "—"}
                     </span>
                     <span className="text-white font-medium">{pair.b?.team_name ?? "BYE"}</span>
                   </div>
-                  <span className="text-gray-500 text-xs">
+                  <span className="text-gray-400 text-xs">
                     {pair.b ? `${pair.b.wins}-${pair.b.losses}` : ""}
                   </span>
                 </div>
@@ -164,7 +164,7 @@ export default async function PlayoffsPage({ params }: { params: Promise<{ id: s
             ))}
           </div>
 
-          <p className="text-gray-600 text-xs mt-4">
+          <p className="text-gray-400 text-xs mt-4">
             Each round corresponds to one playoff event. Winners advance based on weekly score during that event.
           </p>
         </div>
@@ -177,10 +177,10 @@ export default async function PlayoffsPage({ params }: { params: Promise<{ id: s
             {standings.slice(bracketSize).map((t, i) => (
               <div key={t.id} className="flex items-center justify-between py-1.5 px-2 text-sm">
                 <div className="flex items-center gap-3">
-                  <span className="text-gray-500 text-xs font-mono w-5">#{bracketSize + i + 1}</span>
+                  <span className="text-gray-400 text-xs font-mono w-5">#{bracketSize + i + 1}</span>
                   <span className="text-white">{t.team_name}</span>
                 </div>
-                <span className="text-gray-500 text-xs">{t.wins}-{t.losses}</span>
+                <span className="text-gray-400 text-xs">{t.wins}-{t.losses}</span>
               </div>
             ))}
           </div>

@@ -198,7 +198,7 @@ export default async function PlayerPage({
           <div className="mb-4">
             {isFreeAgent ? (
               !draftComplete ? (
-                <span className="text-xs text-gray-500 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full">
+                <span className="text-xs text-gray-400 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full">
                   Add locked until draft completes
                 </span>
               ) : waiversActive ? (
@@ -262,7 +262,7 @@ export default async function PlayerPage({
                 {player.division}
               </span>
               {player.world_ranking && (
-                <span className="text-gray-500 text-xs">#{player.world_ranking} world ranking</span>
+                <span className="text-gray-400 text-xs">#{player.world_ranking} world ranking</span>
               )}
             </div>
           </div>
@@ -270,22 +270,22 @@ export default async function PlayerPage({
             <div className="ml-auto flex gap-5 shrink-0">
               <div className="text-center">
                 <p className="font-bold text-lg" style={{ color: totalPtsColor(totalPts) }}>{totalPts.toFixed(1)}</p>
-                <p className="text-gray-500 text-xs">Total pts</p>
+                <p className="text-gray-400 text-xs">Total pts</p>
               </div>
               {avgFinish && (
                 <div className="text-center">
                   <p className="font-bold text-lg" style={{ color: avgFinishColor(avgFinish) }}>{avgFinish}</p>
-                  <p className="text-gray-500 text-xs">Avg finish</p>
+                  <p className="text-gray-400 text-xs">Avg finish</p>
                 </div>
               )}
               <div className="text-center">
                 <p className="text-white font-bold text-lg">{playedEvents.length}</p>
-                <p className="text-gray-500 text-xs">Events</p>
+                <p className="text-gray-400 text-xs">Events</p>
               </div>
               {projectedTotal != null && playedEvents.length < totalEventsInSeason && (
                 <div className="text-center">
                   <p className="text-white font-bold text-lg">{projectedTotal.toFixed(0)}</p>
-                  <p className="text-gray-500 text-xs">Projected</p>
+                  <p className="text-gray-400 text-xs">Projected</p>
                 </div>
               )}
             </div>
@@ -298,18 +298,18 @@ export default async function PlayerPage({
         <h2 className="text-white font-bold mb-3">Tournament Log</h2>
         {(events ?? []).length === 0 ? (
           <div className="bg-[#1a1d23] rounded-2xl p-12 border border-white/5 text-center">
-            <p className="text-gray-600 text-sm">No events played yet.</p>
+            <p className="text-gray-400 text-sm">No events played yet.</p>
           </div>
         ) : (
           <div className="bg-[#1a1d23] rounded-2xl border border-white/5 overflow-hidden">
             {/* Header row */}
             <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-4 px-4 py-2 border-b border-white/5">
-              <span className="text-gray-600 text-xs font-semibold uppercase tracking-wide">Event</span>
-              <span className="text-gray-600 text-xs font-semibold uppercase tracking-wide text-right w-14">Pts</span>
-              <span className="text-gray-600 text-xs font-semibold uppercase tracking-wide text-right w-12">Finish</span>
-              <span className="text-gray-600 text-xs font-semibold uppercase tracking-wide text-center w-8">🔥</span>
-              <span className="text-gray-600 text-xs font-semibold uppercase tracking-wide text-center w-8">✅</span>
-              <span className="text-gray-600 text-xs font-semibold uppercase tracking-wide text-center w-8">🎯</span>
+              <span className="text-gray-400 text-xs font-semibold uppercase tracking-wide">Event</span>
+              <span className="text-gray-400 text-xs font-semibold uppercase tracking-wide text-right w-14">Pts</span>
+              <span className="text-gray-400 text-xs font-semibold uppercase tracking-wide text-right w-12">Finish</span>
+              <span className="text-gray-400 text-xs font-semibold uppercase tracking-wide text-center w-8">🔥</span>
+              <span className="text-gray-400 text-xs font-semibold uppercase tracking-wide text-center w-8">✅</span>
+              <span className="text-gray-400 text-xs font-semibold uppercase tracking-wide text-center w-8">🎯</span>
             </div>
 
             {(events ?? []).map((event, i) => {
@@ -341,7 +341,7 @@ export default async function PlayerPage({
                       <p className="text-white text-sm font-medium truncate">{event.name}</p>
                     )}
                     {event.start_date && (
-                      <p className="text-gray-600 text-xs mt-0.5">
+                      <p className="text-gray-400 text-xs mt-0.5">
                         {new Date(event.start_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                       </p>
                     )}
@@ -356,13 +356,13 @@ export default async function PlayerPage({
                     {finish != null ? `#${finish}` : "—"}
                   </span>
                   <span className="text-sm tabular-nums text-center w-8">
-                    {hot > 0 ? <span className="text-white font-medium">{hot}</span> : <span className="text-gray-700">—</span>}
+                    {hot > 0 ? <span className="text-white font-medium">{hot}</span> : <span className="text-gray-400">—</span>}
                   </span>
                   <span className="text-sm tabular-nums text-center w-8">
-                    {clean > 0 ? <span className="text-white font-medium">{clean}</span> : <span className="text-gray-700">—</span>}
+                    {clean > 0 ? <span className="text-white font-medium">{clean}</span> : <span className="text-gray-400">—</span>}
                   </span>
                   <span className="text-sm tabular-nums text-center w-8">
-                    {aces > 0 ? <span className="text-white font-medium">{aces}</span> : <span className="text-gray-700">—</span>}
+                    {aces > 0 ? <span className="text-white font-medium">{aces}</span> : <span className="text-gray-400">—</span>}
                   </span>
                 </div>
               );

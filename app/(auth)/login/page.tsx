@@ -55,7 +55,7 @@ export default function LoginPage() {
         </button>
       </form>
 
-      <p className="text-center text-gray-500 text-sm mt-6">
+      <p className="text-center text-gray-400 text-sm mt-6">
         No account?{" "}
         <Link href="/signup" className="text-[#36D7B7] hover:text-[#4B3DFF] transition">
           Create one

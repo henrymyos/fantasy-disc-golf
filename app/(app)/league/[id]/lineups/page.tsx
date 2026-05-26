@@ -280,7 +280,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
             return (
               <div className="text-right">
                 <p className="text-white font-semibold text-sm tabular-nums">{myWins}-{myLosses}</p>
-                <p className="text-gray-500 text-xs mt-0.5">
+                <p className="text-gray-400 text-xs mt-0.5">
                   {anyActual ? "" : "~"}{displayTotal.toFixed(1)} pts {anyActual ? "this event" : "projected"}
                 </p>
               </div>
@@ -319,7 +319,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
 
         {bench.length > 0 && (
           <>
-            <h3 className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Bench</h3>
+            <h3 className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-2">Bench</h3>
             <div className="space-y-2">
               {bench.map((spot) => {
                 const div = (spot.players as any)?.division ?? "MPO";
@@ -339,7 +339,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
         )}
 
         {roster.length === 0 && (
-          <p className="text-gray-600 text-sm text-center py-4">
+          <p className="text-gray-400 text-sm text-center py-4">
             No players on your roster yet. Add players in Free Agency.
           </p>
         )}

@@ -266,7 +266,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
     if (leagueId) load(leagueId);
   }
 
-  if (loading) return <div className="text-gray-500 text-sm">Loading...</div>;
+  if (loading) return <div className="text-gray-400 text-sm">Loading...</div>;
 
   const involvedTeams: Team[] = myTeam
     ? [myTeam, ...otherTeams.filter((t) => selectedTeamIds.has(t.id))]
@@ -303,12 +303,12 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
               </Link>
             )}
             <h2 className="text-white font-bold">Propose a Trade</h2>
-            <span className="text-gray-500 text-xs">Tap teams to include</span>
+            <span className="text-gray-400 text-xs">Tap teams to include</span>
           </div>
 
           {otherTeams.length === 0 ? (
             <div className="bg-[#1a1d23] rounded-2xl p-12 border border-white/5 text-center">
-              <p className="text-gray-600 text-sm">No other teams in this league yet.</p>
+              <p className="text-gray-400 text-sm">No other teams in this league yet.</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -344,7 +344,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-white font-semibold text-sm truncate">{team.teamName}</p>
-                        <p className="text-gray-500 text-xs mt-0.5">
+                        <p className="text-gray-400 text-xs mt-0.5">
                           {team.roster.length} player{team.roster.length !== 1 ? "s" : ""}
                         </p>
                       </div>
@@ -355,7 +355,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
                       ))}
                       {team.picks.length > 0 && (
                         <>
-                          <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mt-3 px-1">
+                          <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mt-3 px-1">
                             {NEXT_SEASON} picks
                           </p>
                           {team.picks.map((p) => (
@@ -386,7 +386,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
                 <p className="text-white font-semibold text-sm">
                   {selectionCount} team{selectionCount !== 1 ? "s" : ""} selected
                 </p>
-                <p className="text-gray-500 text-xs mt-0.5">All teams must accept the proposal.</p>
+                <p className="text-gray-400 text-xs mt-0.5">All teams must accept the proposal.</p>
               </div>
               <button
                 onClick={startProposal}
@@ -421,7 +421,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
             ← Back
           </button>
           <h2 className="text-white font-bold">Build the trade</h2>
-          <span className="text-gray-500 text-xs">Tap players to include them</span>
+          <span className="text-gray-400 text-xs">Tap players to include them</span>
         </div>
 
         <div
@@ -441,7 +441,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
                   <p className="text-white font-semibold text-sm truncate">
                     {isMine ? `${team.teamName} (you)` : team.teamName}
                   </p>
-                  <p className="text-gray-500 text-xs mt-0.5">
+                  <p className="text-gray-400 text-xs mt-0.5">
                     {team.roster.length} player{team.roster.length !== 1 ? "s" : ""}
                   </p>
                 </div>
@@ -465,7 +465,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
                   })}
                   {team.picks.length > 0 && (
                     <>
-                      <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mt-3 px-1">
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mt-3 px-1">
                         {NEXT_SEASON} picks
                       </p>
                       {team.picks.map((p) => {
@@ -504,7 +504,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
             <div>
               <p className="text-white font-semibold text-sm">Trade Proposal</p>
               {(filteredMovements.length > 0 || filteredPickMovements.length > 0) && (
-                <p className="text-gray-500 text-xs mt-0.5">
+                <p className="text-gray-400 text-xs mt-0.5">
                   {filteredMovements.length} player{filteredMovements.length !== 1 ? "s" : ""}
                   {filteredPickMovements.length > 0 && (
                     <> · {filteredPickMovements.length} pick{filteredPickMovements.length !== 1 ? "s" : ""}</>
@@ -575,7 +575,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
               <p className="text-white font-semibold mb-4">{team.teamName}</p>
               <div className="grid grid-cols-2 gap-5">
                 <div>
-                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-3">Receives</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-3">Receives</p>
                   <div className="space-y-3">
                     {received.map((m) => {
                       const p = playerById.get(m.playerId);
@@ -600,11 +600,11 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
                         />
                       );
                     })}
-                    {received.length === 0 && receivedPicks.length === 0 && <p className="text-gray-600 text-xs">—</p>}
+                    {received.length === 0 && receivedPicks.length === 0 && <p className="text-gray-400 text-xs">—</p>}
                   </div>
                 </div>
                 <div>
-                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-3">Sends</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-3">Sends</p>
                   <div className="space-y-3">
                     {sent.map((m) => {
                       const p = playerById.get(m.playerId);
@@ -629,7 +629,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
                         />
                       );
                     })}
-                    {sent.length === 0 && sentPicks.length === 0 && <p className="text-gray-600 text-xs">—</p>}
+                    {sent.length === 0 && sentPicks.length === 0 && <p className="text-gray-400 text-xs">—</p>}
                   </div>
                 </div>
               </div>
@@ -680,7 +680,7 @@ function PickPreviewCard({
       </div>
       <div className="bg-[#1a1d23] px-3 py-2">
         <p className="text-white font-semibold text-sm leading-tight">Round {pick.round} pick</p>
-        <p className="text-gray-500 text-xs mt-0.5">
+        <p className="text-gray-400 text-xs mt-0.5">
           {isOriginal ? "Owned" : `Originally from ${originalTeamName ?? "another team"}`}
         </p>
       </div>
@@ -709,7 +709,7 @@ function TeamRosterCard({ leagueId, player }: { leagueId: number; player: Player
           {player.name}
         </Link>
         {player.worldRanking != null && (
-          <p className="text-gray-600 text-xs mt-0.5">#{player.worldRanking}</p>
+          <p className="text-gray-400 text-xs mt-0.5">#{player.worldRanking}</p>
         )}
       </div>
     </div>
@@ -783,11 +783,11 @@ function SelectablePlayerCard({
           {player.name}
         </Link>
         {player.worldRanking != null && (
-          <p className="text-gray-600 text-xs mt-0.5">#{player.worldRanking}</p>
+          <p className="text-gray-400 text-xs mt-0.5">#{player.worldRanking}</p>
         )}
         {selected && showDestinationPicker && destOptions.length > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-1">
-            <span className="text-[10px] text-gray-500 uppercase tracking-wide">to</span>
+            <span className="text-[10px] text-gray-400 uppercase tracking-wide">to</span>
             {destOptions.map((t) => {
               const isDest = destTeam?.id === t.id;
               return (
@@ -870,12 +870,12 @@ function SelectablePickCard({
         <p className="text-white font-semibold text-sm leading-tight">
           Round {pick.round} pick
         </p>
-        <p className="text-gray-500 text-xs mt-0.5">
+        <p className="text-gray-400 text-xs mt-0.5">
           {isOriginal ? "Owned" : `Originally from ${originalTeamName ?? "another team"}`}
         </p>
         {selected && showDestinationPicker && destOptions.length > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-1">
-            <span className="text-[10px] text-gray-500 uppercase tracking-wide">to</span>
+            <span className="text-[10px] text-gray-400 uppercase tracking-wide">to</span>
             {destOptions.map((t) => {
               const isDest = destinationTeamId === t.id;
               return (
@@ -912,7 +912,7 @@ function ReviewPick({ round, seasonYear, note }: { round: number; seasonYear: nu
       <div className="min-w-0">
         <p className="text-white text-sm font-medium leading-tight">Round {round} pick</p>
         <p className="text-xs font-semibold text-[#F5A524]">{seasonYear}</p>
-        {note && <p className="text-gray-500 text-[10px] mt-0.5">{note}</p>}
+        {note && <p className="text-gray-400 text-[10px] mt-0.5">{note}</p>}
       </div>
     </div>
   );
@@ -932,7 +932,7 @@ function ReviewPlayer({ leagueId, player, note }: { leagueId: number; player: Pl
       <div className="min-w-0">
         <p className="text-white text-sm font-medium leading-tight truncate hover:underline">{player.name}</p>
         <p className="text-xs font-semibold" style={{ color }}>{player.division}</p>
-        {note && <p className="text-gray-500 text-[10px] mt-0.5">{note}</p>}
+        {note && <p className="text-gray-400 text-[10px] mt-0.5">{note}</p>}
       </div>
     </Link>
   );
@@ -970,7 +970,7 @@ function PendingTradeCard({
           <p className="text-white text-sm font-medium">
             {trade.proposer?.team_name} proposed a trade
           </p>
-          {trade.message && <p className="text-gray-500 text-xs mt-0.5">&quot;{trade.message}&quot;</p>}
+          {trade.message && <p className="text-gray-400 text-xs mt-0.5">&quot;{trade.message}&quot;</p>}
         </div>
         <span className="text-xs text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full shrink-0 ml-3">Pending</span>
       </div>
@@ -978,7 +978,7 @@ function PendingTradeCard({
       {iAmReceiver && (
         <div className="grid grid-cols-2 gap-4 text-xs mb-4">
           <div>
-            <p className="text-gray-500 font-semibold mb-1">You receive</p>
+            <p className="text-gray-400 font-semibold mb-1">You receive</p>
             {toMe.map((tp: any) => (
               <Link
                 key={tp.player_id}
@@ -993,10 +993,10 @@ function PendingTradeCard({
                 {tp.season_year} Round {tp.round} pick
               </p>
             ))}
-            {toMe.length === 0 && picksToMe.length === 0 && <p className="text-gray-600">—</p>}
+            {toMe.length === 0 && picksToMe.length === 0 && <p className="text-gray-400">—</p>}
           </div>
           <div>
-            <p className="text-gray-500 font-semibold mb-1">You give up</p>
+            <p className="text-gray-400 font-semibold mb-1">You give up</p>
             {fromMe.map((tp: any) => (
               <Link
                 key={tp.player_id}
@@ -1011,14 +1011,14 @@ function PendingTradeCard({
                 {tp.season_year} Round {tp.round} pick
               </p>
             ))}
-            {fromMe.length === 0 && picksFromMe.length === 0 && <p className="text-gray-600">—</p>}
+            {fromMe.length === 0 && picksFromMe.length === 0 && <p className="text-gray-400">—</p>}
           </div>
         </div>
       )}
 
       {participants.length > 0 && (
         <div className="mb-4">
-          <p className="text-gray-500 text-[10px] uppercase tracking-wide font-semibold mb-1.5">Participants</p>
+          <p className="text-gray-400 text-[10px] uppercase tracking-wide font-semibold mb-1.5">Participants</p>
           <div className="flex flex-wrap gap-1.5">
             {participants.map((p: any) => {
               const colors =

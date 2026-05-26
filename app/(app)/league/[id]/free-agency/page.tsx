@@ -222,7 +222,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
         <details className="bg-[#1a1d23] rounded-2xl border border-white/5 px-4 py-3 group">
           <summary className="cursor-pointer flex items-center justify-between gap-3 text-sm">
             <span className="text-white font-semibold">Waiver order</span>
-            <span className="text-gray-500 text-xs">
+            <span className="text-gray-400 text-xs">
               You're #{(myMember as any).waiver_priority ?? "—"} · waivers running
             </span>
           </summary>
@@ -234,7 +234,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
                   m.id === myMember.id ? "bg-[#4B3DFF]/10" : ""
                 }`}
               >
-                <span className="text-gray-500 text-xs w-6">#{m.waiver_priority ?? i + 1}</span>
+                <span className="text-gray-400 text-xs w-6">#{m.waiver_priority ?? i + 1}</span>
                 <span className="text-white">{m.team_name}</span>
               </li>
             ))}

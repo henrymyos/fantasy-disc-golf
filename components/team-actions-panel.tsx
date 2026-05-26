@@ -85,7 +85,7 @@ export function TeamActionsPanel({ leagueId, myTeamId, rosterTxs, completedTrade
       {showTx && (
         <div className="bg-[#1a1d23] rounded-2xl border border-white/5 overflow-hidden">
           {!hasActivity ? (
-            <p className="text-gray-600 text-sm text-center py-8">No recent transactions</p>
+            <p className="text-gray-400 text-sm text-center py-8">No recent transactions</p>
           ) : (
             <div className="divide-y divide-white/5">
               {activity.map((entry, i) => {
@@ -114,15 +114,15 @@ export function TeamActionsPanel({ leagueId, myTeamId, rosterTxs, completedTrade
                         {isSwap ? (
                           <p className="text-white text-sm truncate">
                             <span className="text-[#36D7B7]">+</span> {t.playerName}
-                            <span className="text-gray-600 mx-1.5">/</span>
+                            <span className="text-gray-400 mx-1.5">/</span>
                             <span className="text-red-400">−</span> {t.droppedName}
                           </p>
                         ) : (
                           <p className="text-white text-sm truncate">{t.playerName}</p>
                         )}
-                        {!isSwap && <p className="text-gray-600 text-xs">{t.playerDivision}</p>}
+                        {!isSwap && <p className="text-gray-400 text-xs">{t.playerDivision}</p>}
                       </div>
-                      <span className="text-gray-600 text-xs shrink-0">{timeAgo(t.createdAt)}</span>
+                      <span className="text-gray-400 text-xs shrink-0">{timeAgo(t.createdAt)}</span>
                     </div>
                   );
                 }
@@ -143,7 +143,7 @@ export function TeamActionsPanel({ leagueId, myTeamId, rosterTxs, completedTrade
                         >
                           {accepted ? "ACCEPTED" : "REJECTED"}
                         </span>
-                        <span className="text-gray-600 text-xs">{timeAgo(t.resolvedAt)}</span>
+                        <span className="text-gray-400 text-xs">{timeAgo(t.resolvedAt)}</span>
                       </div>
                     </div>
                     {t.received.length > 0 && (

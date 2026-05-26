@@ -102,12 +102,12 @@ export default async function TeamPage({
           <div>
             <h2 className="font-bold text-white text-lg">{team.team_name}</h2>
             {(team as any).profiles?.username && (
-              <p className="text-gray-500 text-xs mt-0.5">
+              <p className="text-gray-400 text-xs mt-0.5">
                 {(team as any).profiles.username}
               </p>
             )}
           </div>
-          <span className="text-gray-500 text-sm">
+          <span className="text-gray-400 text-sm">
             {totalFilledStarters}/{totalSlots} starters
           </span>
         </div>
@@ -135,7 +135,7 @@ export default async function TeamPage({
 
         {bench.length > 0 && (
           <>
-            <h3 className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">
+            <h3 className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-2">
               Bench
             </h3>
             <div className="space-y-2">
@@ -147,7 +147,7 @@ export default async function TeamPage({
         )}
 
         {roster.length === 0 && (
-          <p className="text-gray-600 text-sm text-center py-4">
+          <p className="text-gray-400 text-sm text-center py-4">
             No players on this roster.
           </p>
         )}
@@ -198,7 +198,7 @@ function LineupRow({
           {occupant.players.name}
         </Link>
       ) : (
-        <p className="flex-1 text-gray-600 text-sm italic">Empty</p>
+        <p className="flex-1 text-gray-400 text-sm italic">Empty</p>
       )}
     </div>
   );

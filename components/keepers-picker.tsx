@@ -47,7 +47,7 @@ export function KeepersPicker({
         <p className="text-white text-sm">
           {selected.size}/{limit} selected
           {remaining > 0 && (
-            <span className="text-gray-500"> · {remaining} slot{remaining !== 1 ? "s" : ""} left</span>
+            <span className="text-gray-400"> · {remaining} slot{remaining !== 1 ? "s" : ""} left</span>
           )}
         </p>
         <button
@@ -87,7 +87,7 @@ export function KeepersPicker({
             </button>
           );
         })}
-        {roster.length === 0 && <p className="text-gray-600 text-sm">No players on your roster yet.</p>}
+        {roster.length === 0 && <p className="text-gray-400 text-sm">No players on your roster yet.</p>}
       </div>
     </div>
   );

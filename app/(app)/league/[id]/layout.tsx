@@ -55,7 +55,7 @@ export default async function LeagueLayout({
             {league.name}
           </Link>
         </div>
-        <div className="flex items-center gap-3 text-xs text-gray-500 flex-wrap">
+        <div className="flex items-center gap-3 text-xs text-gray-400 flex-wrap">
           <Link
             href={`${base}/settings`}
             className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition"

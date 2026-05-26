@@ -61,7 +61,7 @@ export function DraftTypeForm({
         {pending ? "Saving..." : saved ? "Saved ✓" : "Save draft type"}
       </button>
       {type === "auction" && (
-        <p className="text-gray-500 text-xs w-full">
+        <p className="text-gray-400 text-xs w-full">
           Each team starts with ${budget} to spend across the entire roster. Teams take turns nominating in draft order; the highest bidder wins. Last-second bids extend the timer to 10 seconds.
         </p>
       )}

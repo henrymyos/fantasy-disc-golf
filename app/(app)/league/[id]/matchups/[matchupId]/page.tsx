@@ -136,7 +136,7 @@ export default async function MatchupDetailPage({
             isFinal={isFinal}
           />
           <div className="text-center shrink-0">
-            <span className="text-gray-600 text-xs font-bold uppercase tracking-widest">
+            <span className="text-gray-400 text-xs font-bold uppercase tracking-widest">
               {isFinal ? "Final" : `Week ${matchup.week}`}
             </span>
           </div>
@@ -153,7 +153,7 @@ export default async function MatchupDetailPage({
 
       {/* Starter lineup side-by-side, scores in the middle */}
       <div className="bg-[#1a1d23] rounded-2xl border border-white/5 overflow-hidden">
-        <div className="grid grid-cols-[1fr_auto_1fr] gap-2 px-4 py-2 bg-[#0f1117] border-b border-white/5 text-[10px] uppercase tracking-wider font-semibold text-gray-500">
+        <div className="grid grid-cols-[1fr_auto_1fr] gap-2 px-4 py-2 bg-[#0f1117] border-b border-white/5 text-[10px] uppercase tracking-wider font-semibold text-gray-400">
           <span>{team1.team_name}</span>
           <span className="text-center w-20">Pts</span>
           <span className="text-right">{team2.team_name}</span>
@@ -187,10 +187,10 @@ function TeamHeader({
   return (
     <div className={`flex-1 min-w-0 ${right ? "text-right" : ""}`}>
       <p className="text-white font-bold text-lg truncate">{name}</p>
-      {division && <p className="text-gray-500 text-xs mt-0.5">{division}</p>}
+      {division && <p className="text-gray-400 text-xs mt-0.5">{division}</p>}
       <p className="text-white text-3xl font-black tabular-nums mt-2">{score.toFixed(1)}</p>
       {!isFinal && projected > 0 && (
-        <p className="text-gray-500 text-xs mt-0.5">~{projected.toFixed(1)} projected</p>
+        <p className="text-gray-400 text-xs mt-0.5">~{projected.toFixed(1)} projected</p>
       )}
     </div>
   );
@@ -237,7 +237,7 @@ function StarterPairRow({
   return (
     <div className="grid grid-cols-[1fr_auto_1fr] gap-2 px-4 py-3 items-center">
       <PlayerCell row={a} leagueId={leagueId} isFinal={isFinal} />
-      <div className="text-center w-20 text-gray-600 text-xs font-mono">vs</div>
+      <div className="text-center w-20 text-gray-400 text-xs font-mono">vs</div>
       <PlayerCell row={b} leagueId={leagueId} isFinal={isFinal} right />
     </div>
   );
@@ -273,7 +273,7 @@ function PlayerCell({
           {row.name}
         </Link>
         <p
-          className={`text-xs tabular-nums ${row.actual != null ? "text-[#36D7B7]" : "text-gray-500"}`}
+          className={`text-xs tabular-nums ${row.actual != null ? "text-[#36D7B7]" : "text-gray-400"}`}
         >
           {display}
         </p>

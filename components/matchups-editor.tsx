@@ -35,7 +35,7 @@ export function MatchupsEditor({
   if (weeks.length === 0) {
     return (
       <div className="bg-[#1a1d23] rounded-2xl p-12 border border-white/5 text-center">
-        <p className="text-gray-600 text-sm">
+        <p className="text-gray-400 text-sm">
           No matchups generated yet — finish the draft (or click Regenerate in Settings).
         </p>
       </div>
@@ -109,7 +109,7 @@ function MatchupRow({
           </option>
         ))}
       </select>
-      <span className="text-gray-500 text-xs px-1">vs</span>
+      <span className="text-gray-400 text-xs px-1">vs</span>
       <select
         value={matchup.team2_id}
         disabled={matchup.is_final || pending}
@@ -124,7 +124,7 @@ function MatchupRow({
         ))}
       </select>
       {matchup.is_final && (
-        <span className="text-[10px] uppercase tracking-wider text-gray-500 px-2">Final</span>
+        <span className="text-[10px] uppercase tracking-wider text-gray-400 px-2">Final</span>
       )}
       {!t1 || !t2 ? <span className="text-red-400 text-xs">unset</span> : null}
     </div>

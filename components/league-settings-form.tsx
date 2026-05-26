@@ -148,7 +148,7 @@ export function LeagueSettingsForm({ leagueId, initial }: Props) {
           <option value="all_play">All-play (vs every team each week)</option>
           <option value="median">Median (vs league median each week)</option>
         </select>
-        <p className="text-gray-600 text-xs mt-1">
+        <p className="text-gray-400 text-xs mt-1">
           Determines how weekly wins and losses are counted in the standings.
         </p>
       </div>
@@ -163,7 +163,7 @@ export function LeagueSettingsForm({ leagueId, initial }: Props) {
           defaultValue={initial.keepersPerTeam}
           className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#4B3DFF] transition"
         />
-        <p className="text-gray-600 text-xs mt-1">
+        <p className="text-gray-400 text-xs mt-1">
           Number of players each team can carry into next season's draft (0 disables keepers).
         </p>
       </div>
@@ -178,7 +178,7 @@ export function LeagueSettingsForm({ leagueId, initial }: Props) {
           <option value="reverse_standings">Reverse standings (worst record first)</option>
           <option value="reverse_last_add">Least recent free-agent add</option>
         </select>
-        <p className="text-gray-600 text-xs mt-1">
+        <p className="text-gray-400 text-xs mt-1">
           Applied automatically when a tournament starts and a waiver period opens.
         </p>
       </div>

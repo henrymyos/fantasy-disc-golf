@@ -106,7 +106,7 @@ export default async function MyMatchupPage({
       <div className="max-w-2xl">
         <h2 className="text-white font-bold text-xl mb-2">Your Matchup</h2>
         <div className="bg-[#1a1d23] rounded-2xl p-12 border border-white/5 text-center">
-          <p className="text-gray-500 text-sm">
+          <p className="text-gray-400 text-sm">
             No matchup scheduled for you yet. Check back once the regular season starts.
           </p>
         </div>
@@ -289,7 +289,7 @@ export default async function MyMatchupPage({
     <div className="max-w-3xl space-y-5">
       <div>
         <h2 className="text-white font-bold text-xl">Your Matchup</h2>
-        <p className="text-gray-500 text-sm mt-1">
+        <p className="text-gray-400 text-sm mt-1">
           Week {(matchup as any).week}
           {isFinal ? " · Final" : " · live projection"}
         </p>
@@ -307,7 +307,7 @@ export default async function MyMatchupPage({
             isMine={isMine(t1Id)}
           />
           <div className="text-center pb-3">
-            <span className="text-gray-600 text-xs font-bold uppercase tracking-widest">
+            <span className="text-gray-400 text-xs font-bold uppercase tracking-widest">
               {isFinal ? "Final" : inProgress ? "Live" : "vs"}
             </span>
           </div>
@@ -402,11 +402,11 @@ function TeamHeader({
     <div className={`min-w-0 ${right ? "text-right" : ""}`}>
       <p className="text-white font-bold text-lg truncate">
         {name}
-        {isMine && <span className="text-gray-500 text-xs font-normal ml-2">(you)</span>}
+        {isMine && <span className="text-gray-400 text-xs font-normal ml-2">(you)</span>}
       </p>
       <p className="text-white text-3xl font-black tabular-nums mt-2">{score.toFixed(1)}</p>
       {!isFinal && (
-        <p className="text-gray-500 text-xs mt-1">
+        <p className="text-gray-400 text-xs mt-1">
           ~{projected.toFixed(1)} {inProgress ? "final proj" : "projected"} ·{" "}
           <span className="text-white font-semibold">{winPct}%</span> win
         </p>
@@ -429,7 +429,7 @@ function SectionHeader({
   return (
     <div
       className={`grid grid-cols-[1fr_3rem_auto_3rem_1fr] gap-2 px-4 py-2 border-b border-white/5 text-[10px] uppercase tracking-wider font-semibold ${
-        muted ? "bg-[#13151b] text-gray-600" : "bg-[#0f1117] text-gray-500"
+        muted ? "bg-[#13151b] text-gray-400" : "bg-[#0f1117] text-gray-400"
       }`}
     >
       <span>{t1Name ?? ""}</span>
@@ -455,7 +455,7 @@ function PairRow({
     <div className="grid grid-cols-[1fr_3rem_auto_3rem_1fr] gap-2 px-4 py-3 items-center">
       <NameCell row={left} leagueId={leagueId} />
       <PointsCell row={left} align="right" />
-      <div className="text-center w-12 text-gray-600 text-[10px] font-mono uppercase tracking-wider">
+      <div className="text-center w-12 text-gray-400 text-[10px] font-mono uppercase tracking-wider">
         {slotLabel}
       </div>
       <PointsCell row={right} align="left" />
@@ -473,7 +473,7 @@ function NameCell({
   leagueId: string;
   right?: boolean;
 }) {
-  if (!row) return <div className={`text-gray-700 text-sm ${right ? "text-right" : ""}`}>—</div>;
+  if (!row) return <div className={`text-gray-400 text-sm ${right ? "text-right" : ""}`}>—</div>;
   const accent = row.division === "MPO" ? "#4B3DFF" : "#36D7B7";
   return (
     <div className={`flex items-center gap-2 min-w-0 ${right ? "flex-row-reverse text-right" : ""}`}>
@@ -514,7 +514,7 @@ function PointsCell({
 
   // Sleeper-style: actual on top, pace-adjusted finishing projection below,
   // colored against the original season projection.
-  let paceColor = "text-gray-500";
+  let paceColor = "text-gray-400";
   if (row.paceProjected != null && row.projected != null && row.projected > 0) {
     const diff = row.paceProjected - row.projected;
     const tol = Math.max(1.5, row.projected * 0.08); // within ~8% is "similar"

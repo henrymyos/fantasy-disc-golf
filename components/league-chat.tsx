@@ -127,7 +127,7 @@ export function LeagueChat({
       {/* Message list */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
         {visible.length === 0 ? (
-          <p className="text-gray-600 text-sm text-center py-8">
+          <p className="text-gray-400 text-sm text-center py-8">
             {channel.kind === "league"
               ? "No messages yet. Be the first to say something."
               : "No DMs yet — send a message to start the conversation."}
@@ -141,7 +141,7 @@ export function LeagueChat({
                 key={m.id}
                 className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}
               >
-                <span className="text-[10px] text-gray-500 mb-0.5">
+                <span className="text-[10px] text-gray-400 mb-0.5">
                   {sender?.team_name ?? "Team"} ·{" "}
                   {new Date(m.created_at).toLocaleTimeString("en-US", {
                     hour: "numeric",

@@ -96,7 +96,7 @@ export function LineupSlot({
             {occupant.players.name}
           </Link>
         ) : (
-          <p className="flex-1 text-gray-600 text-sm italic">Empty</p>
+          <p className="flex-1 text-gray-400 text-sm italic">Empty</p>
         )}
 
         {occupant && <WeekPointsBadge wp={weekPoints} />}
@@ -203,16 +203,16 @@ function StarterPickerModal({
               {division}
             </span>
             <span className="text-white font-bold">Slot {slotIndex}</span>
-            {occupant?.players && <span className="text-gray-500 text-xs">· {occupant.players.name}</span>}
+            {occupant?.players && <span className="text-gray-400 text-xs">· {occupant.players.name}</span>}
           </div>
-          <button type="button" onClick={onClose} className="text-gray-500 hover:text-white text-xl leading-none transition ml-3">×</button>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none transition ml-3">×</button>
         </div>
 
         <div className="px-3 pt-3 pb-4 space-y-4 max-h-[70vh] overflow-y-auto">
           {/* Other filled starters */}
           {hasFilledOthers && (
             <section>
-              <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold px-1 mb-1.5">
+              <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold px-1 mb-1.5">
                 {occupant ? "Swap with starter" : "Move to this slot"}
               </p>
               <div className="space-y-1.5">
@@ -230,7 +230,7 @@ function StarterPickerModal({
                     <span className="flex-1 text-sm font-medium text-white truncate">
                       {loadingKey === `s-${spot.id}` ? "Moving..." : spot.players?.name}
                     </span>
-                    <span className="text-xs text-gray-500 shrink-0">
+                    <span className="text-xs text-gray-400 shrink-0">
                       {occupant ? `${otherIdx} ⇄ ${slotIndex}` : `Slot ${otherIdx} → ${slotIndex}`}
                     </span>
                   </button>
@@ -242,7 +242,7 @@ function StarterPickerModal({
           {/* Empty slots (only shown when current slot has an occupant to move) */}
           {hasEmptyOthers && (
             <section>
-              <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold px-1 mb-1.5">Move to empty slot</p>
+              <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold px-1 mb-1.5">Move to empty slot</p>
               <div className="space-y-1.5">
                 {emptyOthers.map(({ slotIndex: otherIdx }) => (
                   <button
@@ -259,7 +259,7 @@ function StarterPickerModal({
                     <span className="flex-1 text-sm italic truncate" style={{ color }}>
                       {loadingKey === `e-${otherIdx}` ? "Moving..." : "Empty slot"}
                     </span>
-                    <span className="text-xs text-gray-500 shrink-0">Slot {otherIdx}</span>
+                    <span className="text-xs text-gray-400 shrink-0">Slot {otherIdx}</span>
                   </button>
                 ))}
               </div>
@@ -269,7 +269,7 @@ function StarterPickerModal({
           {/* Bench players */}
           {hasBench && (
             <section>
-              <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold px-1 mb-1.5">
+              <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold px-1 mb-1.5">
                 {occupant ? "Move from bench" : "Available"}
               </p>
               <div className="space-y-1.5">
@@ -287,7 +287,7 @@ function StarterPickerModal({
                     <span className="flex-1 text-sm font-medium text-white truncate">
                       {loadingKey === `b-${spot.id}` ? "Moving..." : spot.players?.name}
                     </span>
-                    <span className="text-xs text-gray-500 shrink-0">→ Slot {slotIndex}</span>
+                    <span className="text-xs text-gray-400 shrink-0">→ Slot {slotIndex}</span>
                   </button>
                 ))}
               </div>
@@ -296,7 +296,7 @@ function StarterPickerModal({
 
           {canSendToBench && (
             <section>
-              <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold px-1 mb-1.5">
+              <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold px-1 mb-1.5">
                 Send to bench
               </p>
               <button
@@ -311,13 +311,13 @@ function StarterPickerModal({
                 <span className="flex-1 text-sm italic text-gray-400">
                   {loadingKey === "send-bench" ? "Moving..." : "Empty bench spot"}
                 </span>
-                <span className="text-xs text-gray-500 shrink-0">Bench</span>
+                <span className="text-xs text-gray-400 shrink-0">Bench</span>
               </button>
             </section>
           )}
 
           {!hasBench && !hasFilledOthers && !hasEmptyOthers && !canSendToBench && (
-            <p className="text-gray-600 text-sm text-center py-4">
+            <p className="text-gray-400 text-sm text-center py-4">
               No {division} players available — visit Free Agency to add more.
             </p>
           )}
@@ -445,11 +445,11 @@ function BenchPickerModal({
               <span className="text-white font-bold">{player?.name}</span>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="text-gray-500 hover:text-white text-xl leading-none transition ml-3">×</button>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none transition ml-3">×</button>
         </div>
 
         <div className="px-3 pt-3 pb-4 space-y-1.5 max-h-72 overflow-y-auto">
-          <p className="text-xs text-gray-600 uppercase tracking-wide font-semibold px-1 mb-1.5">Choose a slot</p>
+          <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold px-1 mb-1.5">Choose a slot</p>
           {starterSlots.map((occupant, i) => {
             const isLoading = loadingIdx === i;
             return (
@@ -474,7 +474,7 @@ function BenchPickerModal({
                 <span className="flex-1 text-sm font-medium truncate" style={{ color: occupant ? undefined : color }}>
                   {isLoading ? "Moving..." : occupant ? (occupant as any).players?.name : "Empty slot"}
                 </span>
-                <span className="text-xs text-gray-500 shrink-0">Slot {i + 1}</span>
+                <span className="text-xs text-gray-400 shrink-0">Slot {i + 1}</span>
               </button>
             );
           })}

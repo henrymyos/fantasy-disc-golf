@@ -27,7 +27,7 @@ export function ConfirmDropButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-xs text-red-400 hover:text-red-300 border border-red-400/20 hover:border-red-400/40 px-3 py-1 rounded-full transition"
+        className="text-xs text-red-400 hover:text-red-300 border border-red-400/20 hover:border-red-400/40 px-3 py-1 min-h-[36px] md:min-h-0 inline-flex items-center justify-center rounded-full transition"
       >
         Drop
       </button>

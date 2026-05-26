@@ -82,7 +82,7 @@ export default async function MatchupsPage({ params }: { params: Promise<{ id: s
           </h2>
           <div className="space-y-3">
             {(byWeek[week] ?? []).length === 0 ? (
-              <p className="text-gray-600 text-sm">No matchups scheduled</p>
+              <p className="text-gray-400 text-sm">No matchups scheduled</p>
             ) : (
               (byWeek[week] ?? []).map((m) => {
                 const t1 = m.team1 as any;
@@ -108,12 +108,12 @@ export default async function MatchupsPage({ params }: { params: Promise<{ id: s
                         <p className="text-white text-sm font-medium">{t1?.team_name}</p>
                         <p className="text-xl font-bold text-white">{m.team1_score.toFixed(1)}</p>
                         {!m.is_final && proj1 > 0 && (
-                          <p className="text-gray-500 text-[10px]">~{proj1.toFixed(1)} proj</p>
+                          <p className="text-gray-400 text-[10px]">~{proj1.toFixed(1)} proj</p>
                         )}
                       </div>
                     </div>
 
-                    <span className="text-gray-600 text-xs font-medium">
+                    <span className="text-gray-400 text-xs font-medium">
                       {m.is_final ? "FINAL" : "vs"}
                     </span>
 
@@ -127,7 +127,7 @@ export default async function MatchupsPage({ params }: { params: Promise<{ id: s
                         <p className="text-white text-sm font-medium">{t2?.team_name}</p>
                         <p className="text-xl font-bold text-white">{m.team2_score.toFixed(1)}</p>
                         {!m.is_final && proj2 > 0 && (
-                          <p className="text-gray-500 text-[10px]">~{proj2.toFixed(1)} proj</p>
+                          <p className="text-gray-400 text-[10px]">~{proj2.toFixed(1)} proj</p>
                         )}
                       </div>
                     </div>
@@ -141,7 +141,7 @@ export default async function MatchupsPage({ params }: { params: Promise<{ id: s
 
       {weeks.length === 0 && (
         <div className="bg-[#1a1d23] rounded-2xl p-12 border border-white/5 text-center">
-          <p className="text-gray-600 text-sm">No matchups yet. The commissioner schedules matchups in the Scoring panel.</p>
+          <p className="text-gray-400 text-sm">No matchups yet. The commissioner schedules matchups in the Scoring panel.</p>
         </div>
       )}
     </div>

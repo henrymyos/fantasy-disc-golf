@@ -58,7 +58,7 @@ export function EnterResultsForm({
       <div className="space-y-2">
         {rows.map((row, i) => (
           <div key={i} className="flex items-center gap-2">
-            <span className="text-gray-500 text-sm w-6 text-right">{row.position}</span>
+            <span className="text-gray-400 text-sm w-6 text-right">{row.position}</span>
             <select
               value={row.playerId}
               onChange={(e) => updateRow(i, "playerId", Number(e.target.value))}
@@ -80,7 +80,7 @@ export function EnterResultsForm({
             />
             <button
               onClick={() => removeRow(i)}
-              className="text-gray-600 hover:text-red-400 transition text-lg px-1"
+              className="text-gray-400 hover:text-red-400 transition text-lg px-1"
             >
               ×
             </button>
@@ -92,7 +92,7 @@ export function EnterResultsForm({
       <div className="border-t border-white/5 pt-4">
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-medium text-gray-300">Bonus Points</p>
-          <div className="flex gap-3 text-xs text-gray-500">
+          <div className="flex gap-3 text-xs text-gray-400">
             <span>🔥 Hot round +{BONUS_POINTS.hotRound}</span>
             <span>✅ Bogey-free +{BONUS_POINTS.bogeyFree}</span>
             <span>🎯 Ace +{BONUS_POINTS.ace}</span>
@@ -148,7 +148,7 @@ export function EnterResultsForm({
                 </label>
                 <button
                   onClick={() => removeBonusRow(i)}
-                  className="text-gray-600 hover:text-red-400 transition text-lg px-1"
+                  className="text-gray-400 hover:text-red-400 transition text-lg px-1"
                 >
                   ×
                 </button>
@@ -159,7 +159,7 @@ export function EnterResultsForm({
 
         <button
           onClick={addBonusRow}
-          className="text-xs text-gray-500 hover:text-gray-300 border border-white/10 hover:border-white/20 px-3 py-1 rounded-lg transition"
+          className="text-xs text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20 px-3 py-1 rounded-lg transition"
         >
           + Add bonus
         </button>

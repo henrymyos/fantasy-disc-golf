@@ -143,7 +143,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
                 minute: "2-digit",
               })}
               {" · "}
-              <span className="text-gray-500">commissioner starts manually</span>
+              <span className="text-gray-400">commissioner starts manually</span>
             </p>
           </div>
         </div>
@@ -153,7 +153,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
         <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5 space-y-5">
           <div>
             <h3 className="text-white font-bold">Pre-draft setup</h3>
-            <p className="text-gray-500 text-xs mt-0.5">Commissioner only · only available before the draft begins</p>
+            <p className="text-gray-400 text-xs mt-0.5">Commissioner only · only available before the draft begins</p>
           </div>
 
           <DraftScheduleForm leagueId={Number(id)} scheduledAt={scheduledAt} />
@@ -185,7 +185,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
             >
               Save timer
             </button>
-            <p className="w-full text-gray-500 text-xs">
+            <p className="w-full text-gray-400 text-xs">
               If a pick isn't made within this window, the highest-ranked available player is auto-picked.
             </p>
           </form>
@@ -201,12 +201,12 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
             <div className="flex-1 min-w-[220px]">
               <p className="text-xs text-gray-400 mb-2">Draft order</p>
               {(allMemberRows ?? []).every((m: any) => m.draft_position == null) ? (
-                <p className="text-gray-600 text-sm italic">Not set yet — click Randomize to assign positions.</p>
+                <p className="text-gray-400 text-sm italic">Not set yet — click Randomize to assign positions.</p>
               ) : (
                 <ol className="space-y-1">
                   {(allMemberRows ?? []).map((m: any) => (
                     <li key={m.id} className="flex items-center gap-3 text-sm">
-                      <span className="text-gray-500 text-xs font-mono w-6 text-right">
+                      <span className="text-gray-400 text-xs font-mono w-6 text-right">
                         {m.draft_position ? `#${m.draft_position}` : "—"}
                       </span>
                       <span className="text-white">{m.team_name}</span>

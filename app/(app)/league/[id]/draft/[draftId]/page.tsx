@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { DraftBoard } from "@/components/draft-board";
 
@@ -67,18 +68,26 @@ export default async function DraftResultPage({
   }));
 
   return (
-    <DraftBoard
-      leagueId={Number(id)}
-      draft={{ id: draft.id, status: draft.status, currentPick: draft.current_pick, totalRounds: draft.total_rounds }}
-      members={members}
-      picks={picks}
-      availablePlayers={[]}
-      myMemberId={member.id}
-      isCommissioner={false}
-      mpoSlots={mpoSlots}
-      fpoSlots={fpoSlots}
-      rosterSize={rosterSize}
-      readOnly
-    />
+    <div className="space-y-4">
+      <Link
+        href={`/league/${id}/settings/drafts`}
+        className="text-gray-400 hover:text-white text-sm transition inline-block"
+      >
+        ← Draft Results
+      </Link>
+      <DraftBoard
+        leagueId={Number(id)}
+        draft={{ id: draft.id, status: draft.status, currentPick: draft.current_pick, totalRounds: draft.total_rounds }}
+        members={members}
+        picks={picks}
+        availablePlayers={[]}
+        myMemberId={member.id}
+        isCommissioner={false}
+        mpoSlots={mpoSlots}
+        fpoSlots={fpoSlots}
+        rosterSize={rosterSize}
+        readOnly
+      />
+    </div>
   );
 }

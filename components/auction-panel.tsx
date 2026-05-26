@@ -169,7 +169,7 @@ export function AuctionPanel({
     <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5 space-y-5">
       {/* Team budgets */}
       <div>
-        <p className="text-xs uppercase tracking-wider text-gray-500 font-semibold mb-2">Budgets</p>
+        <p className="text-xs uppercase tracking-wider text-gray-400 font-semibold mb-2">Budgets</p>
         <div className="flex flex-wrap gap-2">
           {members.map((m) => (
             <div
@@ -192,17 +192,17 @@ export function AuctionPanel({
         <div className="bg-[#0f1117] rounded-xl p-5 border border-[#4B3DFF]/30">
           <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
             <div>
-              <p className="text-xs uppercase tracking-wider text-gray-500 font-semibold mb-1">
+              <p className="text-xs uppercase tracking-wider text-gray-400 font-semibold mb-1">
                 Nominated by {nominator?.team_name ?? "—"}
               </p>
               <p className="text-white font-bold text-xl">{nominatedPlayer.name}</p>
-              <p className="text-gray-500 text-xs mt-0.5">{nominatedPlayer.division}</p>
+              <p className="text-gray-400 text-xs mt-0.5">{nominatedPlayer.division}</p>
             </div>
             <div className="text-right">
               <p className="text-[#36D7B7] font-mono text-3xl font-black">
                 ${draft.auction_current_bid}
               </p>
-              <p className="text-gray-500 text-xs mt-0.5">
+              <p className="text-gray-400 text-xs mt-0.5">
                 {highBidder?.team_name ?? "—"} · {secondsLeft ?? 0}s left
               </p>
             </div>
@@ -227,7 +227,7 @@ export function AuctionPanel({
               >
                 {pending ? "Bidding..." : `Bid $${bidAmount || myMinBid}`}
               </button>
-              <p className="text-gray-500 text-xs">
+              <p className="text-gray-400 text-xs">
                 You have ${myMaxBid} max
               </p>
             </div>
@@ -259,7 +259,7 @@ export function AuctionPanel({
                     : "bg-[#1a1d23] border border-white/5 hover:border-white/15 text-gray-300"
                 }`}
               >
-                <span className="text-gray-500 text-xs font-mono w-8 text-right">
+                <span className="text-gray-400 text-xs font-mono w-8 text-right">
                   {p.overall_rank != null ? `#${p.overall_rank}` : ""}
                 </span>
                 <span className="flex-1">{p.name}</span>
@@ -293,7 +293,7 @@ export function AuctionPanel({
             >
               {pending ? "Nominating..." : `Nominate for $${openingBid}`}
             </button>
-            <p className="text-gray-500 text-xs">Max ${myMaxBid}</p>
+            <p className="text-gray-400 text-xs">Max ${myMaxBid}</p>
           </div>
         </div>
       ) : (

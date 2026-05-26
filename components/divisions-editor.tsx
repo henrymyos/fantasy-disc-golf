@@ -46,7 +46,7 @@ export function DivisionsEditor({
           />
         </div>
       ))}
-      <p className="text-gray-600 text-xs">
+      <p className="text-gray-400 text-xs">
         Teams with the same division name play each other more often. Leave blank for no division.
       </p>
     </div>

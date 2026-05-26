@@ -156,7 +156,7 @@ export default async function DashboardPage() {
         <div className="bg-[#1a1d23] rounded-2xl p-12 border border-white/5 text-center">
           <p className="text-4xl mb-3">🥏</p>
           <h2 className="text-white font-semibold text-lg mb-1">No leagues yet</h2>
-          <p className="text-gray-500 text-sm mb-6">Create a new league or join one with an invite code</p>
+          <p className="text-gray-400 text-sm mb-6">Create a new league or join one with an invite code</p>
           <Link
             href="/league/new"
             className="inline-block px-6 py-2.5 bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white text-sm font-semibold rounded-lg transition"
@@ -184,7 +184,7 @@ export default async function DashboardPage() {
                       </span>
                     )}
                   </div>
-                  <p className="text-gray-500 text-sm">
+                  <p className="text-gray-400 text-sm">
                     Your team: <span className="text-gray-300">{league.myTeamName}</span>
                     {" · "}
                     Week {league.current_week}
@@ -192,7 +192,7 @@ export default async function DashboardPage() {
                 </div>
                 <div className="text-right">
                   <DraftBadge status={league.draft_status} />
-                  <p className="text-gray-600 text-xs mt-1">Code: {league.invite_code}</p>
+                  <p className="text-gray-400 text-xs mt-1">Code: {league.invite_code}</p>
                 </div>
               </div>
             </Link>

@@ -102,10 +102,10 @@ export function EditSeasonForm({ leagueId, events, initialSelected }: Props) {
           <h2 className="text-white font-bold text-lg">Edit Season</h2>
           <span className="text-sm font-mono text-gray-400 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 tabular-nums">
             <span className="text-white font-bold">{count}</span>
-            <span className="text-gray-500"> / {total} tournaments</span>
+            <span className="text-gray-400"> / {total} tournaments</span>
           </span>
         </div>
-        <p className="text-gray-500 text-sm mt-2">
+        <p className="text-gray-400 text-sm mt-2">
           Select which 2026 DGPT events count toward the season. The last {PLAYOFF_COUNT}{" "}
           selected events of the year are marked as <span className="text-[#F5A524] font-semibold">PLAYOFFS</span>.
         </p>
@@ -178,7 +178,7 @@ export function EditSeasonForm({ leagueId, events, initialSelected }: Props) {
                     </span>
                   )}
                 </div>
-                <p className="text-gray-500 text-xs mt-0.5 truncate">
+                <p className="text-gray-400 text-xs mt-0.5 truncate">
                   {formatEventDateRange(event)} · {formatEventLocation(event)}
                 </p>
               </div>
@@ -194,7 +194,7 @@ export function EditSeasonForm({ leagueId, events, initialSelected }: Props) {
             <p className="text-white font-semibold">
               {count} of {total} tournaments
             </p>
-            <p className="text-gray-500 text-xs mt-0.5">
+            <p className="text-gray-400 text-xs mt-0.5">
               <span className="text-gray-400">{regularCount} regular</span>
               <span> · </span>
               <span className="text-[#F5A524]">{playoffCount} playoff{playoffCount !== 1 ? "s" : ""}</span>
@@ -203,14 +203,14 @@ export function EditSeasonForm({ leagueId, events, initialSelected }: Props) {
               <p className="text-[#36D7B7] text-xs mt-0.5">Saved</p>
             )}
             {dirty && (
-              <p className="text-gray-500 text-xs mt-0.5">Unsaved changes</p>
+              <p className="text-gray-400 text-xs mt-0.5">Unsaved changes</p>
             )}
           </div>
           <button
             type="button"
             onClick={save}
             disabled={pending || !dirty}
-            className="bg-[#4B3DFF] hover:bg-[#3a2eff] disabled:bg-white/10 disabled:text-gray-500 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition disabled:cursor-not-allowed"
+            className="bg-[#4B3DFF] hover:bg-[#3a2eff] disabled:bg-white/10 disabled:text-gray-400 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition disabled:cursor-not-allowed"
           >
             {pending ? "Saving..." : "Save"}
           </button>

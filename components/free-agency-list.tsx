@@ -72,7 +72,7 @@ export function FreeAgencyList({
     if (overLimit || addsDisabled) {
       return (
         <span
-          className="text-xs text-gray-600 py-1.5 shrink-0 ml-2 w-16 text-center"
+          className="text-xs text-gray-400 py-1.5 shrink-0 ml-2 w-16 text-center"
           title={addsDisabled ? "Adds locked until draft completes" : undefined}
         >
           Add
@@ -86,7 +86,7 @@ export function FreeAgencyList({
           <form action={cancelWaiverClaim.bind(null, leagueId, claim.id)} className="shrink-0 ml-2">
             <button
               type="submit"
-              className="text-xs border border-yellow-400/40 text-yellow-300 hover:text-white hover:border-yellow-300 py-1.5 rounded-full font-medium transition w-16 text-center"
+              className="text-xs border border-yellow-400/40 text-yellow-300 hover:text-white hover:border-yellow-300 py-2 rounded-full font-medium transition w-16 text-center min-h-[40px] md:min-h-0 md:py-1.5 inline-flex items-center justify-center"
             >
               Pending
             </button>
@@ -97,7 +97,7 @@ export function FreeAgencyList({
         <form action={placeWaiverClaim.bind(null, leagueId, player.id, undefined)} className="shrink-0 ml-2">
           <button
             type="submit"
-            className="text-xs bg-yellow-400 hover:bg-yellow-300 text-black py-1.5 rounded-full font-medium transition w-16 text-center"
+            className="text-xs bg-yellow-400 hover:bg-yellow-300 text-black py-2 rounded-full font-medium transition w-16 text-center min-h-[40px] md:min-h-0 md:py-1.5 inline-flex items-center justify-center"
           >
             Claim
           </button>
@@ -163,7 +163,7 @@ export function FreeAgencyList({
         <button
           onClick={() => setView("available")}
           className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition ${
-            view === "available" ? "bg-[#4B3DFF] text-white" : "text-gray-500 hover:text-gray-300"
+            view === "available" ? "bg-[#4B3DFF] text-white" : "text-gray-400 hover:text-gray-300"
           }`}
         >
           Free Agents
@@ -171,7 +171,7 @@ export function FreeAgencyList({
         <button
           onClick={() => setView("leaders")}
           className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition ${
-            view === "leaders" ? "bg-[#4B3DFF] text-white" : "text-gray-500 hover:text-gray-300"
+            view === "leaders" ? "bg-[#4B3DFF] text-white" : "text-gray-400 hover:text-gray-300"
           }`}
         >
           Points Leaders
@@ -191,7 +191,7 @@ export function FreeAgencyList({
                   : t === "fpo"
                   ? "bg-[#36D7B7] text-black"
                   : "bg-white/10 text-white"
-                : "text-gray-500 hover:text-gray-300"
+                : "text-gray-400 hover:text-gray-300"
             }`}
           >
             {t}
@@ -203,7 +203,7 @@ export function FreeAgencyList({
       {view === "available" ? (
         filteredAgents.length === 0 ? (
           <div className="bg-[#1a1d23] rounded-2xl p-12 border border-white/5 text-center">
-            <p className="text-gray-600 text-sm">No free agents in this division.</p>
+            <p className="text-gray-400 text-sm">No free agents in this division.</p>
           </div>
         ) : (
           <div className="space-y-1">
@@ -236,7 +236,7 @@ export function FreeAgencyList({
             ) : (
               <Link
                 href={`/league/${leagueId}/trades?with=${player.ownerTeamId}&want=${player.id}`}
-                className="text-xs bg-[#36D7B7] hover:bg-[#2bc4a6] text-black py-1.5 rounded-full font-medium transition shrink-0 ml-2 w-16 text-center"
+                className="text-xs bg-[#36D7B7] hover:bg-[#2bc4a6] text-black py-2 rounded-full font-medium transition shrink-0 ml-2 w-16 text-center min-h-[40px] md:min-h-0 md:py-1.5 inline-flex items-center justify-center"
                 title={player.ownerTeamName ? `Trade with ${player.ownerTeamName}` : "Propose a trade"}
               >
                 Trade
@@ -250,7 +250,7 @@ export function FreeAgencyList({
                 </span>
                 {player.projectedPoints != null && (
                   <span
-                    className="text-gray-500 text-[10px] tabular-nums leading-tight"
+                    className="text-gray-400 text-[10px] tabular-nums leading-tight"
                     title="Projected season total at current pace"
                   >
                     proj {player.projectedPoints.toFixed(0)}
@@ -313,7 +313,7 @@ function PlayerRow({
           {player.name}
         </Link>
         {ownerName && (
-          <span className="text-gray-500 text-xs truncate">→ {ownerName}</span>
+          <span className="text-gray-400 text-xs truncate">→ {ownerName}</span>
         )}
       </div>
 

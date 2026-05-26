@@ -306,7 +306,7 @@ export function MockDraft({
             ← Mock Drafts
           </Link>
           <h2 className="text-white font-bold text-xl">Mock Draft</h2>
-          <p className="text-gray-500 text-sm mt-1">
+          <p className="text-gray-400 text-sm mt-1">
             {numTeams} teams · {rosterSize} rounds · snake order · bots take {(BOT_PICK_DELAY_MS / 1000).toFixed(0)}s per pick
           </p>
         </div>
@@ -314,7 +314,7 @@ export function MockDraft({
         <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5 space-y-4">
           <div>
             <p className="text-white font-semibold text-sm mb-2">Choose your draft position</p>
-            <p className="text-gray-500 text-xs mb-4">
+            <p className="text-gray-400 text-xs mb-4">
               Pick 1 goes first overall; pick {numTeams} goes last. Snake reverses each round.
             </p>
             <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
@@ -411,7 +411,7 @@ export function MockDraft({
               : "bg-[#0f1117] border-white/10"
           }`}
         >
-          <p className="text-xs uppercase tracking-wider font-semibold text-gray-500">
+          <p className="text-xs uppercase tracking-wider font-semibold text-gray-400">
             Round {currentRound} · Pick {currentPickIndex + 1} of {totalPicks}
           </p>
           <p className="text-base font-bold mt-0.5">
@@ -439,14 +439,14 @@ export function MockDraft({
               gridTemplateColumns: `48px repeat(${numTeams}, minmax(120px, 1fr))`,
             }}
           >
-            <div className="text-[10px] font-bold uppercase text-gray-600 px-2 py-2">Rd</div>
+            <div className="text-[10px] font-bold uppercase text-gray-400 px-2 py-2">Rd</div>
             {Array.from({ length: numTeams }, (_, i) => {
               const isMine = i === myTeamIndex;
               return (
                 <div
                   key={i}
                   className={`text-[10px] font-bold uppercase tracking-wider px-2 py-2 text-center truncate ${
-                    isMine ? "text-[#36D7B7]" : "text-gray-500"
+                    isMine ? "text-[#36D7B7]" : "text-gray-400"
                   }`}
                 >
                   {isMine ? "You" : `Team ${i + 1}`}
@@ -467,7 +467,7 @@ export function MockDraft({
                   gridTemplateColumns: `48px repeat(${numTeams}, minmax(120px, 1fr))`,
                 }}
               >
-                <div className="text-xs font-bold text-gray-600 px-2 py-2 flex items-center">
+                <div className="text-xs font-bold text-gray-400 px-2 py-2 flex items-center">
                   R{round}
                 </div>
                 {Array.from({ length: numTeams }, (_, teamIdx) => {
@@ -492,7 +492,7 @@ export function MockDraft({
                           : {}
                       }
                     >
-                      <div className="text-[10px] text-gray-600 font-mono">
+                      <div className="text-[10px] text-gray-400 font-mono">
                         #{pickNumber}
                       </div>
                       {player ? (
@@ -511,7 +511,7 @@ export function MockDraft({
                           </div>
                         </div>
                       ) : (
-                        <div className={`text-[10px] ${isCurrent ? "text-[#36D7B7]" : "text-gray-700"}`}>
+                        <div className={`text-[10px] ${isCurrent ? "text-[#36D7B7]" : "text-gray-400"}`}>
                           {isCurrent ? "On clock" : "—"}
                         </div>
                       )}
@@ -536,7 +536,7 @@ export function MockDraft({
                 type="button"
                 onClick={() => canEnlarge && setPanelSize(PANEL_ORDER[panelIdx + 1])}
                 disabled={!canEnlarge}
-                className="text-gray-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed leading-none"
+                className="text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed leading-none"
                 title="Enlarge"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -547,7 +547,7 @@ export function MockDraft({
                 type="button"
                 onClick={() => canShrink && setPanelSize(PANEL_ORDER[panelIdx - 1])}
                 disabled={!canShrink}
-                className="text-gray-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed leading-none"
+                className="text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed leading-none"
                 title="Shrink"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -591,7 +591,7 @@ export function MockDraft({
                             : t === "fpo"
                             ? "bg-[#36D7B7] text-black"
                             : "bg-white/10 text-white"
-                          : "text-gray-500 hover:text-gray-300"
+                          : "text-gray-400 hover:text-gray-300"
                       }`}
                     >
                       {t}
@@ -685,7 +685,7 @@ function AvailableList({
     .filter((p) => !search || p.name.toLowerCase().includes(search.toLowerCase()));
 
   if (filtered.length === 0) {
-    return <p className="text-gray-600 text-xs text-center py-6">No players found</p>;
+    return <p className="text-gray-400 text-xs text-center py-6">No players found</p>;
   }
 
   return (
@@ -710,7 +710,7 @@ function AvailableList({
             ) : (
               <span className="w-[58px] shrink-0 -mr-2" />
             )}
-            <span className="text-gray-600 text-xs font-mono w-8 text-right shrink-0">
+            <span className="text-gray-400 text-xs font-mono w-8 text-right shrink-0">
               {rank != null ? `#${rank}` : ""}
             </span>
             <div className="flex-1 min-w-0 flex items-center gap-2">
@@ -759,8 +759,8 @@ function TeamList({
   return (
     <div className="px-3 lg:px-6 py-2 space-y-2">
       <div className="flex items-center justify-between px-1">
-        <span className="text-xs text-gray-500 font-semibold uppercase tracking-wide">Starters</span>
-        <span className="text-gray-500 text-xs">{filledStarters}/{totalSlots}</span>
+        <span className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Starters</span>
+        <span className="text-gray-400 text-xs">{filledStarters}/{totalSlots}</span>
       </div>
       <div className="space-y-1.5">
         {Array.from({ length: mpoSlots }).map((_, i) => (
@@ -785,8 +785,8 @@ function TeamList({
       {benchCapacity > 0 && (
         <>
           <div className="flex items-center justify-between px-1 pt-2">
-            <span className="text-xs text-gray-500 font-semibold uppercase tracking-wide">Bench</span>
-            <span className="text-gray-500 text-xs">{bench.length}/{benchCapacity}</span>
+            <span className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Bench</span>
+            <span className="text-gray-400 text-xs">{bench.length}/{benchCapacity}</span>
           </div>
           <div className="space-y-1.5">
             {bench.map((p) => {
@@ -817,10 +817,10 @@ function MockBenchEmptyRow() {
       className="flex items-center gap-3 p-2.5 rounded-xl border border-dashed"
       style={{ background: "rgba(15,17,23,0.5)", borderColor: "rgba(255,255,255,0.08)" }}
     >
-      <span className="w-12 shrink-0 text-center text-xs font-bold uppercase tracking-wide py-1 rounded-lg text-gray-600 bg-white/5">
+      <span className="w-12 shrink-0 text-center text-xs font-bold uppercase tracking-wide py-1 rounded-lg text-gray-400 bg-white/5">
         —
       </span>
-      <span className="flex-1 text-gray-600 text-sm italic">Empty bench</span>
+      <span className="flex-1 text-gray-400 text-sm italic">Empty bench</span>
     </div>
   );
 }
@@ -859,9 +859,9 @@ function MockLineupRow({
       {player ? (
         <span className="flex-1 text-white text-sm font-medium truncate">{player.name}</span>
       ) : (
-        <span className="flex-1 text-gray-600 text-sm italic">Empty</span>
+        <span className="flex-1 text-gray-400 text-sm italic">Empty</span>
       )}
-      <span className="text-gray-500 text-xs font-mono shrink-0">
+      <span className="text-gray-400 text-xs font-mono shrink-0">
         {pick ? `#${pick.pickNumber}` : slotIndex ? `Slot ${slotIndex}` : ""}
       </span>
     </div>

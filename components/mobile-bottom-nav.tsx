@@ -49,7 +49,7 @@ export function MobileBottomNav() {
             key={item.href}
             href={item.href}
             className={`flex flex-col items-center gap-0.5 flex-1 py-2 text-[10px] font-semibold transition ${
-              isActive ? "text-[#4B3DFF]" : "text-gray-500 hover:text-white"
+              isActive ? "text-[#4B3DFF]" : "text-gray-400 hover:text-white"
             }`}
           >
             {item.icon}

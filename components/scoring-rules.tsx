@@ -85,31 +85,31 @@ export function ScoringRules({ mpoStarters = 4, fpoStarters = 2 }: { mpoStarters
             <div className="text-2xl mb-1">🔥</div>
             <div className="text-white font-bold text-xl">+{BONUS_POINTS.hotRound}</div>
             <div className="text-gray-400 text-xs mt-1">Hot Round</div>
-            <div className="text-gray-600 text-xs mt-0.5">Best score in a round</div>
+            <div className="text-gray-400 text-xs mt-0.5">Best score in a round</div>
           </div>
           <div className="bg-[#0f1117] rounded-xl p-4 border border-white/5 text-center">
             <div className="text-2xl mb-1">✅</div>
             <div className="text-white font-bold text-xl">+{BONUS_POINTS.bogeyFree}</div>
             <div className="text-gray-400 text-xs mt-1">Bogey-Free Round</div>
-            <div className="text-gray-600 text-xs mt-0.5">Per round, no bogeys</div>
+            <div className="text-gray-400 text-xs mt-0.5">Per round, no bogeys</div>
           </div>
           <div className="bg-[#0f1117] rounded-xl p-4 border border-white/5 text-center">
             <div className="text-2xl mb-1">🎯</div>
             <div className="text-white font-bold text-xl">+{BONUS_POINTS.ace}</div>
             <div className="text-gray-400 text-xs mt-1">Ace</div>
-            <div className="text-gray-600 text-xs mt-0.5">Hole-in-one</div>
+            <div className="text-gray-400 text-xs mt-0.5">Hole-in-one</div>
           </div>
         </div>
-        <p className="text-gray-600 text-xs mt-2">Each tied player earns the full bonus — bonuses are not shared. Bonuses stack per round.</p>
+        <p className="text-gray-400 text-xs mt-2">Each tied player earns the full bonus — bonuses are not shared. Bonuses stack per round.</p>
       </div>
 
       {/* Placement tables side by side */}
-      <p className="text-gray-600 text-xs">Tied finishes each earn the full points for the position they tied for.</p>
+      <p className="text-gray-400 text-xs">Tied finishes each earn the full points for the position they tied for.</p>
       <div style={{ display: "flex", flexDirection: "row", gap: "16px" }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p className="text-sm font-medium text-[#4B3DFF] mb-3 flex items-center gap-2">
             MPO Placement
-            <span className="text-xs text-gray-600 font-normal">{mpoStarters} starters</span>
+            <span className="text-xs text-gray-400 font-normal">{mpoStarters} starters</span>
           </p>
           <div className="space-y-0">
             {MPO_TABLE.map(({ pos, pts }) => (
@@ -123,7 +123,7 @@ export function ScoringRules({ mpoStarters = 4, fpoStarters = 2 }: { mpoStarters
         <div style={{ flex: 1, minWidth: 0 }}>
           <p className="text-sm font-medium text-[#36D7B7] mb-3 flex items-center gap-2">
             FPO Placement
-            <span className="text-xs text-gray-600 font-normal">{fpoStarters} starters</span>
+            <span className="text-xs text-gray-400 font-normal">{fpoStarters} starters</span>
           </p>
           <div className="space-y-0">
             {FPO_TABLE.map(({ pos, pts }) => (

@@ -73,7 +73,7 @@ export function DraftPlayerList({
             className="flex items-center justify-between p-3 rounded-xl bg-[#0f1117] border border-white/5"
           >
             <div className="flex items-center gap-2">
-              <span className="text-gray-600 text-xs font-mono w-6 text-right shrink-0">
+              <span className="text-gray-400 text-xs font-mono w-6 text-right shrink-0">
                 {rankLabel(player)}
               </span>
               <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white text-xs font-bold shrink-0">
@@ -90,7 +90,7 @@ export function DraftPlayerList({
               <form action={makeDraftPick.bind(null, leagueId, player.id)}>
                 <button
                   type="submit"
-                  className="text-xs bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white px-3 py-1.5 rounded-full transition"
+                  className="text-xs bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white px-4 py-2 rounded-full transition min-h-[40px] md:min-h-0 md:py-1.5 md:px-3 inline-flex items-center justify-center"
                 >
                   Draft
                 </button>
@@ -99,7 +99,7 @@ export function DraftPlayerList({
           </div>
         ))}
         {sorted.length === 0 && (
-          <p className="text-gray-600 text-sm text-center py-4">No players available</p>
+          <p className="text-gray-400 text-sm text-center py-4">No players available</p>
         )}
       </div>
     </div>
