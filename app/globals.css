@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0f1117;
+  --background: #181b22;
   --foreground: #ffffff;
   --mpo-fill: rgba(75, 61, 255, 0.32);
   --mpo-fill-border: rgba(75, 61, 255, 0.45);
@@ -49,6 +49,24 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #ffffff35;
 }
+
+/* ─── Dark theme surface lift ───────────────────────────────────────────
+   The app bakes very-dark surface hexes into Tailwind arbitrary classes
+   (bg-[#0f1117], bg-[#1a1d23], …) which read as near-black. Rather than
+   rewrite every component, remap those surfaces to a softer blue-grey
+   (Sleeper-like) for the dark theme — i.e. any time we're NOT in explicit
+   light mode (dark is the default and may have no data-theme attribute).
+   ────────────────────────────────────────────────────────────────────── */
+:root:not([data-theme="light"]) .bg-\[\#0f1117\] { background-color: #181b22 !important; }
+:root:not([data-theme="light"]) .bg-\[\#0f1117\]\/95 { background-color: rgba(24, 27, 34, 0.95) !important; }
+:root:not([data-theme="light"]) .bg-\[\#1a1d23\] { background-color: #22262f !important; }
+:root:not([data-theme="light"]) .hover\:bg-\[\#1a1d23\]\/80:hover { background-color: rgba(34, 38, 47, 0.8) !important; }
+:root:not([data-theme="light"]) .bg-\[\#13151c\] { background-color: #1b1e26 !important; }
+:root:not([data-theme="light"]) .bg-\[\#13151c\]\/95 { background-color: rgba(27, 30, 38, 0.95) !important; }
+:root:not([data-theme="light"]) .bg-\[\#13151b\] { background-color: #1b1e26 !important; }
+:root:not([data-theme="light"]) .hover\:bg-\[\#1e2028\]:hover { background-color: #282d37 !important; }
+:root:not([data-theme="light"]) .hover\:bg-\[\#1f2329\]:hover { background-color: #282d37 !important; }
+:root:not([data-theme="light"]) .hover\:bg-\[\#23262e\]:hover { background-color: #2e333e !important; }
 
 /* ─── Light theme overrides ─────────────────────────────────────────────
    The app was written with dark surface hex codes baked in via Tailwind's
