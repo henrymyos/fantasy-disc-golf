@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fantasyPointsFromResult, resolveScoringRules } from "@/lib/scoring-rules";
 
 /**
  * For each (team, week) pair in the league, sum the fantasy_points of the
@@ -34,13 +35,30 @@ export async function getTeamWeeklyTotals(
     startersByTeam.set(r.team_id, list);
   });
 
-  // All tournament_results, keyed by player_id+tournament_id
+  // Pull raw result fields so we can apply this league's custom rules.
+  const { data: league } = await supabase
+    .from("leagues")
+    .select("scoring_rules")
+    .eq("id", leagueId)
+    .single();
+  const rules = resolveScoringRules((league as any)?.scoring_rules);
+
   const { data: results } = await supabase
     .from("tournament_results")
-    .select("player_id, tournament_id, fantasy_points");
+    .select("player_id, tournament_id, finishing_position, hot_round_count, bogey_free_count, ace_count, under_par_strokes, over_par_strokes, eagle_count, players(division)");
   const ptsByPlayerTournament = new Map<string, number>();
   (results ?? []).forEach((r: any) => {
-    ptsByPlayerTournament.set(`${r.player_id}:${r.tournament_id}`, Number(r.fantasy_points ?? 0));
+    const pts = fantasyPointsFromResult(rules, {
+      finishing_position: r.finishing_position,
+      hot_round_count: r.hot_round_count,
+      bogey_free_count: r.bogey_free_count,
+      ace_count: r.ace_count,
+      under_par_strokes: r.under_par_strokes,
+      over_par_strokes: r.over_par_strokes,
+      eagle_count: r.eagle_count,
+      division: r.players?.division ?? "MPO",
+    });
+    ptsByPlayerTournament.set(`${r.player_id}:${r.tournament_id}`, pts);
   });
 
   // Aggregate

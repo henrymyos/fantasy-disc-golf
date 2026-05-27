@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { BONUS_POINTS, getPointsForDivision } from "@/lib/scoring-constants";
+import { fantasyPointsFromResult, resolveScoringRules } from "@/lib/scoring-rules";
 import { generateWeeklyRecap } from "@/lib/weekly-recap";
 import { enqueueNotification } from "@/lib/notifications";
 
@@ -26,6 +27,9 @@ export type PlayerBonus = {
   hotRoundCount: number;
   bogeyFreeCount: number;
   aceCount: number;
+  underParStrokes?: number;
+  overParStrokes?: number;
+  eagleCount?: number;
 };
 
 export async function enterResults(
@@ -63,7 +67,10 @@ export async function enterResults(
     const bonusPts = b
       ? b.hotRoundCount * BONUS_POINTS.hotRound +
         b.bogeyFreeCount * BONUS_POINTS.bogeyFree +
-        b.aceCount * BONUS_POINTS.ace
+        b.aceCount * BONUS_POINTS.ace +
+        (b.underParStrokes ?? 0) * BONUS_POINTS.birdie -
+        (b.overParStrokes ?? 0) * BONUS_POINTS.bogey +
+        (b.eagleCount ?? 0) * BONUS_POINTS.eagle
       : 0;
     return {
       tournament_id: tournamentId,
@@ -72,6 +79,9 @@ export async function enterResults(
       hot_round_count: b?.hotRoundCount ?? 0,
       bogey_free_count: b?.bogeyFreeCount ?? 0,
       ace_count: b?.aceCount ?? 0,
+      under_par_strokes: b?.underParStrokes ?? 0,
+      over_par_strokes: b?.overParStrokes ?? 0,
+      eagle_count: b?.eagleCount ?? 0,
       fantasy_points: Math.round((placementPts + bonusPts) * 10) / 10,
     };
   });
@@ -86,18 +96,39 @@ export async function finalizeWeekScores(leagueId: number, week: number): Promis
   if (!user) redirect("/login");
 
   const admin = createAdminClient();
-  const { data: league } = await admin.from("leagues").select("commissioner_id").eq("id", leagueId).single();
-  if (!league || league.commissioner_id !== user.id) return;
+  const { data: league } = await admin
+    .from("leagues")
+    .select("commissioner_id, scoring_rules")
+    .eq("id", leagueId)
+    .single();
+  if (!league || (league as any).commissioner_id !== user.id) return;
+  const rules = resolveScoringRules((league as any).scoring_rules);
 
   const { data: tournaments } = await admin.from("tournaments").select("id").eq("week", week);
   const tournamentIds = (tournaments ?? []).map((t) => t.id);
   if (tournamentIds.length === 0) return;
 
-  const { data: results } = await admin.from("tournament_results").select("player_id, fantasy_points").in("tournament_id", tournamentIds);
+  // Pull the raw result fields so we can re-apply the league's custom rules
+  // (placement table + bonus values) on top of the stored fantasy_points.
+  const { data: results } = await admin
+    .from("tournament_results")
+    .select("player_id, finishing_position, hot_round_count, bogey_free_count, ace_count, under_par_strokes, over_par_strokes, eagle_count, fantasy_points, players(division)")
+    .in("tournament_id", tournamentIds);
 
   const playerPoints: Record<number, number> = {};
-  (results ?? []).forEach((r) => {
-    playerPoints[r.player_id] = (playerPoints[r.player_id] ?? 0) + r.fantasy_points;
+  (results ?? []).forEach((r: any) => {
+    const division = r.players?.division ?? "MPO";
+    const pts = fantasyPointsFromResult(rules, {
+      finishing_position: r.finishing_position,
+      hot_round_count: r.hot_round_count,
+      bogey_free_count: r.bogey_free_count,
+      ace_count: r.ace_count,
+      under_par_strokes: r.under_par_strokes,
+      over_par_strokes: r.over_par_strokes,
+      eagle_count: r.eagle_count,
+      division,
+    });
+    playerPoints[r.player_id] = (playerPoints[r.player_id] ?? 0) + pts;
   });
 
   const { data: starters } = await admin.from("rosters").select("team_id, player_id").eq("league_id", leagueId).eq("is_starter", true);

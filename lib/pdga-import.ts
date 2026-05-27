@@ -30,9 +30,12 @@ function pointsFor(position: number, division: "MPO" | "FPO"): number {
 }
 
 // Per-round bonus points must match lib/scoring-constants.ts.
-const BONUS_POINTS = { hotRound: 10, bogeyFree: 5, ace: 20 } as const;
+const BONUS_POINTS = { hotRound: 10, bogeyFree: 5, ace: 20, birdie: 0.2, bogey: 0.1, eagle: 2 } as const;
 
-type RoundBonus = { hot: number; bogey: number; ace: number };
+// `bogey` here is the bogey-FREE round count (legacy name); `under`/`over` are
+// cumulative strokes relative to par across the player's rounds in the event;
+// `eagle` is the count of holes played 2+ under par.
+type RoundBonus = { hot: number; bogey: number; ace: number; under: number; over: number; eagle: number };
 
 /**
  * Pulls the earliest scheduled tee time for round 1 from PDGA Live (across
@@ -136,7 +139,7 @@ async function computeBonusesForEvent(pdgaId: number): Promise<{
       for (const s of completed) {
         if (!s.PDGANum) continue;
         const key = String(s.PDGANum);
-        const entry = bonus.get(key) ?? { hot: 0, bogey: 0, ace: 0 };
+        const entry = bonus.get(key) ?? { hot: 0, bogey: 0, ace: 0, under: 0, over: 0, eagle: 0 };
 
         if (s.RoundScore === minRound) entry.hot += 1;
 
@@ -144,7 +147,15 @@ async function computeBonusesForEvent(pdgaId: number): Promise<{
         const holes = (s.HoleScores as string[]).map((n) => Number(n));
         let bogeyFree = holes.length > 0;
         for (let i = 0; i < holes.length; i++) {
-          if (holes[i] > (pars[i] ?? 99)) { bogeyFree = false; break; }
+          const par = pars[i];
+          const score = holes[i];
+          if (!Number.isFinite(par) || !Number.isFinite(score)) continue;
+          if (score > par) { bogeyFree = false; entry.over += score - par; }
+          else if (score < par) {
+            entry.under += par - score;
+            // A hole 2+ under par is an eagle (an ace on a par 3+ also qualifies).
+            if (par - score >= 2) entry.eagle += 1;
+          }
         }
         if (bogeyFree) entry.bogey += 1;
 
@@ -323,12 +334,15 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
           unmatched.push({ event: event.name, ...r, division });
           continue;
         }
-        const bonus = bonusByPdga.get(String(r.pdgaNumber)) ?? { hot: 0, bogey: 0, ace: 0 };
+        const bonus = bonusByPdga.get(String(r.pdgaNumber)) ?? { hot: 0, bogey: 0, ace: 0, under: 0, over: 0, eagle: 0 };
         const placementPts = pointsFor(r.place, division);
         const bonusPts =
           bonus.hot * BONUS_POINTS.hotRound +
           bonus.bogey * BONUS_POINTS.bogeyFree +
-          bonus.ace * BONUS_POINTS.ace;
+          bonus.ace * BONUS_POINTS.ace +
+          bonus.under * BONUS_POINTS.birdie -
+          bonus.over * BONUS_POINTS.bogey +
+          bonus.eagle * BONUS_POINTS.eagle;
         rowsToInsert.push({
           tournament_id: event.dbId,
           player_id: player.id,
@@ -336,6 +350,9 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
           hot_round_count: bonus.hot,
           bogey_free_count: bonus.bogey,
           ace_count: bonus.ace,
+          under_par_strokes: bonus.under,
+          over_par_strokes: bonus.over,
+          eagle_count: bonus.eagle,
           fantasy_points: Math.round((placementPts + bonusPts) * 10) / 10,
         });
       }

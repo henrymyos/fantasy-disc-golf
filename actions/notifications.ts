@@ -35,7 +35,10 @@ export async function markNotificationRead(notificationId: number): Promise<void
   revalidatePath("/notifications");
 }
 
-export type NotificationKind = "trade_proposed" | "weekly_result" | "lineup_unset";
+// Note: NotificationKind lives in lib/notifications.ts. We re-export from
+// there into components that need the type; "use server" files can only
+// export async functions.
+import type { NotificationKind } from "@/lib/notifications";
 
 export async function subscribeToPush(sub: {
   endpoint: string;

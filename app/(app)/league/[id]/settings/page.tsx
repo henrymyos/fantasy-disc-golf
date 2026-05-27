@@ -121,6 +121,14 @@ export default async function LeagueSettingsPage({
           subtitle="Past seasons' standings and rosters"
         />
 
+        {isCommissioner && (
+          <Tile
+            href={`${base}/dues`}
+            title="Dues & Payouts"
+            subtitle="Track who paid and set payout splits"
+          />
+        )}
+
         {keepersPerTeam > 0 && (
           <Tile
             href={`${base}/keepers`}

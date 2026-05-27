@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -16,7 +16,6 @@ export const metadata: Metadata = {
   title: "Disc Fantasy",
   description: "Fantasy Disc Golf League Platform",
   manifest: "/manifest.json",
-  themeColor: "#4B3DFF",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -26,6 +25,10 @@ export const metadata: Metadata = {
     icon: "/icon-192.svg",
     apple: "/icon-192.svg",
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#4B3DFF",
 };
 
 export default function RootLayout({

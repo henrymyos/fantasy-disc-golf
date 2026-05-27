@@ -2,6 +2,14 @@ export const BONUS_POINTS = {
   hotRound: 10,
   bogeyFree: 5,
   ace: 20,
+  // Per-stroke-relative-to-par scoring. `birdie` is awarded for each stroke
+  // under par (an eagle counts twice); `bogey` is subtracted for each stroke
+  // over par (a double bogey counts twice).
+  birdie: 0.2,
+  bogey: 0.1,
+  // Flat bonus per eagle (a hole 2+ under par), stacked on top of the
+  // proportional `birdie` strokes that eagle already earns.
+  eagle: 2,
 } as const;
 
 // League structure: 6 starters = 4 MPO + 2 FPO

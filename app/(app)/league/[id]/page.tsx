@@ -12,6 +12,7 @@ import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
 import { applyProjectionVariance } from "@/lib/projections";
 import { getActiveTournament } from "@/lib/lineup-lock";
 import { LeagueChat } from "@/components/league-chat";
+import { CopyButton } from "@/components/copy-button";
 import { getActivityFeed } from "@/lib/activity-feed";
 import { fetchDiscGolfNews } from "@/lib/news-feed";
 
@@ -38,7 +39,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, name, current_week, starters_count, selected_event_slugs, waivers_locked, scoring_mode")
+    .select("id, name, current_week, starters_count, selected_event_slugs, waivers_locked, scoring_mode, invite_code, max_teams")
     .eq("id", id)
     .single();
 
@@ -66,6 +67,15 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
     .select("id, team_name, user_id, is_commissioner, waiver_priority, profiles(username)")
     .eq("league_id", id)
     .order("joined_at");
+
+  // Before the draft starts and while there's still an open slot, surface the
+  // invite code so the league can be filled.
+  const preDraft = draft?.status == null || draft.status === "pending";
+  const inviteCode = (league as any).invite_code as string | null;
+  const maxTeams = (league as any).max_teams as number | null;
+  const leagueIsFull = maxTeams != null && (members ?? []).length >= maxTeams;
+  const showInviteCode = preDraft && !!inviteCode && !leagueIsFull;
+  const emptySlotCount = maxTeams != null ? Math.max(0, maxTeams - (members ?? []).length) : 0;
 
   const { data: matchups } = await supabase
     .from("matchups")
@@ -248,55 +258,105 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   return (
     <div className="grid lg:grid-cols-3 gap-6">
-      {/* Standings */}
+      {/* Standings (or team roster before the draft) */}
       <div className="lg:col-span-1 bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
-        <h2 className="font-bold text-white mb-4">Standings</h2>
+        <h2 className="font-bold text-white mb-4">{preDraft ? "Teams" : "Standings"}</h2>
         <div className="space-y-2">
-          {standings.map((t, i) => {
-            const isMe = t.user_id === user.id;
-            const href = isMe ? `/league/${id}/lineups` : `/league/${id}/team/${t.id}`;
-            return (
-              <Link
-                key={t.id}
-                href={href}
-                className={`flex items-center justify-between py-2 px-3 rounded-lg transition ${
-                  isMe
-                    ? "bg-[#4B3DFF]/15 border border-[#4B3DFF]/30 hover:bg-[#4B3DFF]/20"
-                    : "hover:bg-white/5"
-                }`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-gray-400 text-sm w-4">{i + 1}</span>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
+          {preDraft ? (
+            <>
+              {(members ?? []).map((t, i) => {
+                const isMe = t.user_id === user.id;
+                const href = isMe ? `/league/${id}/lineups` : `/league/${id}/team/${t.id}`;
+                return (
+                  <Link
+                    key={t.id}
+                    href={href}
+                    className={`flex items-center gap-3 py-2 px-3 rounded-lg transition min-w-0 ${
+                      isMe
+                        ? "bg-[#4B3DFF]/15 border border-[#4B3DFF]/30 hover:bg-[#4B3DFF]/20"
+                        : "hover:bg-white/5"
+                    }`}
+                  >
+                    <span className="text-gray-400 text-sm w-4">{i + 1}</span>
+                    <div className="min-w-0">
                       <p className="text-white text-sm font-medium truncate">{t.team_name}</p>
-                      {waiversActive && (t as any).waiver_priority != null && (
-                        <span
-                          className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded text-yellow-300 bg-yellow-400/15"
-                          title={`Next waiver pick: #${(t as any).waiver_priority}`}
-                        >
-                          W#{(t as any).waiver_priority}
-                        </span>
-                      )}
+                      <p className="text-gray-400 text-xs truncate">{(t.profiles as any)?.username}</p>
                     </div>
-                    <p className="text-gray-400 text-xs">{(t.profiles as any)?.username}</p>
-                  </div>
+                  </Link>
+                );
+              })}
+              {Array.from({ length: emptySlotCount }).map((_, i) => (
+                <div
+                  key={`empty-${i}`}
+                  className="flex items-center gap-3 py-2 px-3 rounded-lg border border-dashed border-white/10"
+                >
+                  <span className="text-gray-600 text-sm w-4">{(members ?? []).length + i + 1}</span>
+                  <p className="text-gray-500 text-sm italic">Open slot</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-white text-sm font-semibold">{t.wins}-{t.losses}</p>
-                  <p className="text-gray-400 text-xs">{t.points.toFixed(0)} pts</p>
-                </div>
-              </Link>
-            );
-          })}
-          {standings.length === 0 && (
-            <p className="text-gray-400 text-sm text-center py-4">No teams yet</p>
+              ))}
+              {(members ?? []).length === 0 && emptySlotCount === 0 && (
+                <p className="text-gray-400 text-sm text-center py-4">No teams yet</p>
+              )}
+            </>
+          ) : (
+            <>
+              {standings.map((t, i) => {
+                const isMe = t.user_id === user.id;
+                const href = isMe ? `/league/${id}/lineups` : `/league/${id}/team/${t.id}`;
+                return (
+                  <Link
+                    key={t.id}
+                    href={href}
+                    className={`flex items-center justify-between py-2 px-3 rounded-lg transition ${
+                      isMe
+                        ? "bg-[#4B3DFF]/15 border border-[#4B3DFF]/30 hover:bg-[#4B3DFF]/20"
+                        : "hover:bg-white/5"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-gray-400 text-sm w-4">{i + 1}</span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-white text-sm font-medium truncate">{t.team_name}</p>
+                          {waiversActive && (t as any).waiver_priority != null && (
+                            <span
+                              className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded text-yellow-300 bg-yellow-400/15"
+                              title={`Next waiver pick: #${(t as any).waiver_priority}`}
+                            >
+                              W#{(t as any).waiver_priority}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-gray-400 text-xs">{(t.profiles as any)?.username}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-white text-sm font-semibold">{t.wins}-{t.losses}</p>
+                      <p className="text-gray-400 text-xs">{t.points.toFixed(0)} pts</p>
+                    </div>
+                  </Link>
+                );
+              })}
+              {standings.length === 0 && (
+                <p className="text-gray-400 text-sm text-center py-4">No teams yet</p>
+              )}
+            </>
           )}
         </div>
       </div>
 
       {/* This week's matchups */}
       <div className="lg:col-span-2 space-y-4">
+        {showInviteCode && (
+          <div className="bg-[#1a1d23] rounded-xl px-4 py-2.5 border border-[#4B3DFF]/30 flex items-center gap-3">
+            <span className="text-gray-400 text-xs shrink-0">Invite code</span>
+            <span className="flex-1 min-w-0 font-mono text-white font-bold tracking-widest select-all truncate">
+              {inviteCode}
+            </span>
+            <CopyButton value={inviteCode!} label="Copy invite code" className="h-8 w-8" />
+          </div>
+        )}
+
         {showMockDraft && (
           <Link
             href={`/league/${id}/mock-draft`}

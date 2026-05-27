@@ -1,7 +1,8 @@
 "use client";
 
 import { useTransition } from "react";
-import { setNotificationPref, type NotificationKind } from "@/actions/notifications";
+import { setNotificationPref } from "@/actions/notifications";
+import type { NotificationKind } from "@/lib/notifications";
 
 export function NotificationPrefToggle({
   kind,

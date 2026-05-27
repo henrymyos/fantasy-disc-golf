@@ -1,61 +1,33 @@
+"use client";
+
 import { BONUS_POINTS } from "@/lib/scoring-constants";
+import {
+  defaultMpoTable,
+  defaultFpoTable,
+  type ScoringRules as RulesType,
+} from "@/lib/scoring-rules";
 
-const MPO_TABLE = [
-  { pos: "1st",       pts: 82 },
-  { pos: "2nd",       pts: 70 },
-  { pos: "3rd",       pts: 60 },
-  { pos: "4th",       pts: 53 },
-  { pos: "5th",       pts: 47 },
-  { pos: "6th",       pts: 42 },
-  { pos: "7th",       pts: 38 },
-  { pos: "8th",       pts: 35 },
-  { pos: "9th",       pts: 32 },
-  { pos: "10th",      pts: 29 },
-  { pos: "11th",      pts: 26 },
-  { pos: "12th",      pts: 24 },
-  { pos: "13th",      pts: 22 },
-  { pos: "14th",      pts: 20 },
-  { pos: "15th",      pts: 19 },
-  { pos: "16th",      pts: 18 },
-  { pos: "17th",      pts: 17 },
-  { pos: "18th",      pts: 16 },
-  { pos: "19th–20th", pts: 15 },
-  { pos: "21st",      pts: 13 },
-  { pos: "22nd",      pts: 12 },
-  { pos: "23rd–24th", pts: 11 },
-  { pos: "25th–26th", pts: 10 },
-  { pos: "27th–30th", pts: 9  },
-  { pos: "31st–32nd", pts: 8  },
-  { pos: "33rd–40th", pts: 6  },
-  { pos: "41st–50th", pts: 4  },
-  { pos: "51st–60th", pts: 3  },
-  { pos: "61st+",     pts: 1  },
-];
+const MPO_EDITABLE_COUNT = 32;
+const FPO_EDITABLE_COUNT = 25;
+const MPO_TAIL = { label: "33rd+", pts: 1 };
+const FPO_TAIL = { label: "26th+", pts: 2 };
 
-const FPO_TABLE = [
-  { pos: "1st",       pts: 54 },
-  { pos: "2nd",       pts: 46 },
-  { pos: "3rd",       pts: 40 },
-  { pos: "4th",       pts: 35 },
-  { pos: "5th",       pts: 31 },
-  { pos: "6th",       pts: 28 },
-  { pos: "7th",       pts: 25 },
-  { pos: "8th",       pts: 23 },
-  { pos: "9th",       pts: 21 },
-  { pos: "10th",      pts: 18 },
-  { pos: "11th",      pts: 17 },
-  { pos: "12th",      pts: 15 },
-  { pos: "13th",      pts: 14 },
-  { pos: "14th",      pts: 13 },
-  { pos: "15th",      pts: 12 },
-  { pos: "16th",      pts: 11 },
-  { pos: "17th–25th", pts: 9  },
-  { pos: "26th–35th", pts: 6  },
-  { pos: "36th–45th", pts: 4  },
-  { pos: "46th+",     pts: 2  },
-];
+export function ScoringRules({
+  mpoStarters = 4,
+  fpoStarters = 2,
+  rules,
+}: {
+  mpoStarters?: number;
+  fpoStarters?: number;
+  rules?: RulesType;
+}) {
+  const bonus = rules?.bonusPoints ?? BONUS_POINTS;
+  const mpoTable = mergeTable(defaultMpoTable(), rules?.mpoPositionPoints);
+  const fpoTable = mergeTable(defaultFpoTable(), rules?.fpoPositionPoints);
 
-export function ScoringRules({ mpoStarters = 4, fpoStarters = 2 }: { mpoStarters?: number; fpoStarters?: number }) {
+  const mpoRows = groupByValue(mpoTable, MPO_EDITABLE_COUNT, MPO_TAIL);
+  const fpoRows = groupByValue(fpoTable, FPO_EDITABLE_COUNT, FPO_TAIL);
+
   const total = mpoStarters + fpoStarters;
   return (
     <div className="space-y-6">
@@ -83,24 +55,42 @@ export function ScoringRules({ mpoStarters = 4, fpoStarters = 2 }: { mpoStarters
         <div className="grid grid-cols-3 sm:grid-cols-3 gap-2 sm:gap-3">
           <div className="bg-[#0f1117] rounded-xl p-4 border border-white/5 text-center">
             <div className="text-2xl mb-1">🔥</div>
-            <div className="text-white font-bold text-xl">+{BONUS_POINTS.hotRound}</div>
+            <div className="text-white font-bold text-xl tabular-nums">+{bonus.hotRound}</div>
             <div className="text-gray-400 text-xs mt-1">Hot Round</div>
             <div className="text-gray-400 text-xs mt-0.5">Best score in a round</div>
           </div>
           <div className="bg-[#0f1117] rounded-xl p-4 border border-white/5 text-center">
             <div className="text-2xl mb-1">✅</div>
-            <div className="text-white font-bold text-xl">+{BONUS_POINTS.bogeyFree}</div>
+            <div className="text-white font-bold text-xl tabular-nums">+{bonus.bogeyFree}</div>
             <div className="text-gray-400 text-xs mt-1">Bogey-Free Round</div>
             <div className="text-gray-400 text-xs mt-0.5">Per round, no bogeys</div>
           </div>
           <div className="bg-[#0f1117] rounded-xl p-4 border border-white/5 text-center">
             <div className="text-2xl mb-1">🎯</div>
-            <div className="text-white font-bold text-xl">+{BONUS_POINTS.ace}</div>
+            <div className="text-white font-bold text-xl tabular-nums">+{bonus.ace}</div>
             <div className="text-gray-400 text-xs mt-1">Ace</div>
             <div className="text-gray-400 text-xs mt-0.5">Hole-in-one</div>
           </div>
+          <div className="bg-[#0f1117] rounded-xl p-4 border border-white/5 text-center">
+            <div className="text-2xl mb-1">🟢</div>
+            <div className="text-white font-bold text-xl tabular-nums">+{bonus.birdie}</div>
+            <div className="text-gray-400 text-xs mt-1">Birdie</div>
+            <div className="text-gray-400 text-xs mt-0.5">Per stroke under par</div>
+          </div>
+          <div className="bg-[#0f1117] rounded-xl p-4 border border-white/5 text-center">
+            <div className="text-2xl mb-1">🔴</div>
+            <div className="text-white font-bold text-xl tabular-nums">−{bonus.bogey}</div>
+            <div className="text-gray-400 text-xs mt-1">Bogey</div>
+            <div className="text-gray-400 text-xs mt-0.5">Per stroke over par</div>
+          </div>
+          <div className="bg-[#0f1117] rounded-xl p-4 border border-white/5 text-center">
+            <div className="text-2xl mb-1">🦅</div>
+            <div className="text-white font-bold text-xl tabular-nums">+{bonus.eagle}</div>
+            <div className="text-gray-400 text-xs mt-1">Eagle</div>
+            <div className="text-gray-400 text-xs mt-0.5">Per hole 2+ under par</div>
+          </div>
         </div>
-        <p className="text-gray-400 text-xs mt-2">Each tied player earns the full bonus — bonuses are not shared. Bonuses stack per round.</p>
+        <p className="text-gray-400 text-xs mt-2">Each tied player earns the full bonus — bonuses are not shared. Bonuses stack per round. Birdie/bogey points count every stroke under or over par (eagles and double bogeys count twice).</p>
       </div>
 
       {/* Placement tables side by side */}
@@ -112,10 +102,10 @@ export function ScoringRules({ mpoStarters = 4, fpoStarters = 2 }: { mpoStarters
             <span className="text-xs text-gray-400 font-normal">{mpoStarters} starters</span>
           </p>
           <div className="space-y-0">
-            {MPO_TABLE.map(({ pos, pts }) => (
-              <div key={pos} className="flex justify-between py-1.5 border-b border-white/5 last:border-0">
-                <span className="text-gray-400 text-xs">{pos}</span>
-                <span className="text-white font-medium text-xs tabular-nums">{pts}</span>
+            {mpoRows.map((row, i) => (
+              <div key={i} className="flex justify-between py-1.5 border-b border-white/5 last:border-0">
+                <span className="text-gray-400 text-xs">{row.label}</span>
+                <span className="text-white font-medium text-xs tabular-nums">{row.pts}</span>
               </div>
             ))}
           </div>
@@ -126,10 +116,10 @@ export function ScoringRules({ mpoStarters = 4, fpoStarters = 2 }: { mpoStarters
             <span className="text-xs text-gray-400 font-normal">{fpoStarters} starters</span>
           </p>
           <div className="space-y-0">
-            {FPO_TABLE.map(({ pos, pts }) => (
-              <div key={pos} className="flex justify-between py-1.5 border-b border-white/5 last:border-0">
-                <span className="text-gray-400 text-xs">{pos}</span>
-                <span className="text-[#36D7B7] font-medium text-xs tabular-nums">{pts}</span>
+            {fpoRows.map((row, i) => (
+              <div key={i} className="flex justify-between py-1.5 border-b border-white/5 last:border-0">
+                <span className="text-gray-400 text-xs">{row.label}</span>
+                <span className="text-[#36D7B7] font-medium text-xs tabular-nums">{row.pts}</span>
               </div>
             ))}
           </div>
@@ -137,4 +127,45 @@ export function ScoringRules({ mpoStarters = 4, fpoStarters = 2 }: { mpoStarters
       </div>
     </div>
   );
+}
+
+function mergeTable(
+  defaults: Record<number, number>,
+  override: Record<number, number> | null | undefined,
+): Record<number, number> {
+  if (!override) return defaults;
+  return { ...defaults, ...override };
+}
+
+/** Collapses consecutive positions with the same point value into a single
+ *  label like "19th–20th". Appends a tail row for everything beyond the
+ *  editable range. */
+function groupByValue(
+  table: Record<number, number>,
+  upTo: number,
+  tail: { label: string; pts: number },
+): Array<{ label: string; pts: number }> {
+  const rows: Array<{ label: string; pts: number }> = [];
+  let runStart = 1;
+  let runValue = table[1] ?? 0;
+  for (let p = 2; p <= upTo; p++) {
+    const v = table[p] ?? 0;
+    if (v === runValue) continue;
+    rows.push({ label: rangeLabel(runStart, p - 1), pts: runValue });
+    runStart = p;
+    runValue = v;
+  }
+  rows.push({ label: rangeLabel(runStart, upTo), pts: runValue });
+  rows.push(tail);
+  return rows;
+}
+
+function ordinal(n: number): string {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function rangeLabel(a: number, b: number): string {
+  return a === b ? ordinal(a) : `${ordinal(a)}–${ordinal(b)}`;
 }
