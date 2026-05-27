@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { BONUS_POINTS, getPointsForDivision } from "@/lib/scoring-constants";
+import { generateWeeklyRecap } from "@/lib/weekly-recap";
+import { enqueueNotification } from "@/lib/notifications";
 
 export async function createTournament(leagueId: number, name: string, week: number): Promise<void> {
   const supabase = await createClient();
@@ -113,6 +115,52 @@ export async function finalizeWeekScores(leagueId: number, week: number): Promis
       team2_score: teamScores[m.team2_id] ?? 0,
       is_final: true,
     }).eq("id", m.id);
+  }
+
+  // Auto-generate the templated weekly recap once every matchup is final.
+  await generateWeeklyRecap(admin, leagueId, week);
+
+  // Notify each team's owner of the win/loss for this week.
+  const teamUserMap = new Map<number, string | null>();
+  const { data: teamMembers } = await admin
+    .from("league_members")
+    .select("id, team_name, user_id")
+    .eq("league_id", leagueId);
+  for (const tm of teamMembers ?? []) {
+    teamUserMap.set((tm as any).id, (tm as any).user_id ?? null);
+  }
+  const nameById = new Map<number, string>(
+    (teamMembers ?? []).map((m: any) => [m.id, m.team_name as string]),
+  );
+
+  for (const m of matchups ?? []) {
+    const s1 = teamScores[m.team1_id] ?? 0;
+    const s2 = teamScores[m.team2_id] ?? 0;
+    const u1 = teamUserMap.get(m.team1_id);
+    const u2 = teamUserMap.get(m.team2_id);
+    const t1Name = nameById.get(m.team1_id) ?? "Team 1";
+    const t2Name = nameById.get(m.team2_id) ?? "Team 2";
+    const link = `/league/${leagueId}/matchups/${m.id}`;
+    if (u1) {
+      const verdict = s1 === s2 ? "tied with" : s1 > s2 ? "won against" : "lost to";
+      await enqueueNotification(admin, {
+        userId: u1,
+        leagueId,
+        kind: "weekly_result",
+        body: `Week ${week}: you ${verdict} ${t2Name} ${s1.toFixed(1)}-${s2.toFixed(1)}.`,
+        link,
+      });
+    }
+    if (u2) {
+      const verdict = s2 === s1 ? "tied with" : s2 > s1 ? "won against" : "lost to";
+      await enqueueNotification(admin, {
+        userId: u2,
+        leagueId,
+        kind: "weekly_result",
+        body: `Week ${week}: you ${verdict} ${t1Name} ${s2.toFixed(1)}-${s1.toFixed(1)}.`,
+        link,
+      });
+    }
   }
 
   revalidatePath(`/league/${leagueId}/scoring`);

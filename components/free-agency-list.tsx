@@ -194,7 +194,7 @@ export function FreeAgencyList({
             view === "leaders" ? "bg-[#4B3DFF] text-white" : "text-gray-400 hover:text-gray-300"
           }`}
         >
-          Points Leaders
+          Leaders
         </button>
       </div>
 
@@ -220,18 +220,28 @@ export function FreeAgencyList({
           ))}
         </div>
 
-        <label className="flex items-center gap-2 text-xs text-gray-400 ml-auto">
+        <div className="flex items-center gap-2 text-xs text-gray-400 ml-auto">
           <span className="uppercase tracking-wide font-semibold">Sort</span>
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortKey)}
-            className="bg-[#1a1d23] border border-white/10 hover:border-white/30 rounded-lg px-2 py-1.5 text-white text-xs cursor-pointer transition"
-          >
-            <option value="points">Total points</option>
-            <option value="projected">Projected (next event)</option>
-            <option value="rank">Ranking</option>
-          </select>
-        </label>
+          <div className="flex gap-1 bg-[#1a1d23] border border-white/5 rounded-xl p-1 w-fit">
+            {([
+              { key: "points", label: "Points" },
+              { key: "projected", label: "Projected" },
+              { key: "rank", label: "Ranking" },
+            ] as { key: SortKey; label: string }[]).map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => setSort(opt.key)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition ${
+                  sort === opt.key
+                    ? "bg-[#4B3DFF] text-white"
+                    : "text-gray-400 hover:text-gray-300"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Body */}
@@ -294,24 +304,16 @@ export function FreeAgencyList({
 
             const primary = sort === "projected"
               ? (player.nextWeekPoints != null ? `~${player.nextWeekPoints.toFixed(1)}` : "—")
+              : sort === "rank"
+              ? (tab === "all"
+                  ? (player.overallRank != null ? `#${player.overallRank}` : "—")
+                  : (player.worldRanking != null ? `#${player.worldRanking}` : "—"))
               : player.totalPoints.toFixed(1);
-            const subLabel = sort === "projected" ? "total" : "next";
-            const subValue = sort === "projected"
-              ? player.totalPoints.toFixed(1)
-              : (player.nextWeekPoints != null ? `~${player.nextWeekPoints.toFixed(1)}` : null);
             const rightSlot = (
               <div className="flex flex-col items-end shrink-0 w-16 text-right">
                 <span className="text-white font-bold text-sm tabular-nums leading-tight">
                   {primary}
                 </span>
-                {subValue != null && (
-                  <span
-                    className="text-gray-400 text-[10px] tabular-nums leading-tight"
-                    title={sort === "projected" ? "Season total" : "Projected for the next event"}
-                  >
-                    {subLabel} {subValue}
-                  </span>
-                )}
               </div>
             );
 

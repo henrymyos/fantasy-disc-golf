@@ -115,6 +115,12 @@ export default async function LeagueSettingsPage({
           />
         )}
 
+        <Tile
+          href={`/league/${id}/archive`}
+          title="Archive"
+          subtitle="Past seasons' standings and rosters"
+        />
+
         {keepersPerTeam > 0 && (
           <Tile
             href={`${base}/keepers`}

@@ -13,6 +13,7 @@ import { applyProjectionVariance } from "@/lib/projections";
 import { getActiveTournament } from "@/lib/lineup-lock";
 import { LeagueChat } from "@/components/league-chat";
 import { getActivityFeed } from "@/lib/activity-feed";
+import { fetchDiscGolfNews } from "@/lib/news-feed";
 
 // Standard-normal CDF via Abramowitz & Stegun 7.1.26 approximation.
 function normalCdfOnDashboard(x: number): number {
@@ -134,6 +135,16 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   const myMembership = (members ?? []).find((m) => m.user_id === user.id);
 
   const activity = await getActivityFeed(supabase, Number(id), 15);
+  const news = await fetchDiscGolfNews(6);
+
+  // Most recent finalized recap, surfaced on the dashboard.
+  const { data: latestRecap } = await supabase
+    .from("weekly_recaps")
+    .select("week, body, created_at")
+    .eq("league_id", id)
+    .order("week", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   // Compute each team's projected total + pace-adjusted finishing estimate
   // for the active/upcoming event so we can surface them on each matchup row
@@ -323,6 +334,20 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
           </div>
         )}
 
+        {latestRecap && (
+          <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="font-bold text-white">Week {(latestRecap as any).week} Recap</h2>
+              <span className="text-gray-400 text-xs">
+                {new Date((latestRecap as any).created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              </span>
+            </div>
+            <p className="text-gray-200 text-sm leading-relaxed">
+              {(latestRecap as any).body}
+            </p>
+          </div>
+        )}
+
         <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
           <h2 className="font-bold text-white mb-4">Week {league.current_week} Matchups</h2>
           {(matchups ?? []).length === 0 ? (
@@ -385,6 +410,42 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                       })}
                     </p>
                   </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* News feed */}
+        {news.length > 0 && (
+          <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold text-white">Disc Golf News</h2>
+              <a
+                href="https://ultiworld.com/category/disc-golf-news/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-400 hover:text-white text-xs"
+              >
+                Ultiworld →
+              </a>
+            </div>
+            <ul className="space-y-2">
+              {news.map((n) => (
+                <li key={n.link}>
+                  <a
+                    href={n.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block p-3 rounded-xl bg-[#0f1117] border border-white/5 hover:border-white/15 transition"
+                  >
+                    <p className="text-white text-sm font-medium leading-snug">{n.title}</p>
+                    {n.pubDate && (
+                      <p className="text-gray-400 text-[11px] mt-1">
+                        {new Date(n.pubDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      </p>
+                    )}
+                  </a>
                 </li>
               ))}
             </ul>

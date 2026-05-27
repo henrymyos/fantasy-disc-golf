@@ -231,7 +231,15 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
       )}
 
       <div className="flex items-center justify-between">
-        <h2 className="text-white font-bold">Players</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-white font-bold">Players</h2>
+          <Link
+            href={`/league/${id}/compare`}
+            className="text-xs text-[#4B3DFF] hover:text-white border border-[#4B3DFF]/40 hover:border-[#4B3DFF] px-2.5 py-1 rounded-full transition"
+          >
+            Compare
+          </Link>
+        </div>
         {draftComplete && !overLimit && openSpots === 0 && (
           <span className="text-yellow-400 text-xs bg-yellow-400/10 px-3 py-1 rounded-full">
             Roster full — pick a player to drop when adding

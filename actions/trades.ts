@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { enqueueNotification } from "@/lib/notifications";
 
 export type TradeMovement = {
   playerId: number;
@@ -90,6 +91,29 @@ export async function proposeTrade(
       status: "pending" as const,
     })),
   );
+
+  // Notify the owner of every receiving team that a trade is waiting on them.
+  const { data: proposerInfo } = await admin
+    .from("league_members")
+    .select("team_name")
+    .eq("id", proposer.id)
+    .single();
+  const proposerName = (proposerInfo as any)?.team_name ?? "Another team";
+  const { data: receivers } = await admin
+    .from("league_members")
+    .select("id, user_id")
+    .in("id", receiverTeamIds);
+  for (const r of receivers ?? []) {
+    if ((r as any).user_id) {
+      await enqueueNotification(admin, {
+        userId: (r as any).user_id,
+        leagueId,
+        kind: "trade_proposed",
+        body: `${proposerName} proposed a trade.`,
+        link: `/league/${leagueId}/trades`,
+      });
+    }
+  }
 
   revalidatePath(`/league/${leagueId}/trades`);
 }

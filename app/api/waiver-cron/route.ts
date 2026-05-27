@@ -4,6 +4,7 @@ import {
   resetWaiverPriority,
   runWaiverProcessing,
 } from "@/actions/rosters";
+import { runLineupUnsetCheck } from "@/lib/lineup-unset-check";
 
 // Daily Vercel cron. Two responsibilities:
 //   1. When a tournament starts today, lock waivers for every league and reset
@@ -66,6 +67,9 @@ export async function GET(request: Request) {
     }
   }
 
+  // 3) Lineup-unset notifications for any tournament within the next 6h.
+  const lineupCheck = await runLineupUnsetCheck(admin, 6);
+
   return NextResponse.json({
     ok: true,
     today,
@@ -73,5 +77,6 @@ export async function GET(request: Request) {
     startingToday: (startingToday ?? []).map((t: any) => t.name),
     lockedLeagueIds: locked,
     processedLeagueIds: processed,
+    lineupNotificationsSent: lineupCheck.notificationsSent,
   });
 }
