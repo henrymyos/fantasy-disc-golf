@@ -6,6 +6,7 @@ import { DraftScheduleForm } from "@/components/draft-schedule-form";
 import { randomizeDraftOrder } from "@/actions/drafts";
 import { setSecondsPerPick } from "@/actions/draft-config";
 import { DraftTypeForm } from "@/components/draft-type-form";
+import { DurationPicker } from "@/components/duration-picker";
 import { AuctionPanel } from "@/components/auction-panel";
 
 export default async function DraftPage({ params }: { params: Promise<{ id: string }> }) {
@@ -30,7 +31,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
 
   const { data: draft } = await supabase
     .from("drafts")
-    .select("id, status, current_pick, total_rounds, scheduled_at, type, auction_budget, seconds_per_pick, current_pick_started_at")
+    .select("id, status, current_pick, total_rounds, scheduled_at, type, auction_budget, seconds_per_pick, current_pick_started_at, third_round_reversal")
     .eq("league_id", id)
     .single();
 
@@ -69,7 +70,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
 
   const { data: pickRows } = await supabase
     .from("draft_picks")
-    .select("pick_number, team_id, players(name, division)")
+    .select("pick_number, team_id, players(id, name, division)")
     .eq("draft_id", draft?.id ?? 0)
     .order("pick_number");
 
@@ -84,6 +85,33 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
     .from("players")
     .select("id, name, division, world_ranking, overall_rank");
 
+  // This user's personal player rankings for this league (set on the
+  // rankings page). When present, the available-players panel can sort by
+  // them instead of the default points/overall ordering.
+  const { data: myRankingRows } = await supabase
+    .from("user_player_rankings")
+    .select("player_id, rank")
+    .eq("user_id", user.id)
+    .eq("league_id", id)
+    .order("rank", { ascending: true });
+  const myRankings = (myRankingRows ?? []).map((r: any) => ({
+    playerId: r.player_id as number,
+    rank: r.rank as number,
+  }));
+
+  // Sum each player's fantasy points this season so the available list can
+  // be ordered like the points leaders view (highest first).
+  const { data: resultRows } = await supabase
+    .from("tournament_results")
+    .select("player_id, fantasy_points");
+  const pointsByPlayer = new Map<number, number>();
+  (resultRows ?? []).forEach((r: any) => {
+    pointsByPlayer.set(
+      r.player_id,
+      (pointsByPlayer.get(r.player_id) ?? 0) + Number(r.fantasy_points ?? 0),
+    );
+  });
+
   const members = (memberRows ?? []).map((m) => ({
     id: m.id,
     teamName: m.team_name,
@@ -93,6 +121,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
   const picks = (pickRows ?? []).map((p: any) => ({
     pickNumber: p.pick_number,
     teamId: p.team_id,
+    playerId: p.players?.id ?? null,
     playerName: p.players?.name ?? "",
     playerDivision: p.players?.division ?? "MPO",
   }));
@@ -105,6 +134,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
       division: p.division,
       worldRanking: p.world_ranking,
       overallRank: p.overall_rank,
+      totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
     }));
 
   const draftPending = draft?.status === "pending";
@@ -158,25 +188,20 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
 
           <DraftScheduleForm leagueId={Number(id)} scheduledAt={scheduledAt} />
 
-          {/* Seconds per pick */}
+          {/* Per-pick timer */}
           <form
             action={async (formData: FormData) => {
               "use server";
-              const seconds = Number(formData.get("secondsPerPick") ?? 90);
+              const seconds = Number(formData.get("secondsPerPick") ?? 60);
               await setSecondsPerPick(Number(id), seconds);
             }}
             className="flex flex-wrap items-end gap-3 pt-3 border-t border-white/5"
           >
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Seconds per pick</label>
-              <input
-                type="number"
+              <label className="block text-xs text-gray-400 mb-1">Time per pick</label>
+              <DurationPicker
                 name="secondsPerPick"
-                min={15}
-                max={3600}
-                step={5}
-                defaultValue={(draft as any)?.seconds_per_pick ?? 90}
-                className="bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white text-sm w-32"
+                defaultSeconds={(draft as any)?.seconds_per_pick ?? 60}
               />
             </div>
             <button
@@ -194,6 +219,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
             leagueId={Number(id)}
             initialType={((draft as any)?.type ?? "snake") as "snake" | "auction"}
             initialBudget={(draft as any)?.auction_budget ?? 200}
+            initialThirdRoundReversal={!!(draft as any)?.third_round_reversal}
           />
 
           {/* Order */}
@@ -238,12 +264,14 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
           status: draft.status,
           currentPick: draft.current_pick,
           totalRounds: draft.total_rounds,
-          secondsPerPick: (draft as any).seconds_per_pick ?? 90,
+          secondsPerPick: (draft as any).seconds_per_pick ?? 60,
           currentPickStartedAt: (draft as any).current_pick_started_at ?? null,
+          thirdRoundReversal: !!(draft as any).third_round_reversal,
         } : null}
         members={members}
         picks={picks}
         availablePlayers={availablePlayers}
+        myRankings={myRankings}
         myMemberId={myMemberRow?.id ?? null}
         isCommissioner={isCommissioner}
         mpoSlots={mpoSlots}

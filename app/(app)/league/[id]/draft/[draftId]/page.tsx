@@ -25,7 +25,7 @@ export default async function DraftResultPage({
 
   const { data: draft } = await supabase
     .from("drafts")
-    .select("id, status, current_pick, total_rounds")
+    .select("id, status, current_pick, total_rounds, third_round_reversal")
     .eq("id", draftId)
     .eq("league_id", id)
     .single();
@@ -50,7 +50,7 @@ export default async function DraftResultPage({
 
   const { data: pickRows } = await supabase
     .from("draft_picks")
-    .select("pick_number, team_id, players(name, division)")
+    .select("pick_number, team_id, player_id, players(name, division)")
     .eq("draft_id", draft.id)
     .order("pick_number");
 
@@ -63,6 +63,7 @@ export default async function DraftResultPage({
   const picks = (pickRows ?? []).map((p: any) => ({
     pickNumber: p.pick_number,
     teamId: p.team_id,
+    playerId: p.player_id ?? null,
     playerName: p.players?.name ?? "",
     playerDivision: p.players?.division ?? "MPO",
   }));
@@ -77,7 +78,7 @@ export default async function DraftResultPage({
       </Link>
       <DraftBoard
         leagueId={Number(id)}
-        draft={{ id: draft.id, status: draft.status, currentPick: draft.current_pick, totalRounds: draft.total_rounds }}
+        draft={{ id: draft.id, status: draft.status, currentPick: draft.current_pick, totalRounds: draft.total_rounds, thirdRoundReversal: !!(draft as any).third_round_reversal }}
         members={members}
         picks={picks}
         availablePlayers={[]}

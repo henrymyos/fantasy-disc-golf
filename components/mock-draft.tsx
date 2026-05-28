@@ -11,6 +11,7 @@ type Player = {
   division: "MPO" | "FPO";
   worldRanking: number | null;
   overallRank: number | null;
+  totalPoints?: number;
 };
 
 type Pick = {
@@ -116,10 +117,15 @@ export function MockDraft({
   const router = useRouter();
   const [exiting, setExiting] = useState(false);
 
-  // Build a sorted master list of players by overallRank (then fallback worldRanking, then name)
+  // Sort master list to mirror the live draft board: total fantasy points this
+  // season is the primary key (descending), with overallRank/worldRanking/name
+  // as tiebreakers for players who haven't scored yet.
   const sortedAll = useMemo(() => {
     const copy = [...players];
     copy.sort((a, b) => {
+      const pa = a.totalPoints ?? 0;
+      const pb = b.totalPoints ?? 0;
+      if (pa !== pb) return pb - pa;
       const ar = a.overallRank ?? Number.POSITIVE_INFINITY;
       const br = b.overallRank ?? Number.POSITIVE_INFINITY;
       if (ar !== br) return ar - br;

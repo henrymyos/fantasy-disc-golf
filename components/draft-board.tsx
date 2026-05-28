@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef, useTransition } from "react";
+import { useState, useEffect, useMemo, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { startDraft, pauseDraft, resumeDraft, makeDraftPick } from "@/actions/drafts";
+import Link from "next/link";
+import { startDraft, pauseDraft, resumeDraft, makeDraftPick, undoLastPick, undoPick, commissionerMakePick } from "@/actions/drafts";
 import { autoPickFromRankings, autoPickExpired } from "@/actions/rankings";
 
 type DraftInfo = {
@@ -12,16 +13,22 @@ type DraftInfo = {
   totalRounds: number;
   secondsPerPick?: number;
   currentPickStartedAt?: string | null;
+  thirdRoundReversal?: boolean;
 };
 type Member = { id: number; teamName: string; draftPosition: number };
-type PickInfo = { pickNumber: number; teamId: number; playerName: string; playerDivision: string };
-type AvailablePlayer = { id: number; name: string; division: string; worldRanking: number | null; overallRank: number | null };
+type PickInfo = { pickNumber: number; teamId: number; playerId: number | null; playerName: string; playerDivision: string };
+type AvailablePlayer = { id: number; name: string; division: string; worldRanking: number | null; overallRank: number | null; totalPoints?: number };
 type Tab = "all" | "mpo" | "fpo";
 type BottomTab = "available" | "team";
-type PanelSize = "small" | "medium" | "large";
+type PanelSize = "small" | "medium" | "large" | "full";
 
-const PANEL_HEIGHTS: Record<PanelSize, number> = { small: 140, medium: 240, large: 460 };
-const PANEL_ORDER: PanelSize[] = ["small", "medium", "large"];
+// "full" mode hides the board grid and lets the panel take the remaining
+// flex height — the numeric value here isn't used for that case.
+const PANEL_HEIGHTS: Record<PanelSize, number> = { small: 140, medium: 240, large: 460, full: 0 };
+const PANEL_ORDER: PanelSize[] = ["small", "medium", "large", "full"];
+
+type MyRanking = { playerId: number; rank: number };
+type SortMode = "mine" | "default";
 
 type Props = {
   leagueId: number;
@@ -29,6 +36,7 @@ type Props = {
   members: Member[];
   picks: PickInfo[];
   availablePlayers: AvailablePlayer[];
+  myRankings?: MyRanking[];
   myMemberId: number | null;
   isCommissioner: boolean;
   mpoSlots?: number;
@@ -37,9 +45,22 @@ type Props = {
   readOnly?: boolean;
 };
 
-function getPickNumber(round: number, draftPosition: number, numTeams: number): number {
-  const isReversed = round % 2 === 0;
-  return (round - 1) * numTeams + (isReversed ? numTeams - draftPosition + 1 : draftPosition);
+function isRoundReversed(round: number, thirdRoundReversal: boolean): boolean {
+  let reversed = round % 2 === 0;
+  // 3RR keeps R1/R2 normal, then inverts the snake direction from R3 onwards
+  // (R3 reverse, R4 forward, R5 reverse, R6 forward, …).
+  if (thirdRoundReversal && round >= 3) reversed = !reversed;
+  return reversed;
+}
+
+function getPickNumber(
+  round: number,
+  draftPosition: number,
+  numTeams: number,
+  thirdRoundReversal = false,
+): number {
+  const reversed = isRoundReversed(round, thirdRoundReversal);
+  return (round - 1) * numTeams + (reversed ? numTeams - draftPosition + 1 : draftPosition);
 }
 
 function divColor(division: string) {
@@ -51,11 +72,13 @@ function divBg(division: string): string {
 }
 
 function DraftLineupRow({
+  leagueId,
   division,
   slotIndex,
   pick,
   bench = false,
 }: {
+  leagueId: number;
   division: "MPO" | "FPO";
   slotIndex?: number;
   pick: PickInfo | null;
@@ -80,7 +103,17 @@ function DraftLineupRow({
         {division}
       </span>
       {pick ? (
-        <span className="flex-1 text-white text-sm font-medium truncate">{pick.playerName}</span>
+        pick.playerId != null ? (
+          <Link
+            href={`/league/${leagueId}/player/${pick.playerId}`}
+            className="flex-1 text-white text-sm font-medium truncate hover:underline min-w-0"
+            title={`View ${pick.playerName}'s profile`}
+          >
+            {pick.playerName}
+          </Link>
+        ) : (
+          <span className="flex-1 text-white text-sm font-medium truncate">{pick.playerName}</span>
+        )
       ) : (
         <span className="flex-1 text-gray-400 text-sm italic">Empty</span>
       )}
@@ -136,9 +169,23 @@ function PickCountdown({
     void autoPickExpired(leagueId);
   }
 
-  const mm = Math.floor(remaining / 60);
-  const ss = remaining % 60;
-  const display = `${mm}:${ss.toString().padStart(2, "0")}`;
+  // Compact countdown that scales: mm:ss under an hour, "2h 15m" under a day,
+  // "3d 5h" for multi-day async drafts.
+  const display = (() => {
+    if (remaining < 3600) {
+      const mm = Math.floor(remaining / 60);
+      const ss = remaining % 60;
+      return `${mm}:${ss.toString().padStart(2, "0")}`;
+    }
+    if (remaining < 86400) {
+      const hh = Math.floor(remaining / 3600);
+      const mm = Math.floor((remaining % 3600) / 60);
+      return `${hh}h ${mm}m`;
+    }
+    const dd = Math.floor(remaining / 86400);
+    const hh = Math.floor((remaining % 86400) / 3600);
+    return `${dd}d ${hh}h`;
+  })();
   const tone =
     remaining <= 10 ? "text-red-400" : remaining <= 30 ? "text-yellow-300" : "text-gray-400";
   return (
@@ -154,17 +201,80 @@ function splitName(full: string): { first: string; last: string } {
   return { first: parts.slice(0, -1).join(" "), last: parts[parts.length - 1] };
 }
 
-export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, myMemberId, isCommissioner, mpoSlots = 4, fpoSlots = 2, rosterSize = 14, readOnly }: Props) {
+export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, myRankings = [], myMemberId, isCommissioner, mpoSlots = 4, fpoSlots = 2, rosterSize = 14, readOnly }: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("all");
   const [bottomTab, setBottomTab] = useState<BottomTab>("available");
   const [search, setSearch] = useState("");
   const [panelSize, setPanelSize] = useState<PanelSize>("medium");
+  const hasMyRankings = myRankings.length > 0;
+  // Default to the user's own rankings when they've set any; otherwise the
+  // generic points/overall ordering. The user can flip between the two from
+  // the panel header.
+  const [sortMode, setSortMode] = useState<SortMode>(hasMyRankings ? "mine" : "default");
+  const myRankByPlayer = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const r of myRankings) m.set(r.playerId, r.rank);
+    return m;
+  }, [myRankings]);
+  const [viewingTeamId, setViewingTeamId] = useState<number | null>(myMemberId);
+  const [teamPickerOpen, setTeamPickerOpen] = useState(false);
+  const teamPickerRef = useRef<HTMLDivElement | null>(null);
   const [, startTransition] = useTransition();
+
+  // Close the team picker on outside click / Escape.
+  useEffect(() => {
+    if (!teamPickerOpen) return;
+    function onPointer(e: PointerEvent) {
+      if (teamPickerRef.current && !teamPickerRef.current.contains(e.target as Node)) {
+        setTeamPickerOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setTeamPickerOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [teamPickerOpen]);
+
+  // Sync the default viewing team to mine when myMemberId becomes available.
+  useEffect(() => {
+    if (viewingTeamId == null && myMemberId != null) setViewingTeamId(myMemberId);
+  }, [myMemberId, viewingTeamId]);
+
   const panelIdx = PANEL_ORDER.indexOf(panelSize);
   const canEnlarge = panelIdx < PANEL_ORDER.length - 1;
   const canShrink = panelIdx > 0;
-  const panelHeight = PANEL_HEIGHTS[panelSize];
+
+  // Measure the outer container and status bar so we can compute an actual
+  // pixel height for "full" mode — keeping every panel size on the same
+  // transitioned `height` property so the animation stays smooth instead of
+  // snapping when we switch from a fixed size to a flex-based layout.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const statusBarRef = useRef<HTMLDivElement>(null);
+  const [containerH, setContainerH] = useState(0);
+  const [statusH, setStatusH] = useState(0);
+  useEffect(() => {
+    const c = containerRef.current;
+    const s = statusBarRef.current;
+    if (!c || !s) return;
+    const measure = () => {
+      setContainerH(c.clientHeight);
+      setStatusH(s.clientHeight);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(c);
+    ro.observe(s);
+    return () => ro.disconnect();
+  }, []);
+  const PANEL_TOP_MARGIN = 8; // matches mt-2 on the panel wrapper
+  const fullPanelHeight = Math.max(0, containerH - statusH - PANEL_TOP_MARGIN);
+  const panelHeight = panelSize === "full" ? fullPanelHeight : PANEL_HEIGHTS[panelSize];
 
   // Poll when draft is live (skip in read-only view)
   useEffect(() => {
@@ -180,11 +290,12 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
   // Compute whose turn it is
   let currentPickTeamId: number | null = null;
   let currentRound = 1;
+  const trr = !!draft?.thirdRoundReversal;
   if (draft && (draft.status === "in_progress" || draft.status === "paused") && N > 0) {
     currentRound = Math.ceil(currentPick / N);
     const posInRound = currentPick - (currentRound - 1) * N;
-    const isReversed = currentRound % 2 === 0;
-    const slot = isReversed ? N - posInRound + 1 : posInRound;
+    const reversed = isRoundReversed(currentRound, trr);
+    const slot = reversed ? N - posInRound + 1 : posInRound;
     currentPickTeamId = members.find((m) => m.draftPosition === slot)?.id ?? null;
   }
   const isMyPick = draft?.status === "in_progress" && currentPickTeamId !== null && currentPickTeamId === myMemberId;
@@ -193,11 +304,26 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
   const pickMap = new Map<number, PickInfo>();
   picks.forEach((p) => pickMap.set(p.pickNumber, p));
 
-  // Filter + sort available players
+  // Filter + sort available players. Primary order is total fantasy points
+  // earned so far this season (descending) so the list mirrors the
+  // points-leaders view; rank fields are used as tiebreakers and for
+  // players with no results yet.
   const filtered = availablePlayers
     .filter((p) => (tab === "all" ? true : tab === "mpo" ? p.division === "MPO" : p.division !== "MPO"))
     .filter((p) => !search || p.name.toLowerCase().includes(search.toLowerCase()))
+    // In "Mine" mode, only show players the user has actually ranked — don't
+    // pad the bottom with the default-ranked players.
+    .filter((p) => !(sortMode === "mine" && hasMyRankings) || myRankByPlayer.has(p.id))
     .sort((a, b) => {
+      if (sortMode === "mine" && hasMyRankings) {
+        const ra = myRankByPlayer.get(a.id) ?? 9_999_999;
+        const rb = myRankByPlayer.get(b.id) ?? 9_999_999;
+        if (ra !== rb) return ra - rb;
+        return (a.overallRank ?? 9999) - (b.overallRank ?? 9999);
+      }
+      const pa = a.totalPoints ?? 0;
+      const pb = b.totalPoints ?? 0;
+      if (pa !== pb) return pb - pa;
       if (tab === "all") return (a.overallRank ?? 9999) - (b.overallRank ?? 9999);
       return (a.worldRanking ?? 9999) - (b.worldRanking ?? 9999);
     });
@@ -246,9 +372,9 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
 
     // Pick cells for each team
     members.forEach((m) => {
-      const pickNum = getPickNumber(round, m.draftPosition, N);
-      const isReversed = round % 2 === 0;
-      const posInRound = isReversed ? N - m.draftPosition + 1 : m.draftPosition;
+      const pickNum = getPickNumber(round, m.draftPosition, N, trr);
+      const reversed = isRoundReversed(round, trr);
+      const posInRound = reversed ? N - m.draftPosition + 1 : m.draftPosition;
       const pickLabel = `${round}.${posInRound}`;
       const pick = pickMap.get(pickNum);
       const isCurrent =
@@ -256,22 +382,66 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
 
       if (pick) {
         const { first, last } = splitName(pick.playerName);
-        gridCells.push(
-          <div
-            key={`${round}-${m.id}`}
-            style={{ background: divBg(pick.playerDivision), color: "var(--pick-fg)" }}
-            className="flex flex-col p-2 min-h-[80px] rounded-lg"
+        const cellStyle = { background: divBg(pick.playerDivision), color: "var(--pick-fg)" } as const;
+        const canUndo =
+          isCommissioner &&
+          (draft?.status === "in_progress" || draft?.status === "paused" || draft?.status === "complete");
+        // Whole cell is a Link to the player profile (everyone can view).
+        // Commissioners get a small ✕ overlay in the corner that rewinds the
+        // draft to this pick — kept as a sibling of the Link so the click
+        // events don't nest.
+        const cellInner = (
+          <Link
+            href={pick.playerId != null ? `/league/${leagueId}/player/${pick.playerId}` : "#"}
+            style={cellStyle}
+            className="flex flex-col p-2 min-h-[80px] rounded-lg transition hover:ring-2 hover:ring-white/30 hover:brightness-110 cursor-pointer"
+            title={`View ${pick.playerName}'s profile`}
           >
             <div className="flex justify-between items-center">
-              <span className="text-[10px] font-semibold" style={{ color: "var(--pick-fg-muted)" }}>{pick.playerDivision}</span>
               <span className="text-[10px] font-mono" style={{ color: "var(--pick-fg-muted)", opacity: 0.7 }}>{pickLabel}</span>
+              {/* Division label hidden when the ✕ overlay takes its corner. */}
+              {!canUndo && (
+                <span className="text-[10px] font-semibold" style={{ color: "var(--pick-fg-muted)" }}>{pick.playerDivision}</span>
+              )}
             </div>
             <div className="flex-1 flex flex-col justify-end mt-1">
               {first && <p className="text-[11px] leading-tight break-words" style={{ color: "var(--pick-fg-muted)" }}>{first}</p>}
               <p className="font-bold text-sm leading-tight break-words" style={{ color: "var(--pick-fg)" }}>{last}</p>
             </div>
-          </div>
+          </Link>
         );
+        if (canUndo) {
+          const confirmMsg = `Undo pick ${pickLabel} (${pick.playerName})? This rewinds the draft to pick ${pickLabel} — all later picks will be removed and the team will be back on the clock.`;
+          gridCells.push(
+            <div key={`${round}-${m.id}`} className="relative">
+              {cellInner}
+              <form
+                action={undoPick.bind(null, leagueId, pickNum)}
+                onSubmit={(e) => {
+                  if (!window.confirm(confirmMsg)) {
+                    e.preventDefault();
+                    return;
+                  }
+                  startTransition(() => { setTimeout(() => router.refresh(), 300); });
+                }}
+                className="absolute top-1 right-1"
+              >
+                <button
+                  type="submit"
+                  className="w-5 h-5 rounded-full bg-black/35 hover:bg-black/65 text-white text-[11px] leading-none flex items-center justify-center transition"
+                  title={`Undo to pick ${pickLabel} (rewinds all later picks)`}
+                  aria-label={`Undo to pick ${pickLabel}`}
+                >
+                  ×
+                </button>
+              </form>
+            </div>
+          );
+        } else {
+          gridCells.push(
+            <div key={`${round}-${m.id}`}>{cellInner}</div>
+          );
+        }
       } else if (isCurrent) {
         gridCells.push(
           <div
@@ -288,7 +458,7 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
             key={`${round}-${m.id}`}
             className="flex flex-col p-2 min-h-[80px] rounded-lg bg-[#1a1d23]"
           >
-            <div className="flex justify-end">
+            <div className="flex justify-start">
               <span className="text-white/20 text-[10px] font-mono">{pickLabel}</span>
             </div>
           </div>
@@ -306,19 +476,31 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
     draft?.status === "paused" ||
     draft?.status === "complete";
 
-  // My team — picks where teamId === myMemberId, sorted by pickNumber
+  // Team panel state — defaults to my team, can switch via the dropdown.
   const myPicks = myMemberId == null
     ? []
-    : picks.filter((p) => p.teamId === myMemberId).sort((a, b) => a.pickNumber - b.pickNumber);
+    : picks.filter((p) => p.teamId === myMemberId);
+  const effectiveViewingTeamId = viewingTeamId ?? myMemberId;
+  const viewingTeamPicks = effectiveViewingTeamId == null
+    ? []
+    : picks
+        .filter((p) => p.teamId === effectiveViewingTeamId)
+        .sort((a, b) => a.pickNumber - b.pickNumber);
+  const teamsByDraftOrder = [...members].sort(
+    (a, b) => (a.draftPosition ?? 9999) - (b.draftPosition ?? 9999),
+  );
+  const viewingTeam = members.find((m) => m.id === effectiveViewingTeamId) ?? null;
+  const viewingIsMine =
+    effectiveViewingTeamId != null && effectiveViewingTeamId === myMemberId;
 
   // Bucket into starter slots (in pick order, by division) then bench.
-  const myMpoPicks = myPicks.filter((p) => p.playerDivision === "MPO");
-  const myFpoPicks = myPicks.filter((p) => p.playerDivision !== "MPO");
-  const mpoStarterPicks = myMpoPicks.slice(0, mpoSlots);
-  const fpoStarterPicks = myFpoPicks.slice(0, fpoSlots);
+  const viewMpoPicks = viewingTeamPicks.filter((p) => p.playerDivision === "MPO");
+  const viewFpoPicks = viewingTeamPicks.filter((p) => p.playerDivision !== "MPO");
+  const mpoStarterPicks = viewMpoPicks.slice(0, mpoSlots);
+  const fpoStarterPicks = viewFpoPicks.slice(0, fpoSlots);
   const benchPicks = [
-    ...myMpoPicks.slice(mpoSlots),
-    ...myFpoPicks.slice(fpoSlots),
+    ...viewMpoPicks.slice(mpoSlots),
+    ...viewFpoPicks.slice(fpoSlots),
   ].sort((a, b) => a.pickNumber - b.pickNumber);
   const filledStarters = mpoStarterPicks.length + fpoStarterPicks.length;
   const totalStarterSlots = mpoSlots + fpoSlots;
@@ -326,10 +508,10 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
   const emptyBenchCount = Math.max(0, benchCapacity - benchPicks.length);
 
   return (
-    <div className="flex flex-col" style={{ height: "calc(100vh - 152px)" }}>
+    <div ref={containerRef} className="flex flex-col" style={{ height: "calc(100vh - 152px)" }}>
 
       {/* Status bar */}
-      <div className="flex items-center justify-between px-1 py-2 shrink-0">
+      <div ref={statusBarRef} className="flex items-center justify-between px-1 py-2 shrink-0">
         <div className="flex items-center gap-3">
           {draft?.status === "pending" && <span className="text-gray-400 text-sm">Draft has not started</span>}
           {draft?.status === "in_progress" && (
@@ -337,7 +519,7 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
               <span className="text-white text-sm font-semibold">Round {currentRound} · Pick {currentPick} of {N * totalRounds}</span>
               <PickCountdown
                 leagueId={leagueId}
-                secondsPerPick={draft.secondsPerPick ?? 90}
+                secondsPerPick={draft.secondsPerPick ?? 60}
                 startedAt={draft.currentPickStartedAt ?? null}
                 pickNumber={currentPick}
               />
@@ -371,6 +553,18 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
                 </button>
               </form>
             )}
+            {isCommissioner &&
+              (draft?.status === "in_progress" || draft?.status === "paused" || draft?.status === "complete") &&
+              picks.length > 0 && (
+                <form action={undoLastPick.bind(null, leagueId)}>
+                  <button
+                    className="border border-white/15 text-gray-300 hover:bg-white/5 hover:text-white px-3 py-1.5 rounded-lg text-sm font-semibold transition"
+                    title="Undo the most recent pick"
+                  >
+                    Undo pick
+                  </button>
+                </form>
+              )}
             {isCommissioner && draft?.status === "in_progress" && (
               <form action={pauseDraft.bind(null, leagueId)}>
                 <button className="border border-yellow-500/40 text-yellow-400 hover:bg-yellow-400/10 px-4 py-1.5 rounded-lg text-sm font-semibold transition">
@@ -389,8 +583,9 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
         )}
       </div>
 
-      {/* Board grid */}
-      <div className="flex-1 overflow-auto rounded-xl border border-white/5">
+      {/* Board grid. `min-h-0` lets the flex item shrink to 0 height when the
+          panel claims all available space (e.g. in full-screen panel mode). */}
+      <div className="flex-1 min-h-0 overflow-auto rounded-xl border border-white/5">
         {N === 0 ? (
           <div className="h-full flex items-center justify-center text-gray-400 text-sm">
             No teams have joined yet
@@ -454,12 +649,35 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
                   bottomTab === "team" ? "bg-[#4B3DFF] text-white" : "text-gray-400 hover:text-white"
                 }`}
               >
-                My Team ({myPicks.length})
+                Team ({viewingTeamPicks.length})
               </button>
             </div>
 
             {bottomTab === "available" && (
               <div className="ml-auto flex flex-col-reverse sm:flex-row sm:items-center gap-2">
+                {hasMyRankings && (
+                  <div className="flex gap-1 bg-[#0f1117] rounded-lg p-0.5 w-48 sm:w-auto">
+                    {([
+                      { key: "mine", label: "Mine" },
+                      { key: "default", label: "Points" },
+                    ] as { key: SortMode; label: string }[]).map((opt) => (
+                      <button
+                        key={opt.key}
+                        onClick={() => setSortMode(opt.key)}
+                        className={`flex-1 sm:flex-initial px-3 py-1 rounded-md text-xs font-semibold transition ${
+                          sortMode === opt.key ? "bg-[#4B3DFF] text-white" : "text-gray-400 hover:text-white"
+                        }`}
+                        title={
+                          opt.key === "mine"
+                            ? "Sort by your personal player rankings"
+                            : "Sort by total fantasy points / overall rank"
+                        }
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className="flex gap-1 bg-[#0f1117] rounded-lg p-0.5 w-48 sm:w-auto">
                   {(["all", "mpo", "fpo"] as Tab[]).map((t) => (
                     <button
@@ -496,34 +714,50 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
               filtered.length === 0 ? (
                 <p className="text-gray-400 text-xs text-center py-6">No players found</p>
               ) : (
-                filtered.map((player) => (
+                filtered.map((player, idx) => (
                   <div
                     key={player.id}
                     className="flex items-center gap-3 px-3 py-2 border-b border-white/5 hover:bg-white/5 transition"
                   >
-                    {isMyPick && draft?.status === "in_progress" ? (
+                    {draft?.status === "in_progress" && (isMyPick || isCommissioner) ? (
                       <form
-                        action={makeDraftPick.bind(null, leagueId, player.id)}
+                        action={(isMyPick ? makeDraftPick : commissionerMakePick).bind(null, leagueId, player.id)}
                         onSubmit={() => startTransition(() => { setTimeout(() => router.refresh(), 300); })}
                         className="shrink-0 -mr-2"
                       >
                         <button
                           type="submit"
-                          className="text-xs bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white px-3 py-1.5 rounded-full transition"
+                          className={`text-xs px-3 py-1.5 rounded-full transition text-white ${
+                            isMyPick
+                              ? "bg-[#4B3DFF] hover:bg-[#3a2ee0]"
+                              : "bg-white/10 hover:bg-white/20 border border-white/15"
+                          }`}
+                          title={isMyPick ? "Draft this player" : "Pick on behalf of the on-clock team"}
                         >
-                          Draft
+                          {isMyPick ? "Draft" : "Assign"}
                         </button>
                       </form>
                     ) : (
                       <span className="w-[60px] shrink-0 -mr-2" />
                     )}
-                    <span className="text-gray-400 text-xs font-mono w-7 text-right shrink-0">
-                      {tab === "all"
-                        ? player.overallRank != null ? `#${player.overallRank}` : ""
-                        : player.worldRanking != null ? `#${player.worldRanking}` : ""}
+                    <span
+                      className="text-gray-400 text-xs font-mono w-7 text-right shrink-0 tabular-nums"
+                      title={
+                        sortMode === "mine" && hasMyRankings
+                          ? "Order by your personal player rankings"
+                          : "Order by total fantasy points this season"
+                      }
+                    >
+                      {idx + 1}
                     </span>
                     <div className="flex-1 min-w-0 flex items-center gap-2">
-                      <span className="text-white text-sm truncate min-w-0">{player.name}</span>
+                      <Link
+                        href={`/league/${leagueId}/player/${player.id}`}
+                        className="text-white text-sm truncate min-w-0 hover:underline"
+                        title={`View ${player.name}'s profile`}
+                      >
+                        {player.name}
+                      </Link>
                       <span className={`text-xs font-semibold shrink-0 ${divColor(player.division)}`}>
                         {player.division}
                       </span>
@@ -531,11 +765,100 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
                   </div>
                 ))
               )
-            ) : myPicks.length === 0 ? (
-              <p className="text-gray-400 text-xs text-center py-6">No picks yet</p>
             ) : (
               <div className="px-3 py-2 space-y-2">
-                <div className="flex items-center justify-between px-1">
+                {/* Team picker — defaults to you, switches the panel to any
+                    team in draft order. */}
+                <div ref={teamPickerRef} className="relative inline-block">
+                  <button
+                    type="button"
+                    onClick={() => setTeamPickerOpen((o) => !o)}
+                    aria-haspopup="listbox"
+                    aria-expanded={teamPickerOpen}
+                    className={`inline-flex items-center gap-2 bg-[#0f1117] border rounded-lg px-3 py-2 text-white text-sm transition ${
+                      teamPickerOpen
+                        ? "border-[#4B3DFF]/60"
+                        : "border-white/10 hover:border-white/30"
+                    }`}
+                  >
+                    <span className="text-left">
+                      {viewingTeam?.teamName ?? "Pick a team"}
+                      {viewingIsMine && (
+                        <span className="text-gray-400 text-xs ml-1.5">(you)</span>
+                      )}
+                    </span>
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className={`shrink-0 text-gray-400 transition-transform ${teamPickerOpen ? "rotate-180" : ""}`}
+                      aria-hidden="true"
+                    >
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </button>
+                  {teamPickerOpen && (
+                    <div
+                      role="listbox"
+                      tabIndex={-1}
+                      className="absolute left-0 right-0 top-full mt-2 z-30 max-h-72 overflow-y-auto bg-[#1a1d23] border border-white/10 rounded-xl shadow-xl p-1"
+                    >
+                      {teamsByDraftOrder.map((t) => {
+                        const isMe = t.id === myMemberId;
+                        const isSelected = t.id === effectiveViewingTeamId;
+                        const teamPickCount = picks.filter((p) => p.teamId === t.id).length;
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            role="option"
+                            aria-selected={isSelected}
+                            onClick={() => {
+                              setViewingTeamId(t.id);
+                              setTeamPickerOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition flex items-center gap-2 ${
+                              isSelected
+                                ? "bg-[#4B3DFF]/15 text-white"
+                                : "text-gray-300 hover:bg-white/5 hover:text-white"
+                            }`}
+                          >
+                            <span className="text-gray-400 text-[10px] font-mono w-5 shrink-0 text-right">
+                              {t.draftPosition ?? "—"}
+                            </span>
+                            <span className="flex-1 truncate">
+                              {t.teamName}
+                              {isMe && <span className="text-gray-400 text-xs ml-1">(you)</span>}
+                            </span>
+                            <span className="text-gray-400 text-xs shrink-0 tabular-nums">{teamPickCount}</span>
+                            {isSelected && (
+                              <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="#4B3DFF"
+                                strokeWidth="2.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                aria-hidden="true"
+                              >
+                                <path d="M20 6L9 17l-5-5" />
+                              </svg>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between px-1 pt-1">
                   <span className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Starters</span>
                   <span className="text-gray-400 text-xs">{filledStarters}/{totalStarterSlots}</span>
                 </div>
@@ -543,6 +866,7 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
                   {Array.from({ length: mpoSlots }).map((_, i) => (
                     <DraftLineupRow
                       key={`mpo-${i}`}
+                      leagueId={leagueId}
                       division="MPO"
                       slotIndex={i + 1}
                       pick={mpoStarterPicks[i] ?? null}
@@ -551,6 +875,7 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
                   {Array.from({ length: fpoSlots }).map((_, i) => (
                     <DraftLineupRow
                       key={`fpo-${i}`}
+                      leagueId={leagueId}
                       division="FPO"
                       slotIndex={i + 1}
                       pick={fpoStarterPicks[i] ?? null}
@@ -567,6 +892,7 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
                       {benchPicks.map((p) => (
                         <DraftLineupRow
                           key={p.pickNumber}
+                          leagueId={leagueId}
                           division={p.playerDivision === "MPO" ? "MPO" : "FPO"}
                           pick={p}
                           bench

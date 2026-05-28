@@ -11,6 +11,7 @@ export async function setDraftConfig(
   leagueId: number,
   type: "snake" | "auction",
   auctionBudget: number,
+  thirdRoundReversal = false,
 ): Promise<void> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -32,9 +33,15 @@ export async function setDraftConfig(
   if (!draft || draft.status !== "pending") return;
 
   const safeBudget = Math.max(50, Math.min(1000, Math.round(auctionBudget) || 200));
+  // 3RR only applies to snake; auction drafts always store false.
+  const effective3rr = type === "snake" ? !!thirdRoundReversal : false;
   await admin
     .from("drafts")
-    .update({ type, auction_budget: safeBudget })
+    .update({
+      type,
+      auction_budget: safeBudget,
+      third_round_reversal: effective3rr,
+    })
     .eq("id", draft.id);
 
   revalidatePath(`/league/${leagueId}/draft`);
@@ -55,7 +62,9 @@ export async function setSecondsPerPick(leagueId: number, seconds: number): Prom
     .single();
   if (!league || league.commissioner_id !== user.id) return;
 
-  const safe = Math.max(15, Math.min(3600, Math.round(seconds) || 90));
+  // Allowed range: 10 seconds to 7 days (covers everything from speed drafts
+  // to multi-day async drafts). Falls back to 60s if the value is missing/garbage.
+  const safe = Math.max(10, Math.min(7 * 24 * 60 * 60, Math.round(seconds) || 60));
   await admin.from("drafts").update({ seconds_per_pick: safe }).eq("league_id", leagueId);
 
   revalidatePath(`/league/${leagueId}/draft`);

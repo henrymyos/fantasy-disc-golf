@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { regenerateLeagueMatchups } from "@/actions/matchups";
+import { snakeSlot } from "@/lib/snake-order";
 
 export async function startDraft(leagueId: number): Promise<void> {
   const supabase = await createClient();
@@ -213,6 +214,163 @@ export async function makeDraftPick(leagueId: number, playerId: number): Promise
   const { data: result } = await admin.rpc("claim_draft_pick", {
     p_league_id: leagueId,
     p_team_id: member.id,
+    p_player_id: playerId,
+  });
+
+  if ((result as any)?.complete) {
+    await regenerateLeagueMatchups(leagueId);
+  }
+
+  revalidatePath(`/league/${leagueId}/draft`);
+  revalidatePath(`/league/${leagueId}/lineups`);
+}
+
+/**
+ * Commissioner-only: rewind the draft to a specific pick. Removes the targeted
+ * pick AND every later pick (along with the rosters rows they created), then
+ * resets drafts.current_pick to that pick number and restarts the per-pick
+ * clock so the on-clock team is back at that slot. If the draft had completed,
+ * flips it back to 'paused' (and league.draft_status back to 'in_progress')
+ * so the commissioner can replay from the rewind point.
+ */
+export async function undoPick(leagueId: number, pickNumber: number): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const admin = createAdminClient();
+  const { data: league } = await admin
+    .from("leagues")
+    .select("commissioner_id")
+    .eq("id", leagueId)
+    .single();
+  if (!league || league.commissioner_id !== user.id) return;
+
+  const { data: draft } = await admin
+    .from("drafts")
+    .select("id, status")
+    .eq("league_id", leagueId)
+    .single();
+  if (!draft) return;
+  if (draft.status !== "in_progress" && draft.status !== "paused" && draft.status !== "complete") {
+    return;
+  }
+  if (!Number.isInteger(pickNumber) || pickNumber < 1) return;
+
+  // Every pick from `pickNumber` onward is rolled back. Pull them so we can
+  // delete the corresponding roster rows in one shot.
+  const { data: rewindPicks } = await admin
+    .from("draft_picks")
+    .select("id, team_id, player_id")
+    .eq("draft_id", draft.id)
+    .gte("pick_number", pickNumber);
+  if (!rewindPicks || rewindPicks.length === 0) return;
+
+  const playerIds = rewindPicks.map((p: any) => p.player_id);
+  await admin
+    .from("rosters")
+    .delete()
+    .eq("league_id", leagueId)
+    .in("player_id", playerIds);
+
+  await admin
+    .from("draft_picks")
+    .delete()
+    .eq("draft_id", draft.id)
+    .gte("pick_number", pickNumber);
+
+  const wasComplete = draft.status === "complete";
+  await admin
+    .from("drafts")
+    .update({
+      current_pick: pickNumber,
+      current_pick_started_at: new Date().toISOString(),
+      status: wasComplete ? "paused" : draft.status,
+    })
+    .eq("id", draft.id);
+  if (wasComplete) {
+    await admin.from("leagues").update({ draft_status: "in_progress" }).eq("id", leagueId);
+  }
+
+  revalidatePath(`/league/${leagueId}/draft`);
+  revalidatePath(`/league/${leagueId}/lineups`);
+}
+
+/**
+ * Convenience wrapper: undo the single most recent pick. Used by the
+ * status-bar "Undo pick" button so callers don't have to know the pick number.
+ */
+export async function undoLastPick(leagueId: number): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const admin = createAdminClient();
+  const { data: draft } = await admin
+    .from("drafts")
+    .select("id")
+    .eq("league_id", leagueId)
+    .single();
+  if (!draft) return;
+
+  const { data: lastPick } = await admin
+    .from("draft_picks")
+    .select("pick_number")
+    .eq("draft_id", (draft as any).id)
+    .order("pick_number", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!lastPick) return;
+
+  await undoPick(leagueId, (lastPick as any).pick_number);
+}
+
+/**
+ * Commissioner-only: make the current pick on behalf of whichever team is on
+ * the clock. Reuses the claim_draft_pick RPC by supplying that team's id so
+ * all of the draft state (lineup slot assignment, roster insertion, current
+ * pick advancement) stays consistent with a normal pick.
+ */
+export async function commissionerMakePick(leagueId: number, playerId: number): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const admin = createAdminClient();
+  const { data: league } = await admin
+    .from("leagues")
+    .select("commissioner_id")
+    .eq("id", leagueId)
+    .single();
+  if (!league || league.commissioner_id !== user.id) return;
+
+  const { data: draft } = await admin
+    .from("drafts")
+    .select("status, current_pick, third_round_reversal")
+    .eq("league_id", leagueId)
+    .single();
+  if (!draft || draft.status !== "in_progress") return;
+
+  const { data: members } = await admin
+    .from("league_members")
+    .select("id, draft_position")
+    .eq("league_id", leagueId)
+    .not("draft_position", "is", null)
+    .order("draft_position");
+  const numTeams = members?.length ?? 0;
+  if (numTeams === 0) return;
+
+  const { slot: draftSlot } = snakeSlot(
+    draft.current_pick,
+    numTeams,
+    (draft as any).third_round_reversal ?? false,
+  );
+  const onClock = members?.find((m: any) => m.draft_position === draftSlot);
+  if (!onClock) return;
+
+  const { data: result } = await admin.rpc("claim_draft_pick", {
+    p_league_id: leagueId,
+    p_team_id: (onClock as any).id,
     p_player_id: playerId,
   });
 

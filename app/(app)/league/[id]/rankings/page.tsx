@@ -35,6 +35,20 @@ export default async function RankingsPage({ params }: { params: Promise<{ id: s
     .eq("league_id", id)
     .order("rank", { ascending: true });
 
+  // Total fantasy points this season — used as the primary sort for
+  // unranked players so the starting order matches the draft board's
+  // available-players list.
+  const { data: resultRows } = await supabase
+    .from("tournament_results")
+    .select("player_id, fantasy_points");
+  const pointsByPlayer = new Map<number, number>();
+  (resultRows ?? []).forEach((r: any) => {
+    pointsByPlayer.set(
+      r.player_id,
+      (pointsByPlayer.get(r.player_id) ?? 0) + Number(r.fantasy_points ?? 0),
+    );
+  });
+
   const playerById = new Map<number, { id: number; name: string; division: string; overallRank: number | null; worldRanking: number | null }>();
   (players ?? []).forEach((p: any) => {
     playerById.set(p.id, {
@@ -52,7 +66,12 @@ export default async function RankingsPage({ params }: { params: Promise<{ id: s
   const rankedIds = new Set(ranked.map((p) => p.id));
   const unranked = [...playerById.values()]
     .filter((p) => !rankedIds.has(p.id))
-    .sort((a, b) => (a.overallRank ?? 9999) - (b.overallRank ?? 9999));
+    .sort((a, b) => {
+      const pa = pointsByPlayer.get(a.id) ?? 0;
+      const pb = pointsByPlayer.get(b.id) ?? 0;
+      if (pa !== pb) return pb - pa;
+      return (a.overallRank ?? 9999) - (b.overallRank ?? 9999);
+    });
 
   return (
     <div className="max-w-3xl space-y-5">

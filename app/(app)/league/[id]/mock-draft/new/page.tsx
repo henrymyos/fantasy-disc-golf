@@ -33,6 +33,19 @@ export default async function MockDraftPage({
     .select("id, name, division, world_ranking, overall_rank")
     .order("overall_rank", { ascending: true, nullsFirst: false });
 
+  // Total fantasy points this season, used as the primary sort to match the
+  // draft board's available-players ordering.
+  const { data: resultRows } = await supabase
+    .from("tournament_results")
+    .select("player_id, fantasy_points");
+  const pointsByPlayer = new Map<number, number>();
+  (resultRows ?? []).forEach((r: any) => {
+    pointsByPlayer.set(
+      r.player_id,
+      (pointsByPlayer.get(r.player_id) ?? 0) + Number(r.fantasy_points ?? 0),
+    );
+  });
+
   return (
     <MockDraft
       leagueId={id}
@@ -47,6 +60,7 @@ export default async function MockDraftPage({
         division: p.division as "MPO" | "FPO",
         worldRanking: p.world_ranking as number | null,
         overallRank: (p as any).overall_rank as number | null,
+        totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
       }))}
     />
   );
