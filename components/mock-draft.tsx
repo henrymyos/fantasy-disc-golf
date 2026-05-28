@@ -181,6 +181,45 @@ export function MockDraft({
     setCurrentPickIndex((idx) => idx + 1);
   }
 
+  // Pick a player for the bot on the clock. Instead of blindly taking the top
+  // overall-ranked player, the bot respects its target roster composition so
+  // it doesn't (e.g.) draft 7 FPO when the lineup only fits 2.
+  // Target = starters + bench split proportionally to the starter ratio
+  // (so 4 MPO / 2 FPO starters with 4 bench slots → 7 MPO / 3 FPO total).
+  function pickForBot(teamIndex: number): number | undefined {
+    let mpoCount = 0;
+    let fpoCount = 0;
+    for (const p of picks) {
+      if (p.teamIndex !== teamIndex || p.playerId == null) continue;
+      const div = playerById[p.playerId]?.division;
+      if (div === "MPO") mpoCount++;
+      else if (div === "FPO") fpoCount++;
+    }
+
+    const totalStarters = mpoStarters + fpoStarters;
+    const benchSize = Math.max(0, rosterSize - totalStarters);
+    const benchMpo = totalStarters > 0 ? Math.round((benchSize * mpoStarters) / totalStarters) : 0;
+    const benchFpo = benchSize - benchMpo;
+    const mpoTarget = mpoStarters + benchMpo;
+    const fpoTarget = fpoStarters + benchFpo;
+
+    // Pool of available players whose division still has a slot. If both
+    // divisions are already at target (rounding quirk) fall back to the full
+    // list so the bot still makes a pick.
+    const eligible = availableSorted.filter(
+      (p) =>
+        (p.division === "MPO" && mpoCount < mpoTarget) ||
+        (p.division === "FPO" && fpoCount < fpoTarget),
+    );
+    const pool = eligible.length > 0 ? eligible : availableSorted;
+
+    // Mostly take the top of the pool (75%), occasionally reach for #2-#4 so
+    // mock drafts feel less robotic. Weights: 75 / 15 / 7 / 3.
+    const r = Math.random();
+    const idx = r < 0.75 ? 0 : r < 0.9 ? 1 : r < 0.97 ? 2 : 3;
+    return pool[Math.min(idx, pool.length - 1)]?.id;
+  }
+
   // Bot picking loop
   useEffect(() => {
     if (isReadOnly) return;
@@ -192,8 +231,8 @@ export function MockDraft({
     if (onClockTeamIndex === myTeamIndex) return; // user's turn
 
     botTimer.current = setTimeout(() => {
-      const top = availableSorted[0];
-      if (top) makePick(top.id);
+      const pid = pickForBot(onClockTeamIndex);
+      if (pid != null) makePick(pid);
     }, BOT_PICK_DELAY_MS);
 
     return () => {

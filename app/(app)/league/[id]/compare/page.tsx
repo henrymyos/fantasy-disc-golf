@@ -2,6 +2,10 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { PlayerPickerMulti } from "@/components/player-picker-multi";
+import {
+  TournamentRangePicker,
+  type TournamentOpt,
+} from "@/components/tournament-range-picker";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +14,7 @@ export default async function ComparePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ players?: string }>;
+  searchParams: Promise<{ players?: string; from?: string; to?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -47,13 +51,45 @@ export default async function ComparePage({
     division: (p.division ?? "MPO") as "MPO" | "FPO",
   }));
 
-  // For chosen players, pull all results joined with the tournament.
+  // All scheduled tournaments — used for the range picker UI.
+  const { data: allTournaments } = await supabase
+    .from("tournaments")
+    .select("id, name, start_date")
+    .order("start_date", { ascending: true });
+  const tournamentOpts: TournamentOpt[] = (allTournaments ?? []).map((t: any) => ({
+    id: t.id,
+    name: t.name,
+    startDate: t.start_date ?? "",
+  }));
+
+  // Resolve the from/to filter against the start_date of each tournament so
+  // they can be applied as a date range in the query.
+  const fromId = sp.from ? Number(sp.from) : null;
+  const toId = sp.to ? Number(sp.to) : null;
+  const fromTournament = fromId != null ? tournamentOpts.find((t) => t.id === fromId) : null;
+  const toTournament = toId != null ? tournamentOpts.find((t) => t.id === toId) : null;
+  // Normalize order so picking a later "from" than "to" still works.
+  let rangeStart = fromTournament?.startDate ?? null;
+  let rangeEnd = toTournament?.startDate ?? null;
+  if (rangeStart && rangeEnd && rangeStart > rangeEnd) {
+    [rangeStart, rangeEnd] = [rangeEnd, rangeStart];
+  }
+
+  // For chosen players, pull all results joined with the tournament. We apply
+  // the date range against tournaments.start_date when set.
   const players = allOpts.filter((p) => selectedIds.includes(p.id));
+  let resultsQuery = supabase
+    .from("tournament_results")
+    .select("player_id, tournament_id, finishing_position, fantasy_points, tournaments!inner(name, start_date, week)")
+    .in("player_id", selectedIds);
+  if (rangeStart) {
+    resultsQuery = resultsQuery.gte("tournaments.start_date", rangeStart);
+  }
+  if (rangeEnd) {
+    resultsQuery = resultsQuery.lte("tournaments.start_date", rangeEnd);
+  }
   const { data: results } = selectedIds.length > 0
-    ? await supabase
-        .from("tournament_results")
-        .select("player_id, tournament_id, finishing_position, fantasy_points, tournaments(name, start_date, week)")
-        .in("player_id", selectedIds)
+    ? await resultsQuery
     : { data: [] };
 
   // Build per-tournament rows: { tournamentId, name, startDate, week, byPlayer: Map<playerId, {finish, pts}> }
@@ -75,7 +111,7 @@ export default async function ComparePage({
     a.startDate.localeCompare(b.startDate),
   );
 
-  // Totals per player.
+  // Totals per player (over the filtered range).
   const totals = new Map<number, { pts: number; events: number; finishSum: number; bestFinish: number; wins: number }>();
   for (const p of players) totals.set(p.id, { pts: 0, events: 0, finishSum: 0, bestFinish: 99, wins: 0 });
   (results ?? []).forEach((r: any) => {
@@ -89,6 +125,8 @@ export default async function ComparePage({
     if (fin > 0 && fin < t.bestFinish) t.bestFinish = fin;
     if (fin === 1) t.wins += 1;
   });
+
+  const rangeLabel = describeRange(fromTournament, toTournament);
 
   return (
     <div className="max-w-3xl space-y-5">
@@ -107,6 +145,20 @@ export default async function ComparePage({
           Pick two or more players to compare season totals and per-event head-to-head.
         </p>
       </div>
+
+      {tournamentOpts.length > 0 && (
+        <div className="bg-[#1a1d23] rounded-2xl p-4 border border-white/5">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <h3 className="text-white font-semibold text-sm">Tournament range</h3>
+            <span className="text-gray-400 text-xs">{rangeLabel}</span>
+          </div>
+          <TournamentRangePicker
+            tournaments={tournamentOpts}
+            selectedFrom={fromId}
+            selectedTo={toId}
+          />
+        </div>
+      )}
 
       {players.length === 0 ? (
         <div className="bg-[#1a1d23] rounded-2xl p-12 border border-white/5 text-center">
@@ -228,4 +280,18 @@ export default async function ComparePage({
       )}
     </div>
   );
+}
+
+function describeRange(
+  from: TournamentOpt | null | undefined,
+  to: TournamentOpt | null | undefined,
+): string {
+  if (!from && !to) return "All tournaments";
+  if (from && to) {
+    if (from.id === to.id) return `Just ${from.name}`;
+    const [a, b] = (from.startDate ?? "") <= (to.startDate ?? "") ? [from, to] : [to, from];
+    return `${a.name} → ${b.name}`;
+  }
+  if (from) return `From ${from.name}`;
+  return `Through ${to!.name}`;
 }
