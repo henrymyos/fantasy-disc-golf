@@ -60,10 +60,10 @@ export default async function LeagueSettingsPage({
     <div className="max-w-2xl space-y-5">
       <div className="grid grid-cols-2 gap-3">
         {inviteCode && (
-          <div className="bg-[#1a1d23] rounded-2xl border border-white/5 p-4 min-h-[120px] flex flex-col justify-between">
+          <div className="col-span-2 sm:col-span-1 bg-[#1a1d23] rounded-2xl border border-white/5 p-4 min-h-[120px] flex flex-col justify-between">
             <p className="text-white font-bold text-base leading-tight">Invite Code</p>
             <div className="flex items-center gap-2">
-              <span className="flex-1 min-w-0 font-mono text-white font-bold text-lg tracking-widest border border-white/10 rounded-lg px-3 py-2 bg-white/5 select-all text-center truncate">
+              <span className="flex-1 min-w-0 font-mono text-white font-bold text-lg tracking-wider border border-white/10 rounded-lg px-3 py-2 bg-white/5 select-all text-center break-all">
                 {inviteCode}
               </span>
               <CopyButton value={inviteCode} label="Copy invite code" />
