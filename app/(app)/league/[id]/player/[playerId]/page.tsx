@@ -236,47 +236,49 @@ export default async function PlayerPage({
           </div>
         )}
 
-        <div className="flex items-center gap-4">
-          <div
-            className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-black text-lg shrink-0"
-            style={{ background: `${accentColor}25`, border: `1.5px solid ${accentColor}40` }}
-          >
-            {player.name[0]?.toUpperCase()}
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="text-white font-bold text-xl truncate">{player.name}</h1>
-              {isMine && (
-                <ConfirmDropButton
-                  leagueId={Number(id)}
-                  playerId={player.id}
-                  playerName={player.name}
-                />
-              )}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-4 min-w-0">
+            <div
+              className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-black text-lg shrink-0"
+              style={{ background: `${accentColor}25`, border: `1.5px solid ${accentColor}40` }}
+            >
+              {player.name[0]?.toUpperCase()}
             </div>
-            <div className="flex items-center gap-2 mt-1">
-              <span
-                className="text-xs font-bold uppercase px-2 py-0.5 rounded"
-                style={{ color: accentColor, background: `${accentColor}20` }}
-              >
-                {player.division}
-              </span>
-              {(player as any).pdga_rating != null && (
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h1 className="text-white font-bold text-xl truncate">{player.name}</h1>
+                {isMine && (
+                  <ConfirmDropButton
+                    leagueId={Number(id)}
+                    playerId={player.id}
+                    playerName={player.name}
+                  />
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
                 <span
-                  className="text-xs font-bold px-2 py-0.5 rounded tabular-nums"
+                  className="text-xs font-bold uppercase px-2 py-0.5 rounded"
                   style={{ color: accentColor, background: `${accentColor}20` }}
-                  title="Current PDGA Rating"
                 >
-                  {(player as any).pdga_rating} rated
+                  {player.division}
                 </span>
-              )}
-              {player.world_ranking && (
-                <span className="text-gray-400 text-xs">#{player.world_ranking} world ranking</span>
-              )}
+                {(player as any).pdga_rating != null && (
+                  <span
+                    className="text-xs font-bold px-2 py-0.5 rounded tabular-nums"
+                    style={{ color: accentColor, background: `${accentColor}20` }}
+                    title="Current PDGA Rating"
+                  >
+                    {(player as any).pdga_rating} rated
+                  </span>
+                )}
+                {player.world_ranking && (
+                  <span className="text-gray-400 text-xs">#{player.world_ranking} world ranking</span>
+                )}
+              </div>
             </div>
           </div>
           {playedEvents.length > 0 && (
-            <div className="ml-auto flex gap-5 shrink-0">
+            <div className="flex gap-5 sm:ml-auto shrink-0">
               <div className="text-center">
                 <p className="font-bold text-lg" style={{ color: totalPtsColor(totalPts) }}>{totalPts.toFixed(1)}</p>
                 <p className="text-gray-400 text-xs">Total pts</p>
@@ -312,7 +314,7 @@ export default async function PlayerPage({
         ) : (
           <div className="bg-[#1a1d23] rounded-2xl border border-white/5 overflow-hidden">
             {/* Header row */}
-            <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-4 px-4 py-2 border-b border-white/5">
+            <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-2 sm:gap-x-4 px-3 sm:px-4 py-2 border-b border-white/5">
               <span className="text-gray-400 text-xs font-semibold uppercase tracking-wide">Event</span>
               <span className="text-gray-400 text-xs font-semibold uppercase tracking-wide text-right w-14">Pts</span>
               <span className="text-gray-400 text-xs font-semibold uppercase tracking-wide text-right w-12">Finish</span>
@@ -332,7 +334,7 @@ export default async function PlayerPage({
               return (
                 <div
                   key={event.id}
-                  className={`grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-4 px-4 py-3 items-center ${
+                  className={`grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-2 sm:gap-x-4 px-3 sm:px-4 py-3 items-center ${
                     i !== 0 ? "border-t border-white/5" : ""
                   }`}
                 >
