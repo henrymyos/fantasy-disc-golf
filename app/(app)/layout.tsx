@@ -89,7 +89,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main content */}
-      <main className="md:ml-14 lg:ml-56 p-4 lg:p-6 pb-24 md:pb-6 min-h-screen">
+      <main className="md:ml-14 lg:ml-56 p-4 lg:p-6 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] md:pb-6 min-h-screen">
         {children}
       </main>
 

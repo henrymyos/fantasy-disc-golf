@@ -29,6 +29,13 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#4B3DFF",
+  width: "device-width",
+  initialScale: 1,
+  // Let content extend into the notch/home-indicator area so our
+  // env(safe-area-inset-*) padding (top bar, bottom nav) actually resolves.
+  // Without this, those insets are 0 and the installed PWA clips under the
+  // status bar and home indicator.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
