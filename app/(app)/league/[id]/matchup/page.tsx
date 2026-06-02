@@ -448,15 +448,15 @@ function SectionHeader({
 }) {
   return (
     <div
-      className={`grid grid-cols-[1fr_3rem_auto_3rem_1fr] gap-2 px-4 py-2 border-b border-white/5 text-[10px] uppercase tracking-wider font-semibold ${
+      className={`grid grid-cols-[1fr_2.5rem_auto_2.5rem_1fr] sm:grid-cols-[1fr_3rem_auto_3rem_1fr] gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 border-b border-white/5 text-[10px] uppercase tracking-wider font-semibold ${
         muted ? "bg-[#13151b] text-gray-400" : "bg-[#0f1117] text-gray-400"
       }`}
     >
-      <span>{t1Name ?? ""}</span>
+      <span className="truncate">{t1Name ?? ""}</span>
       <span />
-      <span className="text-center w-12">{label}</span>
+      <span className="text-center w-10 sm:w-12">{label}</span>
       <span />
-      <span className="text-right">{t2Name ?? ""}</span>
+      <span className="text-right truncate">{t2Name ?? ""}</span>
     </div>
   );
 }
@@ -472,10 +472,10 @@ function PairRow({
 }) {
   const slotLabel = left?.slotLabel ?? right?.slotLabel ?? "";
   return (
-    <div className="grid grid-cols-[1fr_3rem_auto_3rem_1fr] gap-2 px-4 py-3 items-center">
+    <div className="grid grid-cols-[1fr_2.5rem_auto_2.5rem_1fr] sm:grid-cols-[1fr_3rem_auto_3rem_1fr] gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-3 items-center">
       <NameCell row={left} leagueId={leagueId} />
       <PointsCell row={left} align="right" />
-      <div className="text-center w-12 text-gray-400 text-[10px] font-mono uppercase tracking-wider">
+      <div className="text-center w-10 sm:w-12 text-gray-400 text-[10px] font-mono uppercase tracking-wider">
         {slotLabel}
       </div>
       <PointsCell row={right} align="left" />
@@ -496,9 +496,9 @@ function NameCell({
   if (!row) return <div className={`text-gray-400 text-sm ${right ? "text-right" : ""}`}>—</div>;
   const accent = row.division === "MPO" ? "#4B3DFF" : "#36D7B7";
   return (
-    <div className={`flex items-center gap-2 min-w-0 ${right ? "flex-row-reverse text-right" : ""}`}>
+    <div className={`flex items-center gap-1.5 sm:gap-2 min-w-0 ${right ? "flex-row-reverse text-right" : ""}`}>
       <span
-        className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0"
+        className="hidden sm:inline-block text-[10px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0"
         style={{ color: accent, background: `${accent}20` }}
       >
         {row.division}
