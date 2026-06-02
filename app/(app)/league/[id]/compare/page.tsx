@@ -171,12 +171,12 @@ export default async function ComparePage({
             <table className="w-full text-sm">
               <thead className="text-gray-400 text-[10px] uppercase tracking-wider">
                 <tr className="border-b border-white/5">
-                  <th className="text-left px-4 py-2">Player</th>
-                  <th className="text-right px-4 py-2">Events</th>
-                  <th className="text-right px-4 py-2">Total Pts</th>
-                  <th className="text-right px-4 py-2">Avg Finish</th>
-                  <th className="text-right px-4 py-2">Best</th>
-                  <th className="text-right px-4 py-2">Wins</th>
+                  <th className="text-left px-3 py-2 sticky left-0 bg-[#1a1d23] z-10 min-w-[150px]">Player</th>
+                  <th className="text-right px-3 py-2 whitespace-nowrap">Events</th>
+                  <th className="text-right px-3 py-2 whitespace-nowrap">Total Pts</th>
+                  <th className="text-right px-3 py-2 whitespace-nowrap">Avg Finish</th>
+                  <th className="text-right px-3 py-2 whitespace-nowrap">Best</th>
+                  <th className="text-right px-3 py-2 whitespace-nowrap">Wins</th>
                 </tr>
               </thead>
               <tbody>
@@ -186,7 +186,7 @@ export default async function ComparePage({
                   const avg = t.events > 0 ? Math.round(t.finishSum / t.events) : null;
                   return (
                     <tr key={p.id} className="border-t border-white/5">
-                      <td className="px-4 py-2.5">
+                      <td className="px-3 py-2.5 sticky left-0 bg-[#1a1d23] z-10 min-w-[150px]">
                         <div className="flex items-center gap-2">
                           <span
                             className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0"
@@ -202,11 +202,11 @@ export default async function ComparePage({
                           </Link>
                         </div>
                       </td>
-                      <td className="px-4 py-2.5 text-right text-white tabular-nums">{t.events}</td>
-                      <td className="px-4 py-2.5 text-right text-white tabular-nums font-semibold">{t.pts.toFixed(1)}</td>
-                      <td className="px-4 py-2.5 text-right text-white tabular-nums">{avg ?? "—"}</td>
-                      <td className="px-4 py-2.5 text-right text-white tabular-nums">{t.bestFinish < 99 ? `#${t.bestFinish}` : "—"}</td>
-                      <td className="px-4 py-2.5 text-right text-white tabular-nums">{t.wins}</td>
+                      <td className="px-3 py-2.5 text-right text-white tabular-nums">{t.events}</td>
+                      <td className="px-3 py-2.5 text-right text-white tabular-nums font-semibold">{t.pts.toFixed(1)}</td>
+                      <td className="px-3 py-2.5 text-right text-white tabular-nums">{avg ?? "—"}</td>
+                      <td className="px-3 py-2.5 text-right text-white tabular-nums">{t.bestFinish < 99 ? `#${t.bestFinish}` : "—"}</td>
+                      <td className="px-3 py-2.5 text-right text-white tabular-nums">{t.wins}</td>
                     </tr>
                   );
                 })}
@@ -224,9 +224,9 @@ export default async function ComparePage({
                 <table className="w-full text-sm">
                   <thead className="text-gray-400 text-[10px] uppercase tracking-wider bg-[#0f1117]">
                     <tr>
-                      <th className="text-left px-4 py-2">Event</th>
+                      <th className="text-left px-3 py-2 sticky left-0 bg-[#0f1117] z-20 w-[150px] min-w-[150px]">Event</th>
                       {players.map((p) => (
-                        <th key={p.id} className="text-right px-4 py-2 whitespace-nowrap">
+                        <th key={p.id} className="text-right px-3 py-2 whitespace-nowrap">
                           {p.name.split(" ").slice(-1)[0]}
                         </th>
                       ))}
@@ -243,7 +243,7 @@ export default async function ComparePage({
                       const max = playedPts.length > 0 ? Math.max(...playedPts) : null;
                       return (
                         <tr key={t.id} className="border-t border-white/5">
-                          <td className="px-4 py-2.5 text-white text-sm">
+                          <td className="px-3 py-2.5 text-white text-sm sticky left-0 bg-[#1a1d23] z-10 w-[150px] min-w-[150px] max-w-[150px]">
                             <p className="font-medium truncate">{t.name}</p>
                             <p className="text-gray-400 text-xs">
                               {t.startDate &&
@@ -254,7 +254,7 @@ export default async function ComparePage({
                             const r = byTournament.get(t.id)?.get(p.id);
                             const isBest = max != null && r?.pts === max && playedPts.length > 1;
                             return (
-                              <td key={p.id} className="px-4 py-2.5 text-right tabular-nums whitespace-nowrap">
+                              <td key={p.id} className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap">
                                 {r ? (
                                   <div>
                                     <p className={`text-sm font-semibold ${isBest ? "text-[#36D7B7]" : "text-white"}`}>

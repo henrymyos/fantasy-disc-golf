@@ -355,11 +355,11 @@ function PlayerRow({
   const accentColor = isMpo ? "#4B3DFF" : "#36D7B7";
 
   return (
-    <div className="bg-[#1a1d23] border border-white/5 rounded-xl px-3 py-2.5 flex items-center gap-3">
+    <div className="bg-[#1a1d23] border border-white/5 rounded-xl px-3 py-2.5 flex items-center gap-2 sm:gap-3">
       {addControl}
 
       {rank != null && (
-        <span className="text-white font-bold text-sm font-mono w-12 shrink-0 text-right">
+        <span className="text-white font-bold text-sm font-mono w-10 sm:w-12 shrink-0 text-right">
           {rank}
         </span>
       )}
