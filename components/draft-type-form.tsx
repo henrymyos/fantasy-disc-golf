@@ -9,6 +9,8 @@ const DRAFT_TYPES: { value: DraftType; label: string }[] = [
   { value: "auction", label: "Auction" },
 ];
 
+const AUCTION_BUDGETS = [100, 200] as const;
+
 export function DraftTypeForm({
   leagueId,
   initialType,
@@ -21,7 +23,9 @@ export function DraftTypeForm({
   initialThirdRoundReversal?: boolean;
 }) {
   const [type, setType] = useState<DraftType>(initialType);
-  const [budget, setBudget] = useState(initialBudget);
+  const [budget, setBudget] = useState<number>(
+    AUCTION_BUDGETS.includes(initialBudget as (typeof AUCTION_BUDGETS)[number]) ? initialBudget : 200,
+  );
   const [thirdRoundReversal, setThirdRoundReversal] = useState(initialThirdRoundReversal);
   const [pending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
@@ -43,15 +47,26 @@ export function DraftTypeForm({
       {type === "auction" && (
         <div>
           <label className="block text-xs text-gray-400 mb-1">Auction budget ($)</label>
-          <input
-            type="number"
-            min={50}
-            max={1000}
-            step={10}
-            value={budget}
-            onChange={(e) => setBudget(Number(e.target.value))}
-            className="bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white text-sm w-32"
-          />
+          <div className="inline-flex rounded-lg border border-white/10 bg-[#0f1117] p-1 gap-1">
+            {AUCTION_BUDGETS.map((amount) => {
+              const selected = budget === amount;
+              return (
+                <button
+                  key={amount}
+                  type="button"
+                  onClick={() => setBudget(amount)}
+                  aria-pressed={selected}
+                  className={`px-4 py-1.5 rounded-md text-sm font-semibold transition ${
+                    selected
+                      ? "bg-[#4B3DFF] text-white"
+                      : "text-gray-300 hover:bg-white/5 hover:text-white"
+                  }`}
+                >
+                  ${amount}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
       {type === "snake" && (

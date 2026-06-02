@@ -3,7 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-type SavedPick = { pickNumber: number; teamIndex: number; playerId: number | null };
+type SavedPick = { pickNumber: number; teamIndex: number; playerId: number | null; price?: number };
 
 export default async function MockDraftHubPage({
   params,
@@ -35,10 +35,19 @@ export default async function MockDraftHubPage({
   const admin = createAdminClient();
   const { data: drafts } = await admin
     .from("mock_drafts")
-    .select("id, my_draft_position, num_teams, roster_size, picks, created_at, status")
+    .select("id, my_draft_position, num_teams, roster_size, picks, created_at, status, draft_type, auction_budget")
     .eq("user_id", user.id)
     .eq("league_id", id)
     .order("created_at", { ascending: false });
+
+  // The league's current draft type, used to label the "start" button so it's
+  // clear a new mock will mirror the real draft.
+  const { data: liveDraft } = await supabase
+    .from("drafts")
+    .select("type")
+    .eq("league_id", id)
+    .single();
+  const liveType = ((liveDraft as any)?.type ?? "snake") as "snake" | "auction";
 
   // Resolve player names for the user's own picks so we can preview their top pick
   const allPlayerIds = new Set<number>();
@@ -72,7 +81,7 @@ export default async function MockDraftHubPage({
             href={`/league/${id}/mock-draft/new`}
             className="bg-[#36D7B7] hover:bg-[#2bc4a6] text-black font-bold text-sm px-4 py-2 rounded-lg transition flex items-center gap-2"
           >
-            <span>🎯</span> Start New Mock Draft
+            <span>🎯</span> Start New Mock {liveType === "auction" ? "Auction" : "Draft"}
           </Link>
         </div>
         <p className="text-gray-400 text-sm mt-2">
@@ -89,10 +98,14 @@ export default async function MockDraftHubPage({
         ) : (
           <div className="bg-[#1a1d23] rounded-2xl border border-white/5 overflow-hidden">
             {(drafts ?? []).map((d, i) => {
+              const isAuction = (d as any).draft_type === "auction";
               const myTeamIndex = d.my_draft_position - 1;
               const myPicks = ((d.picks ?? []) as SavedPick[])
                 .filter((p) => p.teamIndex === myTeamIndex && p.playerId != null)
-                .sort((a, b) => a.pickNumber - b.pickNumber);
+                // Auctions don't have a meaningful pick order, so headline the
+                // priciest acquisition; snake drafts headline the first pick.
+                .sort((a, b) => (isAuction ? (b.price ?? 0) - (a.price ?? 0) : a.pickNumber - b.pickNumber));
+              const spent = myPicks.reduce((s, p) => s + (p.price ?? 0), 0);
               const topPick = myPicks[0]?.playerId ? playersById[myPicks[0].playerId] : null;
               const date = new Date(d.created_at).toLocaleDateString("en-US", {
                 month: "short",
@@ -114,6 +127,15 @@ export default async function MockDraftHubPage({
                       <p className="text-white font-medium text-sm">
                         {date} <span className="text-gray-400">· {time}</span>
                       </p>
+                      <span
+                        className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
+                          isAuction
+                            ? "text-[#4B3DFF] bg-[#4B3DFF]/10 border-[#4B3DFF]/30"
+                            : "text-gray-300 bg-white/5 border-white/10"
+                        }`}
+                      >
+                        {isAuction ? "Auction" : "Snake"}
+                      </span>
                       {(d as any).status === "in_progress" ? (
                         <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded text-yellow-300 bg-yellow-400/15 border border-yellow-400/30">
                           In progress
@@ -125,7 +147,9 @@ export default async function MockDraftHubPage({
                       )}
                     </div>
                     <p className="text-gray-400 text-xs mt-0.5">
-                      Pick #{d.my_draft_position} of {d.num_teams} · {myPicks.length} players drafted
+                      {isAuction
+                        ? `${myPicks.length} players · $${spent} spent`
+                        : `Pick #${d.my_draft_position} of ${d.num_teams} · ${myPicks.length} players drafted`}
                     </p>
                   </div>
                   {topPick && (

@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { MockDraft } from "@/components/mock-draft";
+import { MockAuction } from "@/components/mock-auction";
 
 export default async function MockDraftPage({
   params,
@@ -28,6 +29,17 @@ export default async function MockDraftPage({
     .single();
   if (!member) redirect(`/league/${id}`);
 
+  // Mirror the league's live draft configuration so a mock matches the real
+  // thing (snake vs auction, budget, third-round reversal).
+  const { data: draft } = await supabase
+    .from("drafts")
+    .select("type, auction_budget, third_round_reversal")
+    .eq("league_id", id)
+    .single();
+  const draftType = ((draft as any)?.type ?? "snake") as "snake" | "auction";
+  const auctionBudget = ((draft as any)?.auction_budget ?? 200) as number;
+  const thirdRoundReversal = !!(draft as any)?.third_round_reversal;
+
   const { data: players } = await supabase
     .from("players")
     .select("id, name, division, world_ranking, overall_rank")
@@ -46,6 +58,30 @@ export default async function MockDraftPage({
     );
   });
 
+  const mappedPlayers = (players ?? []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    division: p.division as "MPO" | "FPO",
+    worldRanking: p.world_ranking as number | null,
+    overallRank: (p as any).overall_rank as number | null,
+    totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
+  }));
+
+  if (draftType === "auction") {
+    return (
+      <MockAuction
+        leagueId={id}
+        leagueName={league.name}
+        numTeams={league.max_teams}
+        rosterSize={league.roster_size}
+        mpoStarters={(league as any).mpo_starters ?? 4}
+        fpoStarters={(league as any).fpo_starters ?? 2}
+        budget={auctionBudget}
+        players={mappedPlayers}
+      />
+    );
+  }
+
   return (
     <MockDraft
       leagueId={id}
@@ -54,14 +90,8 @@ export default async function MockDraftPage({
       rosterSize={league.roster_size}
       mpoStarters={(league as any).mpo_starters ?? 4}
       fpoStarters={(league as any).fpo_starters ?? 2}
-      players={(players ?? []).map((p) => ({
-        id: p.id,
-        name: p.name,
-        division: p.division as "MPO" | "FPO",
-        worldRanking: p.world_ranking as number | null,
-        overallRank: (p as any).overall_rank as number | null,
-        totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
-      }))}
+      thirdRoundReversal={thirdRoundReversal}
+      players={mappedPlayers}
     />
   );
 }

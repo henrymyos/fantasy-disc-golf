@@ -2,8 +2,9 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { MockDraft } from "@/components/mock-draft";
+import { MockAuction } from "@/components/mock-auction";
 
-type SavedPick = { pickNumber: number; teamIndex: number; playerId: number | null };
+type SavedPick = { pickNumber: number; teamIndex: number; playerId: number | null; price?: number };
 
 export default async function MockDraftViewerPage({
   params,
@@ -34,7 +35,7 @@ export default async function MockDraftViewerPage({
   const admin = createAdminClient();
   const { data: mock } = await admin
     .from("mock_drafts")
-    .select("id, user_id, league_id, my_draft_position, num_teams, roster_size, picks, created_at, status")
+    .select("id, user_id, league_id, my_draft_position, num_teams, roster_size, picks, created_at, status, draft_type, auction_budget, third_round_reversal")
     .eq("id", Number(mockDraftId))
     .single();
 
@@ -58,6 +59,44 @@ export default async function MockDraftViewerPage({
     );
   });
 
+  const mappedPlayers = (players ?? []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    division: p.division as "MPO" | "FPO",
+    worldRanking: p.world_ranking as number | null,
+    overallRank: (p as any).overall_rank as number | null,
+    totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
+  }));
+
+  if ((mock as any).draft_type === "auction") {
+    return (
+      <MockAuction
+        leagueId={id}
+        leagueName={league.name}
+        numTeams={mock.num_teams}
+        rosterSize={mock.roster_size}
+        mpoStarters={(league as any).mpo_starters ?? 4}
+        fpoStarters={(league as any).fpo_starters ?? 2}
+        budget={(mock as any).auction_budget ?? 200}
+        players={mappedPlayers}
+        initialMockDraft={{
+          id: mock.id,
+          myDraftPosition: mock.my_draft_position,
+          picks: ((mock.picks ?? []) as SavedPick[])
+            .filter((p): p is SavedPick & { playerId: number } => p.playerId != null)
+            .map((p) => ({
+              pickNumber: p.pickNumber,
+              teamIndex: p.teamIndex,
+              playerId: p.playerId,
+              price: p.price ?? 0,
+            })),
+          createdAt: mock.created_at,
+          status: ((mock as any).status ?? "complete") as "in_progress" | "complete",
+        }}
+      />
+    );
+  }
+
   return (
     <MockDraft
       leagueId={id}
@@ -66,14 +105,8 @@ export default async function MockDraftViewerPage({
       rosterSize={mock.roster_size}
       mpoStarters={(league as any).mpo_starters ?? 4}
       fpoStarters={(league as any).fpo_starters ?? 2}
-      players={(players ?? []).map((p) => ({
-        id: p.id,
-        name: p.name,
-        division: p.division as "MPO" | "FPO",
-        worldRanking: p.world_ranking as number | null,
-        overallRank: (p as any).overall_rank as number | null,
-        totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
-      }))}
+      thirdRoundReversal={!!(mock as any).third_round_reversal}
+      players={mappedPlayers}
       initialMockDraft={{
         id: mock.id,
         myDraftPosition: mock.my_draft_position,

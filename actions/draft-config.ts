@@ -32,7 +32,8 @@ export async function setDraftConfig(
     .single();
   if (!draft || draft.status !== "pending") return;
 
-  const safeBudget = Math.max(50, Math.min(1000, Math.round(auctionBudget) || 200));
+  // Auction budget is a fixed choice between $100 and $200.
+  const safeBudget = auctionBudget === 100 ? 100 : 200;
   // 3RR only applies to snake; auction drafts always store false.
   const effective3rr = type === "snake" ? !!thirdRoundReversal : false;
   await admin

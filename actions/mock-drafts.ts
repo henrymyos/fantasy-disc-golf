@@ -9,9 +9,12 @@ type SavedPick = {
   pickNumber: number;
   teamIndex: number;
   playerId: number | null;
+  /** Auction only: price the winning team paid. */
+  price?: number;
 };
 
 type MockStatus = "in_progress" | "complete";
+type MockDraftType = "snake" | "auction";
 
 export async function saveMockDraft(
   leagueId: string,
@@ -22,6 +25,9 @@ export async function saveMockDraft(
     picks: SavedPick[];
     status?: MockStatus;
     id?: number;
+    draftType?: MockDraftType;
+    auctionBudget?: number | null;
+    thirdRoundReversal?: boolean;
   }
 ): Promise<{ id: number }> {
   const supabase = await createClient();
@@ -59,6 +65,9 @@ export async function saveMockDraft(
         roster_size: payload.rosterSize,
         picks: payload.picks,
         status,
+        draft_type: payload.draftType ?? "snake",
+        auction_budget: payload.auctionBudget ?? null,
+        third_round_reversal: payload.thirdRoundReversal ?? false,
       })
       .eq("id", payload.id);
     if (updateError) throw new Error(updateError.message);
@@ -76,6 +85,9 @@ export async function saveMockDraft(
       roster_size: payload.rosterSize,
       picks: payload.picks,
       status,
+      draft_type: payload.draftType ?? "snake",
+      auction_budget: payload.auctionBudget ?? null,
+      third_round_reversal: payload.thirdRoundReversal ?? false,
     })
     .select("id")
     .single();

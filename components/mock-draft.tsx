@@ -32,18 +32,32 @@ const PANEL_ORDER: PanelSize[] = ["small", "medium", "large"];
 
 const BOT_PICK_DELAY_MS = 1000;
 
+/** Whether the given 1-based round runs in reverse draft order. Rounds 1 and 2
+ *  always stay normal snake; with third-round reversal on, every round from 3
+ *  inverts the standard snake direction. Mirrors lib/snake-order.ts. */
+function isRoundReversed(round: number, thirdRoundReversal: boolean): boolean {
+  let reversed = round % 2 === 0;
+  if (thirdRoundReversal && round >= 3) reversed = !reversed;
+  return reversed;
+}
+
 /** Snake order: returns the 0-based team index for a given 0-based pick index. */
-function teamIndexForPick(pickIndex: number, numTeams: number): number {
-  const round = Math.floor(pickIndex / numTeams); // 0-based round
+function teamIndexForPick(pickIndex: number, numTeams: number, thirdRoundReversal: boolean): number {
+  const round = Math.floor(pickIndex / numTeams) + 1; // 1-based round
   const slot = pickIndex % numTeams;
-  return round % 2 === 0 ? slot : numTeams - 1 - slot;
+  return isRoundReversed(round, thirdRoundReversal) ? numTeams - 1 - slot : slot;
 }
 
 /** Builds the per-team pick numbers for a snake draft. */
-function pickNumberFor(round: number, draftPosition: number, numTeams: number): number {
+function pickNumberFor(
+  round: number,
+  draftPosition: number,
+  numTeams: number,
+  thirdRoundReversal: boolean,
+): number {
   // round is 1-based, draftPosition is 1-based
-  const isReversed = round % 2 === 0;
-  return (round - 1) * numTeams + (isReversed ? numTeams - draftPosition + 1 : draftPosition);
+  const reversed = isRoundReversed(round, thirdRoundReversal);
+  return (round - 1) * numTeams + (reversed ? numTeams - draftPosition + 1 : draftPosition);
 }
 
 type Props = {
@@ -54,6 +68,8 @@ type Props = {
   mpoStarters: number;
   fpoStarters: number;
   players: Player[];
+  /** Mirrors the league's live snake setting. */
+  thirdRoundReversal?: boolean;
   /** When provided, hydrate from a previously saved draft. */
   initialMockDraft?: {
     id: number;
@@ -74,6 +90,7 @@ export function MockDraft({
   mpoStarters,
   fpoStarters,
   players,
+  thirdRoundReversal = false,
   initialMockDraft,
 }: Props) {
   // A completed initial draft is shown read-only; an in-progress one is
@@ -155,7 +172,7 @@ export function MockDraft({
   );
 
   const myTeamIndex = myDraftPosition - 1;
-  const onClockTeamIndex = phase === "drafting" ? teamIndexForPick(currentPickIndex, numTeams) : -1;
+  const onClockTeamIndex = phase === "drafting" ? teamIndexForPick(currentPickIndex, numTeams, thirdRoundReversal) : -1;
   const isMyTurn = phase === "drafting" && onClockTeamIndex === myTeamIndex;
   const currentRound = Math.floor(currentPickIndex / numTeams) + 1;
 
@@ -166,7 +183,7 @@ export function MockDraft({
       empty.push({
         pickNumber: i + 1,
         round: Math.floor(i / numTeams) + 1,
-        teamIndex: teamIndexForPick(i, numTeams),
+        teamIndex: teamIndexForPick(i, numTeams, thirdRoundReversal),
         playerId: null,
       });
     }
@@ -275,6 +292,8 @@ export function MockDraft({
             playerId: p.playerId,
           })),
           status: completed ? "complete" : "in_progress",
+          draftType: "snake",
+          thirdRoundReversal,
         });
         draftIdRef.current = res.id;
         setSavedId(res.id);
@@ -295,7 +314,7 @@ export function MockDraft({
     return () => {
       if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     };
-  }, [phase, isReadOnly, leagueId, myDraftPosition, numTeams, rosterSize, picks]);
+  }, [phase, isReadOnly, leagueId, myDraftPosition, numTeams, rosterSize, picks, thirdRoundReversal]);
 
   // Saves the current state immediately and navigates to the mock-draft hub.
   // Works at any time — bots may have a pick in flight, but their pending
@@ -318,6 +337,8 @@ export function MockDraft({
             playerId: p.playerId,
           })),
           status: "in_progress",
+          draftType: "snake",
+          thirdRoundReversal,
         });
       }
     } catch (err) {
@@ -352,7 +373,7 @@ export function MockDraft({
           </Link>
           <h2 className="text-white font-bold text-xl">Mock Draft</h2>
           <p className="text-gray-400 text-sm mt-1">
-            {numTeams} teams · {rosterSize} rounds · snake order · bots take {(BOT_PICK_DELAY_MS / 1000).toFixed(0)}s per pick
+            {numTeams} teams · {rosterSize} rounds · snake order{thirdRoundReversal ? " (3rd-round reversal)" : ""} · bots take {(BOT_PICK_DELAY_MS / 1000).toFixed(0)}s per pick
           </p>
         </div>
 
@@ -360,7 +381,8 @@ export function MockDraft({
           <div>
             <p className="text-white font-semibold text-sm mb-2">Choose your draft position</p>
             <p className="text-gray-400 text-xs mb-4">
-              Pick 1 goes first overall; pick {numTeams} goes last. Snake reverses each round.
+              Pick 1 goes first overall; pick {numTeams} goes last. Snake reverses each round
+              {thirdRoundReversal ? ", and the direction inverts again from round 3 onward." : "."}
             </p>
             <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
               {Array.from({ length: numTeams }, (_, i) => i + 1).map((pos) => {
@@ -517,7 +539,7 @@ export function MockDraft({
                 </div>
                 {Array.from({ length: numTeams }, (_, teamIdx) => {
                   // Find the pick belonging to this (round, teamIdx)
-                  const pickNumber = pickNumberFor(round, teamIdx + 1, numTeams);
+                  const pickNumber = pickNumberFor(round, teamIdx + 1, numTeams, thirdRoundReversal);
                   const pick = picks[pickNumber - 1];
                   const isCurrent = phase === "drafting" && pick && currentPickIndex === pickNumber - 1;
                   const isMine = teamIdx === myTeamIndex;
