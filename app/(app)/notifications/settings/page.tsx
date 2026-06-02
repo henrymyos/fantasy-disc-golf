@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { BackLink } from "@/components/back-link";
 import { NotificationPrefToggle } from "@/components/notification-pref-toggle";
 
 export const dynamic = "force-dynamic";
@@ -39,12 +39,11 @@ export default async function NotificationSettingsPage() {
   return (
     <div className="max-w-xl space-y-5">
       <div>
-        <Link
-          href="/notifications"
+        <BackLink
+          fallbackHref="/notifications"
+          label="Notifications"
           className="text-gray-400 hover:text-white text-sm transition inline-block mb-2"
-        >
-          ← Notifications
-        </Link>
+        />
         <h2 className="text-white font-bold text-xl">Notification Settings</h2>
         <p className="text-gray-400 text-sm mt-1">
           Turn off any of these to stop creating new in-app notifications of that kind. Existing notifications stay in your feed.

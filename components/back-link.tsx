@@ -2,7 +2,15 @@
 
 import { useRouter } from "next/navigation";
 
-export function BackLink({ fallbackHref }: { fallbackHref: string }) {
+export function BackLink({
+  fallbackHref,
+  label = "Back",
+  className = "text-gray-400 hover:text-white text-sm transition inline-block mb-4",
+}: {
+  fallbackHref: string;
+  label?: string;
+  className?: string;
+}) {
   const router = useRouter();
 
   function handleClick(e: React.MouseEvent<HTMLAnchorElement>) {
@@ -18,9 +26,9 @@ export function BackLink({ fallbackHref }: { fallbackHref: string }) {
     <a
       href={fallbackHref}
       onClick={handleClick}
-      className="text-gray-400 hover:text-white text-sm transition inline-block mb-4"
+      className={className}
     >
-      ← Back
+      ← {label}
     </a>
   );
 }
