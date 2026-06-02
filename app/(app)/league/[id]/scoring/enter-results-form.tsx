@@ -80,7 +80,7 @@ export function EnterResultsForm({
             />
             <button
               onClick={() => removeRow(i)}
-              className="text-gray-400 hover:text-red-400 transition text-lg px-1"
+              className="text-gray-400 hover:text-red-400 transition text-lg px-2 shrink-0"
             >
               ×
             </button>
@@ -90,9 +90,9 @@ export function EnterResultsForm({
 
       {/* Bonus points section */}
       <div className="border-t border-white/5 pt-4">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-3">
           <p className="text-sm font-medium text-gray-300">Bonus Points</p>
-          <div className="flex gap-3 text-xs text-gray-400">
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-400">
             <span>🔥 Hot round +{BONUS_POINTS.hotRound}</span>
             <span>✅ Bogey-free +{BONUS_POINTS.bogeyFree}</span>
             <span>🎯 Ace +{BONUS_POINTS.ace}</span>
@@ -102,56 +102,58 @@ export function EnterResultsForm({
         {bonusRows.length > 0 && (
           <div className="space-y-2 mb-3">
             {bonusRows.map((row, i) => (
-              <div key={i} className="flex items-center gap-2">
+              <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-2 border-b border-white/5 pb-2 last:border-0 sm:border-0 sm:pb-0">
                 <select
                   value={row.playerId}
                   onChange={(e) => updateBonus(i, "playerId", Number(e.target.value))}
-                  className="flex-1 bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#4B3DFF]"
+                  className="w-full sm:flex-1 bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#4B3DFF]"
                 >
                   <option value={0}>Select player...</option>
                   {(eligiblePlayers.length > 0 ? eligiblePlayers : players).map((p) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
-                <label className="flex items-center gap-1 text-xs text-gray-400 whitespace-nowrap">
-                  🔥
-                  <input
-                    type="number"
-                    min={0}
-                    max={3}
-                    value={row.hotRoundCount}
-                    onChange={(e) => updateBonus(i, "hotRoundCount", Number(e.target.value))}
-                    className="w-10 bg-[#0f1117] border border-white/10 rounded px-1 py-1 text-white text-sm text-center focus:outline-none focus:border-[#4B3DFF]"
-                  />
-                </label>
-                <label className="flex items-center gap-1 text-xs text-gray-400 whitespace-nowrap">
-                  ✅
-                  <input
-                    type="number"
-                    min={0}
-                    max={3}
-                    value={row.bogeyFreeCount}
-                    onChange={(e) => updateBonus(i, "bogeyFreeCount", Number(e.target.value))}
-                    className="w-10 bg-[#0f1117] border border-white/10 rounded px-1 py-1 text-white text-sm text-center focus:outline-none focus:border-[#4B3DFF]"
-                  />
-                </label>
-                <label className="flex items-center gap-1 text-xs text-gray-400 whitespace-nowrap">
-                  🎯
-                  <input
-                    type="number"
-                    min={0}
-                    max={3}
-                    value={row.aceCount}
-                    onChange={(e) => updateBonus(i, "aceCount", Number(e.target.value))}
-                    className="w-10 bg-[#0f1117] border border-white/10 rounded px-1 py-1 text-white text-sm text-center focus:outline-none focus:border-[#4B3DFF]"
-                  />
-                </label>
-                <button
-                  onClick={() => removeBonusRow(i)}
-                  className="text-gray-400 hover:text-red-400 transition text-lg px-1"
-                >
-                  ×
-                </button>
+                <div className="flex items-center gap-2 sm:shrink-0">
+                  <label className="flex items-center gap-1 text-xs text-gray-400 whitespace-nowrap">
+                    🔥
+                    <input
+                      type="number"
+                      min={0}
+                      max={3}
+                      value={row.hotRoundCount}
+                      onChange={(e) => updateBonus(i, "hotRoundCount", Number(e.target.value))}
+                      className="w-10 bg-[#0f1117] border border-white/10 rounded px-1 py-1 text-white text-sm text-center focus:outline-none focus:border-[#4B3DFF]"
+                    />
+                  </label>
+                  <label className="flex items-center gap-1 text-xs text-gray-400 whitespace-nowrap">
+                    ✅
+                    <input
+                      type="number"
+                      min={0}
+                      max={3}
+                      value={row.bogeyFreeCount}
+                      onChange={(e) => updateBonus(i, "bogeyFreeCount", Number(e.target.value))}
+                      className="w-10 bg-[#0f1117] border border-white/10 rounded px-1 py-1 text-white text-sm text-center focus:outline-none focus:border-[#4B3DFF]"
+                    />
+                  </label>
+                  <label className="flex items-center gap-1 text-xs text-gray-400 whitespace-nowrap">
+                    🎯
+                    <input
+                      type="number"
+                      min={0}
+                      max={3}
+                      value={row.aceCount}
+                      onChange={(e) => updateBonus(i, "aceCount", Number(e.target.value))}
+                      className="w-10 bg-[#0f1117] border border-white/10 rounded px-1 py-1 text-white text-sm text-center focus:outline-none focus:border-[#4B3DFF]"
+                    />
+                  </label>
+                  <button
+                    onClick={() => removeBonusRow(i)}
+                    className="text-gray-400 hover:text-red-400 transition text-lg px-2 ml-auto sm:ml-0"
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
             ))}
           </div>
