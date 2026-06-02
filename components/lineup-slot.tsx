@@ -205,7 +205,7 @@ function StarterPickerModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-4"
       onClick={onClose}
     >
       <div
@@ -395,7 +395,7 @@ export function BenchSlot({
         </div>
         <WeekPointsBadge wp={weekPoints} />
         {!slotsFull && !locked && (
-          <form action={toggleStarter.bind(null, leagueId, benchSpot.id, true)} className="shrink-0 opacity-0 group-hover:opacity-100 transition">
+          <form action={toggleStarter.bind(null, leagueId, benchSpot.id, true)} className="shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition">
             <button
               type="submit"
               className="text-xs font-semibold px-3 py-1 rounded-full border transition"
@@ -452,7 +452,7 @@ function BenchPickerModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-4"
       onClick={onClose}
     >
       <div
