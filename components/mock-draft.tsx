@@ -1,9 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { saveMockDraft } from "@/actions/mock-drafts";
+import {
+  saveMockDraft,
+  shareMockDraft,
+  joinMockDraft,
+  leaveMockDraftSeat,
+  startSharedMockDraft,
+  makeSharedMockPick,
+  getMockDraftState,
+} from "@/actions/mock-drafts";
+import { createClient as createBrowserClient } from "@/lib/supabase/client";
+import type { MockSeats } from "@/lib/mock-draft-types";
 
 type Player = {
   id: number;
@@ -21,7 +31,10 @@ type Pick = {
   playerId: number | null;
 };
 
-type Phase = "setup" | "drafting" | "complete";
+// "lobby" is the pre-start staging area: the board is visible (with empty
+// slots) but nobody is on the clock yet. Solo drafts pass through it briefly;
+// shared drafts sit here while friends claim seats.
+type Phase = "setup" | "lobby" | "drafting" | "complete";
 
 type DivisionTab = "all" | "mpo" | "fpo";
 type BottomTab = "available" | "team";
@@ -31,6 +44,8 @@ const PANEL_HEIGHTS: Record<PanelSize, number> = { small: 180, medium: 300, larg
 const PANEL_ORDER: PanelSize[] = ["small", "medium", "large"];
 
 const BOT_PICK_DELAY_MS = 1000;
+// Backstop refresh for shared drafts in case a Realtime event is dropped.
+const SHARED_POLL_MS = 4000;
 
 /** Whether the given 1-based round runs in reverse draft order. Rounds 1 and 2
  *  always stay normal snake; with third-round reversal on, every round from 3
@@ -60,6 +75,12 @@ function pickNumberFor(
   return (round - 1) * numTeams + (reversed ? numTeams - draftPosition + 1 : draftPosition);
 }
 
+/** Index of the first unfilled pick, or the total count if the board is full. */
+function firstOpenIndex(picks: Pick[], totalPicks: number): number {
+  const i = picks.findIndex((p) => p.playerId == null);
+  return i === -1 ? totalPicks : i;
+}
+
 type Props = {
   leagueId: string;
   leagueName: string;
@@ -70,15 +91,22 @@ type Props = {
   players: Player[];
   /** Mirrors the league's live snake setting. */
   thirdRoundReversal?: boolean;
+  /** The signed-in viewer, used to figure out which seat is theirs and whether
+   *  they're the host of a shared draft. */
+  currentUserId: string;
   /** When provided, hydrate from a previously saved draft. */
   initialMockDraft?: {
     id: number;
     myDraftPosition: number;
     picks: { pickNumber: number; teamIndex: number; playerId: number | null }[];
     createdAt: string;
-    /** If "in_progress", the draft is resumed in editable mode; otherwise
-     *  the saved draft is shown as a read-only completed run. */
-    status?: "in_progress" | "complete";
+    /** "lobby" → shared lobby; "in_progress" → live/resumable; "complete" →
+     *  read-only finished run. */
+    status?: "lobby" | "in_progress" | "complete";
+    /** Shared (multiplayer) draft fields. */
+    isShared?: boolean;
+    hostId?: string;
+    seats?: MockSeats;
   };
 };
 
@@ -91,18 +119,20 @@ export function MockDraft({
   fpoStarters,
   players,
   thirdRoundReversal = false,
+  currentUserId,
   initialMockDraft,
 }: Props) {
   // A completed initial draft is shown read-only; an in-progress one is
   // resumed in editable mode.
-  const isReadOnly = !!initialMockDraft && initialMockDraft.status !== "in_progress";
-  const isResuming = !!initialMockDraft && initialMockDraft.status === "in_progress";
+  const isReadOnly = !!initialMockDraft && initialMockDraft.status === "complete";
 
   const totalPicks = numTeams * rosterSize;
 
   const [phase, setPhase] = useState<Phase>(() => {
     if (!initialMockDraft) return "setup";
-    return initialMockDraft.status === "in_progress" ? "drafting" : "complete";
+    if (initialMockDraft.status === "lobby") return "lobby";
+    if (initialMockDraft.status === "in_progress") return "drafting";
+    return "complete";
   });
   const [myDraftPosition, setMyDraftPosition] = useState<number>(initialMockDraft?.myDraftPosition ?? 1);
   const [picks, setPicks] = useState<Pick[]>(() => {
@@ -127,12 +157,24 @@ export function MockDraft({
   const [savedId, setSavedId] = useState<number | null>(initialMockDraft?.id ?? null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
+  const myColRef = useRef<HTMLDivElement | null>(null);
   const botTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasSavedRef = useRef(!!initialMockDraft && initialMockDraft.status === "complete");
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftIdRef = useRef<number | null>(initialMockDraft?.id ?? null);
   const router = useRouter();
   const [exiting, setExiting] = useState(false);
+
+  // Shared / multiplayer state.
+  const [isShared, setIsShared] = useState<boolean>(initialMockDraft?.isShared ?? false);
+  const [seats, setSeats] = useState<MockSeats>(initialMockDraft?.seats ?? {});
+  const [shareState, setShareState] = useState<"idle" | "sharing" | "copied">("idle");
+  const [seatBusy, setSeatBusy] = useState(false);
+  const [pickPending, setPickPending] = useState(false);
+  // The host owns the row; only the host's browser drives bot picks and can
+  // start the draft. A freshly created (unsaved) draft belongs to the viewer.
+  const hostId = initialMockDraft?.hostId ?? currentUserId;
+  const isHost = hostId === currentUserId;
 
   // Sort master list to mirror the live draft board: total fantasy points this
   // season is the primary key (descending), with overallRank/worldRanking/name
@@ -171,13 +213,44 @@ export function MockDraft({
     [sortedAll, takenIds]
   );
 
-  const myTeamIndex = myDraftPosition - 1;
-  const onClockTeamIndex = phase === "drafting" ? teamIndexForPick(currentPickIndex, numTeams, thirdRoundReversal) : -1;
-  const isMyTurn = phase === "drafting" && onClockTeamIndex === myTeamIndex;
-  const currentRound = Math.floor(currentPickIndex / numTeams) + 1;
+  // In a shared draft the seat the viewer claimed defines "their" team; solo
+  // drafts use the position chosen in setup.
+  const mySeatIndex = useMemo(() => {
+    for (const [k, s] of Object.entries(seats)) if (s.userId === currentUserId) return Number(k);
+    return -1;
+  }, [seats, currentUserId]);
+  const myTeamIndex = isShared ? mySeatIndex : myDraftPosition - 1;
 
-  function start() {
-    // Build empty pick slots
+  // In shared mode the picks array (kept in sync from the DB) is the single
+  // source of truth for who's on the clock; solo mode tracks it locally.
+  const livePickIndex = useMemo(() => firstOpenIndex(picks, totalPicks), [picks, totalPicks]);
+  const currentPick = isShared ? livePickIndex : currentPickIndex;
+
+  const onClockTeamIndex =
+    phase === "drafting"
+      ? isShared
+        ? picks[currentPick]?.teamIndex ?? -1
+        : teamIndexForPick(currentPickIndex, numTeams, thirdRoundReversal)
+      : -1;
+  const isMyTurn = phase === "drafting" && myTeamIndex >= 0 && onClockTeamIndex === myTeamIndex;
+  const currentRound = Math.floor(currentPick / numTeams) + 1;
+  const seatedCount = Object.keys(seats).length;
+
+  /** Display label + "is this me" for a team column / seat. */
+  const labelForTeam = useCallback(
+    (teamIdx: number): { text: string; mine: boolean; bot: boolean } => {
+      const mine = teamIdx === myTeamIndex;
+      if (isShared) {
+        const s = seats[String(teamIdx)];
+        if (!s) return { text: "Bot", mine: false, bot: true };
+        return { text: mine ? "You" : s.name, mine, bot: false };
+      }
+      return { text: mine ? "You" : `Team ${teamIdx + 1}`, mine, bot: false };
+    },
+    [isShared, seats, myTeamIndex],
+  );
+
+  function buildEmptyBoard(): Pick[] {
     const empty: Pick[] = [];
     for (let i = 0; i < totalPicks; i++) {
       empty.push({
@@ -187,13 +260,29 @@ export function MockDraft({
         playerId: null,
       });
     }
-    setPicks(empty);
+    return empty;
+  }
+
+  // Setup → lobby. The board is laid out now but nobody is on the clock until
+  // the draft is actually started.
+  function start() {
+    setPicks(buildEmptyBoard());
     setCurrentPickIndex(0);
-    setPhase("drafting");
+    setPhase("lobby");
   }
 
   function makePick(playerId: number) {
     if (phase !== "drafting") return;
+
+    if (isShared) {
+      if (!isMyTurn || pickPending || draftIdRef.current == null) return;
+      setPickPending(true);
+      makeSharedMockPick(draftIdRef.current, playerId)
+        .catch((err) => setSaveError(err instanceof Error ? err.message : "Pick failed"))
+        .finally(() => setPickPending(false));
+      return;
+    }
+
     if (currentPickIndex >= totalPicks) return;
     setPicks((prev) => {
       const next = [...prev];
@@ -209,43 +298,47 @@ export function MockDraft({
   // it doesn't (e.g.) draft 7 FPO when the lineup only fits 2.
   // Target = starters + bench split proportionally to the starter ratio
   // (so 4 MPO / 2 FPO starters with 4 bench slots → 7 MPO / 3 FPO total).
-  function pickForBot(teamIndex: number): number | undefined {
-    let mpoCount = 0;
-    let fpoCount = 0;
-    for (const p of picks) {
-      if (p.teamIndex !== teamIndex || p.playerId == null) continue;
-      const div = playerById[p.playerId]?.division;
-      if (div === "MPO") mpoCount++;
-      else if (div === "FPO") fpoCount++;
-    }
+  const pickForBot = useCallback(
+    (teamIndex: number): number | undefined => {
+      let mpoCount = 0;
+      let fpoCount = 0;
+      for (const p of picks) {
+        if (p.teamIndex !== teamIndex || p.playerId == null) continue;
+        const div = playerById[p.playerId]?.division;
+        if (div === "MPO") mpoCount++;
+        else if (div === "FPO") fpoCount++;
+      }
 
-    const totalStarters = mpoStarters + fpoStarters;
-    const benchSize = Math.max(0, rosterSize - totalStarters);
-    const benchMpo = totalStarters > 0 ? Math.round((benchSize * mpoStarters) / totalStarters) : 0;
-    const benchFpo = benchSize - benchMpo;
-    const mpoTarget = mpoStarters + benchMpo;
-    const fpoTarget = fpoStarters + benchFpo;
+      const totalStarters = mpoStarters + fpoStarters;
+      const benchSize = Math.max(0, rosterSize - totalStarters);
+      const benchMpo = totalStarters > 0 ? Math.round((benchSize * mpoStarters) / totalStarters) : 0;
+      const benchFpo = benchSize - benchMpo;
+      const mpoTarget = mpoStarters + benchMpo;
+      const fpoTarget = fpoStarters + benchFpo;
 
-    // Pool of available players whose division still has a slot. If both
-    // divisions are already at target (rounding quirk) fall back to the full
-    // list so the bot still makes a pick.
-    const eligible = availableSorted.filter(
-      (p) =>
-        (p.division === "MPO" && mpoCount < mpoTarget) ||
-        (p.division === "FPO" && fpoCount < fpoTarget),
-    );
-    const pool = eligible.length > 0 ? eligible : availableSorted;
+      // Pool of available players whose division still has a slot. If both
+      // divisions are already at target (rounding quirk) fall back to the full
+      // list so the bot still makes a pick.
+      const eligible = availableSorted.filter(
+        (p) =>
+          (p.division === "MPO" && mpoCount < mpoTarget) ||
+          (p.division === "FPO" && fpoCount < fpoTarget),
+      );
+      const pool = eligible.length > 0 ? eligible : availableSorted;
 
-    // Mostly take the top of the pool (75%), occasionally reach for #2-#4 so
-    // mock drafts feel less robotic. Weights: 75 / 15 / 7 / 3.
-    const r = Math.random();
-    const idx = r < 0.75 ? 0 : r < 0.9 ? 1 : r < 0.97 ? 2 : 3;
-    return pool[Math.min(idx, pool.length - 1)]?.id;
-  }
+      // Mostly take the top of the pool (75%), occasionally reach for #2-#4 so
+      // mock drafts feel less robotic. Weights: 75 / 15 / 7 / 3.
+      const r = Math.random();
+      const idx = r < 0.75 ? 0 : r < 0.9 ? 1 : r < 0.97 ? 2 : 3;
+      return pool[Math.min(idx, pool.length - 1)]?.id;
+    },
+    [picks, playerById, availableSorted, mpoStarters, fpoStarters, rosterSize],
+  );
 
-  // Bot picking loop
+  // Local (solo) bot loop — disabled for shared drafts, which drive bots from
+  // the host's browser instead (see below).
   useEffect(() => {
-    if (isReadOnly) return;
+    if (isReadOnly || isShared) return;
     if (phase !== "drafting") return;
     if (currentPickIndex >= totalPicks) {
       setPhase("complete");
@@ -262,7 +355,86 @@ export function MockDraft({
       if (botTimer.current) clearTimeout(botTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, currentPickIndex, onClockTeamIndex, myTeamIndex, availableSorted, totalPicks]);
+  }, [phase, currentPickIndex, onClockTeamIndex, myTeamIndex, availableSorted, totalPicks, isShared]);
+
+  // Shared draft: subscribe to the row over Realtime and poll as a backstop, so
+  // every participant sees seats fill and picks land live.
+  useEffect(() => {
+    if (!isShared || savedId == null) return;
+    const id = savedId;
+    let cancelled = false;
+
+    const applyState = (state: {
+      picks: { pickNumber: number; teamIndex: number; playerId: number | null }[];
+      seats: MockSeats;
+      status: string;
+    }) => {
+      if (cancelled) return;
+      setPicks(
+        (state.picks ?? []).map((p) => ({
+          pickNumber: p.pickNumber,
+          round: Math.ceil(p.pickNumber / numTeams),
+          teamIndex: p.teamIndex,
+          playerId: p.playerId,
+        })),
+      );
+      setSeats(state.seats ?? {});
+      setPhase(
+        state.status === "lobby" ? "lobby" : state.status === "complete" ? "complete" : "drafting",
+      );
+    };
+
+    getMockDraftState(id)
+      .then((s) => s && applyState(s))
+      .catch(() => {});
+
+    const supabase = createBrowserClient();
+    const channel = supabase
+      .channel(`mock_draft_${id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "mock_drafts", filter: `id=eq.${id}` },
+        (payload) => {
+          const row = payload.new as {
+            picks?: { pickNumber: number; teamIndex: number; playerId: number | null }[];
+            seats?: MockSeats;
+            status?: string;
+          };
+          applyState({ picks: row.picks ?? [], seats: row.seats ?? {}, status: row.status ?? "lobby" });
+        },
+      )
+      .subscribe();
+
+    const poll = setInterval(() => {
+      getMockDraftState(id)
+        .then((s) => s && applyState(s))
+        .catch(() => {});
+    }, SHARED_POLL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(poll);
+      supabase.removeChannel(channel);
+    };
+  }, [isShared, savedId, numTeams]);
+
+  // Shared draft: the host's browser drafts for any unclaimed (bot) seat. A
+  // single driver avoids two clients racing to pick for the same bot.
+  useEffect(() => {
+    if (!isShared || !isHost || phase !== "drafting") return;
+    if (currentPick >= totalPicks) return;
+    const teamIdx = picks[currentPick]?.teamIndex;
+    if (teamIdx == null) return;
+    if (seats[String(teamIdx)]) return; // a human owns this seat
+    const id = draftIdRef.current;
+    if (id == null) return;
+
+    const timer = setTimeout(() => {
+      const pid = pickForBot(teamIdx);
+      if (pid != null) makeSharedMockPick(id, pid).catch(() => {});
+    }, BOT_PICK_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [isShared, isHost, phase, currentPick, picks, seats, totalPicks, pickForBot]);
 
   // Scroll the board to keep the current row in view
   useEffect(() => {
@@ -271,11 +443,18 @@ export function MockDraft({
     if (row) row.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [currentRound, phase]);
 
-  // Autosave during drafting (debounced) and once on completion. The first
-  // save creates the row; subsequent saves update it via its stored id.
+  // On mobile the board scrolls horizontally; nudge the viewer's own team
+  // column into view once the board is shown so they don't have to hunt for it.
   useEffect(() => {
-    if (isReadOnly) return;
-    if (phase === "setup") return;
+    if (phase === "setup" || myTeamIndex < 0) return;
+    myColRef.current?.scrollIntoView({ inline: "center", block: "nearest" });
+  }, [phase, myTeamIndex]);
+
+  // Autosave solo drafts during drafting (debounced) and once on completion.
+  // Shared drafts are persisted server-side on every action, so they skip this.
+  useEffect(() => {
+    if (isReadOnly || isShared) return;
+    if (phase === "setup" || phase === "lobby") return;
     if (phase === "complete" && hasSavedRef.current) return;
 
     const completed = phase === "complete";
@@ -314,7 +493,83 @@ export function MockDraft({
     return () => {
       if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     };
-  }, [phase, isReadOnly, leagueId, myDraftPosition, numTeams, rosterSize, picks, thirdRoundReversal]);
+  }, [phase, isReadOnly, isShared, leagueId, myDraftPosition, numTeams, rosterSize, picks, thirdRoundReversal]);
+
+  // Promote the draft to a shareable lobby and copy the invite link. Creates
+  // the row on first share. Host only.
+  async function handleShare() {
+    if (!isHost || shareState === "sharing") return;
+    setShareState("sharing");
+    setSaveError(null);
+    try {
+      const hostSeatIndex = isShared
+        ? mySeatIndex >= 0
+          ? mySeatIndex
+          : 0
+        : myDraftPosition - 1;
+      const res = await shareMockDraft(leagueId, {
+        id: draftIdRef.current ?? undefined,
+        numTeams,
+        rosterSize,
+        hostSeatIndex,
+        thirdRoundReversal,
+      });
+      draftIdRef.current = res.id;
+      setSavedId(res.id);
+      setIsShared(true);
+      const url = `${window.location.origin}/league/${leagueId}/mock-draft/${res.id}/live`;
+      try {
+        await navigator.clipboard.writeText(url);
+        setShareState("copied");
+        setTimeout(() => setShareState("idle"), 2500);
+      } catch {
+        setShareState("idle");
+        window.prompt("Copy this invite link:", url);
+      }
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Couldn't share draft");
+      setShareState("idle");
+    }
+  }
+
+  async function handleClaimSeat(teamIdx: number) {
+    if (seatBusy || draftIdRef.current == null) return;
+    setSeatBusy(true);
+    setSaveError(null);
+    try {
+      await joinMockDraft(draftIdRef.current, teamIdx);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Couldn't claim seat");
+    } finally {
+      setSeatBusy(false);
+    }
+  }
+
+  async function handleLeaveSeat() {
+    if (seatBusy || draftIdRef.current == null) return;
+    setSeatBusy(true);
+    try {
+      await leaveMockDraftSeat(draftIdRef.current);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Couldn't leave seat");
+    } finally {
+      setSeatBusy(false);
+    }
+  }
+
+  async function handleStart() {
+    if (isShared) {
+      if (!isHost || draftIdRef.current == null) return;
+      try {
+        await startSharedMockDraft(draftIdRef.current);
+        setPhase("drafting"); // optimistic; Realtime confirms
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : "Couldn't start draft");
+      }
+      return;
+    }
+    setPhase("drafting");
+  }
 
   // Saves the current state immediately and navigates to the mock-draft hub.
   // Works at any time — bots may have a pick in flight, but their pending
@@ -325,7 +580,9 @@ export function MockDraft({
     if (botTimer.current) clearTimeout(botTimer.current);
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     try {
-      if (phase === "drafting") {
+      // Shared drafts are already persisted on every action; only solo drafts
+      // need a final flush here.
+      if (!isShared && phase === "drafting") {
         await saveMockDraft(leagueId, {
           id: draftIdRef.current ?? undefined,
           myDraftPosition,
@@ -346,18 +603,6 @@ export function MockDraft({
       console.error("Failed to save mock draft on exit", err);
     }
     router.push(`/league/${leagueId}/mock-draft`);
-  }
-
-  function reset() {
-    if (botTimer.current) clearTimeout(botTimer.current);
-    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-    // Forget the saved row so the next run creates a new one.
-    draftIdRef.current = null;
-    hasSavedRef.current = false;
-    setSavedId(null);
-    setPicks([]);
-    setCurrentPickIndex(0);
-    setPhase("setup");
   }
 
   // ── SETUP PHASE ───────────────────────────────────────────────────────────
@@ -410,23 +655,24 @@ export function MockDraft({
             onClick={start}
             className="w-full bg-[#36D7B7] hover:bg-[#2bc4a6] text-black font-bold py-3 rounded-lg transition"
           >
-            Start Draft
+            Continue
           </button>
         </div>
       </div>
     );
   }
 
-  // ── DRAFTING & COMPLETE PHASES ────────────────────────────────────────────
+  // ── LOBBY / DRAFTING / COMPLETE PHASES ────────────────────────────────────
   const myPicks = picks.filter((p) => p.teamIndex === myTeamIndex && p.playerId != null);
 
   const panelIdx = PANEL_ORDER.indexOf(panelSize);
   const canEnlarge = panelIdx < PANEL_ORDER.length - 1;
   const canShrink = panelIdx > 0;
   const panelHeight = PANEL_HEIGHTS[panelSize];
+  const showPanel = phase !== "lobby";
 
   return (
-    <div className="space-y-4" style={{ paddingBottom: panelHeight + 32 }}>
+    <div className="space-y-4" style={{ paddingBottom: (showPanel ? panelHeight : 0) + 32 }}>
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
@@ -458,16 +704,157 @@ export function MockDraft({
                 })}
               </>
             ) : (
-              <>Mock Draft {phase === "complete" && <span className="text-[#36D7B7] text-sm font-semibold">· Complete</span>}</>
+              <>
+                {isShared ? "Shared Mock Draft" : "Mock Draft"}{" "}
+                {phase === "complete" && <span className="text-[#36D7B7] text-sm font-semibold">· Complete</span>}
+              </>
             )}
           </h2>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-gray-400 text-xs bg-white/5 px-3 py-1.5 rounded-full">
-            Your pick: <span className="text-white font-semibold">#{myDraftPosition}</span>
+            {isShared ? (
+              myTeamIndex >= 0 ? (
+                <>Your team: <span className="text-white font-semibold">#{myTeamIndex + 1}</span></>
+              ) : (
+                <span className="text-white font-semibold">Spectating</span>
+              )
+            ) : (
+              <>Your pick: <span className="text-white font-semibold">#{myDraftPosition}</span></>
+            )}
           </span>
         </div>
       </div>
+
+      {/* Lobby controls */}
+      {phase === "lobby" && (
+        <div className="bg-[#1a1d23] rounded-2xl border border-white/5 p-5 space-y-4">
+          {!isShared ? (
+            <>
+              <div>
+                <p className="text-white font-semibold">Ready when you are</p>
+                <p className="text-gray-400 text-sm mt-1">
+                  You&apos;re drafting from spot #{myDraftPosition}. Start solo against bots, or share a
+                  link to draft live with friends — whoever joins claims an open team, and the rest
+                  are filled by bots.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleStart}
+                  className="bg-[#36D7B7] hover:bg-[#2bc4a6] text-black font-bold py-2.5 px-5 rounded-lg transition"
+                >
+                  Start Draft
+                </button>
+                {isHost && (
+                  <button
+                    type="button"
+                    onClick={handleShare}
+                    disabled={shareState === "sharing"}
+                    className="border border-[#4B3DFF] text-[#9b91ff] hover:bg-[#4B3DFF]/10 font-semibold py-2.5 px-5 rounded-lg transition disabled:opacity-50"
+                  >
+                    {shareState === "sharing" ? "Sharing…" : "Share to draft live"}
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <p className="text-white font-semibold">Draft lobby</p>
+                  <p className="text-gray-400 text-sm mt-1">
+                    {seatedCount} of {numTeams} {seatedCount === 1 ? "team" : "teams"} claimed · the
+                    rest draft as bots.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleShare}
+                    disabled={shareState === "sharing"}
+                    className="border border-white/10 hover:border-white/30 text-gray-300 hover:text-white text-sm font-semibold px-4 py-2 rounded-lg transition disabled:opacity-50"
+                  >
+                    {shareState === "copied" ? "Link copied!" : "Copy invite link"}
+                  </button>
+                  {isHost && (
+                    <button
+                      type="button"
+                      onClick={handleStart}
+                      className="bg-[#36D7B7] hover:bg-[#2bc4a6] text-black font-bold text-sm px-5 py-2 rounded-lg transition"
+                    >
+                      Start Draft
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {Array.from({ length: numTeams }, (_, i) => {
+                  const s = seats[String(i)];
+                  const mine = s?.userId === currentUserId;
+                  return (
+                    <div
+                      key={i}
+                      className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 ${
+                        mine
+                          ? "border-[#36D7B7]/40 bg-[#36D7B7]/10"
+                          : s
+                          ? "border-white/10 bg-[#0f1117]"
+                          : "border-dashed border-white/15 bg-[#0f1117]/60"
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">
+                          Team {i + 1}
+                        </p>
+                        <p className="text-sm text-white truncate">
+                          {s ? (
+                            <>
+                              {mine ? "You" : s.name}
+                              {s.isHost && <span className="text-gray-400"> · host</span>}
+                            </>
+                          ) : (
+                            <span className="text-gray-500 italic">Open</span>
+                          )}
+                        </p>
+                      </div>
+                      {!s ? (
+                        <button
+                          type="button"
+                          onClick={() => handleClaimSeat(i)}
+                          disabled={seatBusy}
+                          className="text-xs bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white px-3 py-1 rounded-full transition disabled:opacity-50 shrink-0"
+                        >
+                          Claim
+                        </button>
+                      ) : mine && !s.isHost ? (
+                        <button
+                          type="button"
+                          onClick={handleLeaveSeat}
+                          disabled={seatBusy}
+                          className="text-[11px] text-gray-400 hover:text-white transition disabled:opacity-50 shrink-0"
+                        >
+                          Leave
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {!isHost && (
+                <p className="text-gray-400 text-xs">
+                  {myTeamIndex >= 0
+                    ? "You're in. Waiting for the host to start the draft…"
+                    : "Claim an open team above, then wait for the host to start."}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {/* On the clock banner */}
       {phase === "drafting" && (
@@ -479,14 +866,17 @@ export function MockDraft({
           }`}
         >
           <p className="text-xs uppercase tracking-wider font-semibold text-gray-400">
-            Round {currentRound} · Pick {currentPickIndex + 1} of {totalPicks}
+            Round {currentRound} · Pick {currentPick + 1} of {totalPicks}
           </p>
           <p className="text-base font-bold mt-0.5">
             {isMyTurn ? (
               <span className="text-[#36D7B7]">You&apos;re on the clock</span>
             ) : (
               <span className="text-white">
-                Team {onClockTeamIndex + 1} is picking…
+                {(() => {
+                  const l = labelForTeam(onClockTeamIndex);
+                  return `${l.bot ? `Team ${onClockTeamIndex + 1} (bot)` : l.text} is picking…`;
+                })()}
               </span>
             )}
           </p>
@@ -506,17 +896,19 @@ export function MockDraft({
               gridTemplateColumns: `48px repeat(${numTeams}, minmax(120px, 1fr))`,
             }}
           >
-            <div className="text-[10px] font-bold uppercase text-gray-400 px-2 py-2">Rd</div>
+            <div className="text-[10px] font-bold uppercase text-gray-400 px-2 py-2 sticky left-0 z-20 bg-[#1a1d23]">Rd</div>
             {Array.from({ length: numTeams }, (_, i) => {
-              const isMine = i === myTeamIndex;
+              const l = labelForTeam(i);
               return (
                 <div
                   key={i}
+                  ref={l.mine ? myColRef : undefined}
                   className={`text-[10px] font-bold uppercase tracking-wider px-2 py-2 text-center truncate ${
-                    isMine ? "text-[#36D7B7]" : "text-gray-400"
+                    l.mine ? "text-[#36D7B7]" : "text-gray-400"
                   }`}
+                  title={l.text}
                 >
-                  {isMine ? "You" : `Team ${i + 1}`}
+                  {l.text}
                 </div>
               );
             })}
@@ -534,14 +926,14 @@ export function MockDraft({
                   gridTemplateColumns: `48px repeat(${numTeams}, minmax(120px, 1fr))`,
                 }}
               >
-                <div className="text-xs font-bold text-gray-400 px-2 py-2 flex items-center">
+                <div className="text-xs font-bold text-gray-400 px-2 py-2 flex items-center sticky left-0 z-[5] bg-[#1a1d23]">
                   R{round}
                 </div>
                 {Array.from({ length: numTeams }, (_, teamIdx) => {
                   // Find the pick belonging to this (round, teamIdx)
                   const pickNumber = pickNumberFor(round, teamIdx + 1, numTeams, thirdRoundReversal);
                   const pick = picks[pickNumber - 1];
-                  const isCurrent = phase === "drafting" && pick && currentPickIndex === pickNumber - 1;
+                  const isCurrent = phase === "drafting" && pick && currentPick === pickNumber - 1;
                   const isMine = teamIdx === myTeamIndex;
                   const player = pick?.playerId ? playerById[pick.playerId] : null;
                   const isMpo = player?.division === "MPO";
@@ -591,9 +983,10 @@ export function MockDraft({
         </div>
       </div>
 
-      {/* Tabbed bottom panel: Available / My Team — visible whenever drafting or complete */}
+      {/* Tabbed bottom panel: Available / My Team — hidden in the lobby. */}
+      {showPanel && (
       <div
-        className="fixed bottom-16 md:bottom-0 left-0 md:left-14 lg:left-56 right-0 z-40 bg-[#0f1117]/95 backdrop-blur-sm border-t border-white/5 flex flex-col transition-[height] duration-200"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom)+4rem)] md:bottom-0 left-0 md:left-14 lg:left-56 right-0 z-40 bg-[#0f1117]/95 backdrop-blur-sm border-t border-white/5 flex flex-col transition-[height] duration-200"
         style={{ height: panelHeight }}
       >
           {/* Tab header */}
@@ -689,7 +1082,7 @@ export function MockDraft({
                 players={availableSorted}
                 divTab={divTab}
                 search={search}
-                isMyTurn={isMyTurn && phase === "drafting"}
+                isMyTurn={isMyTurn && phase === "drafting" && !pickPending}
                 onPick={makePick}
               />
             ) : (
@@ -703,15 +1096,18 @@ export function MockDraft({
             )}
           </div>
         </div>
+      )}
 
       {phase === "complete" && !isReadOnly && (
         <div className="bg-[#36D7B7]/10 border border-[#36D7B7]/30 rounded-2xl p-5 flex items-center justify-between gap-4 flex-wrap">
           <div>
             <p className="text-[#36D7B7] font-bold">Mock draft complete</p>
             <p className="text-gray-400 text-xs mt-1">
-              You drafted {myPicks.length} players across {rosterSize} rounds.
-              {savedId && <span className="text-[#36D7B7]"> · Saved</span>}
-              {saveError && <span className="text-red-400"> · Save failed: {saveError}</span>}
+              {myTeamIndex >= 0
+                ? `You drafted ${myPicks.length} players across ${rosterSize} rounds.`
+                : `${totalPicks} picks across ${rosterSize} rounds.`}
+              {!isShared && savedId && <span className="text-[#36D7B7]"> · Saved</span>}
+              {saveError && <span className="text-red-400"> · {saveError}</span>}
             </p>
           </div>
           <div className="flex gap-2">
@@ -729,6 +1125,10 @@ export function MockDraft({
             </Link>
           </div>
         </div>
+      )}
+
+      {saveError && phase !== "complete" && (
+        <p className="text-red-400 text-xs">{saveError}</p>
       )}
     </div>
   );

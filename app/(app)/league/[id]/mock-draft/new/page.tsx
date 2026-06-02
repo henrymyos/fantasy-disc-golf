@@ -91,6 +91,7 @@ export default async function MockDraftPage({
       mpoStarters={(league as any).mpo_starters ?? 4}
       fpoStarters={(league as any).fpo_starters ?? 2}
       thirdRoundReversal={thirdRoundReversal}
+      currentUserId={user.id}
       players={mappedPlayers}
     />
   );
