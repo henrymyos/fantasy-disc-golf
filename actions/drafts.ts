@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { regenerateLeagueMatchups } from "@/actions/matchups";
-import { snakeSlot } from "@/lib/snake-order";
+import { resolvePickOwnerId, buildPickOwnerOverrides } from "@/lib/draft-pick-owners";
 
 export async function startDraft(leagueId: number): Promise<void> {
   const supabase = await createClient();
@@ -346,7 +346,7 @@ export async function commissionerMakePick(leagueId: number, playerId: number): 
 
   const { data: draft } = await admin
     .from("drafts")
-    .select("status, current_pick, third_round_reversal")
+    .select("id, status, current_pick, third_round_reversal")
     .eq("league_id", leagueId)
     .single();
   if (!draft || draft.status !== "in_progress") return;
@@ -357,20 +357,24 @@ export async function commissionerMakePick(leagueId: number, playerId: number): 
     .eq("league_id", leagueId)
     .not("draft_position", "is", null)
     .order("draft_position");
-  const numTeams = members?.length ?? 0;
-  if (numTeams === 0) return;
+  if (!members || members.length === 0) return;
 
-  const { slot: draftSlot } = snakeSlot(
+  const { data: ownerRows } = await admin
+    .from("current_draft_pick_owners")
+    .select("overall_pick, owner_team_id")
+    .eq("draft_id", (draft as any).id);
+
+  const onClockId = resolvePickOwnerId(
     draft.current_pick,
-    numTeams,
+    (members as any[]).map((m) => ({ id: m.id, draftPosition: m.draft_position })),
     (draft as any).third_round_reversal ?? false,
+    buildPickOwnerOverrides(ownerRows as any),
   );
-  const onClock = members?.find((m: any) => m.draft_position === draftSlot);
-  if (!onClock) return;
+  if (onClockId == null) return;
 
   const { data: result } = await admin.rpc("claim_draft_pick", {
     p_league_id: leagueId,
-    p_team_id: (onClock as any).id,
+    p_team_id: onClockId,
     p_player_id: playerId,
   });
 

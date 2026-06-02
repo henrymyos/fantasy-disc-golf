@@ -4,11 +4,14 @@ import { useState, useEffect, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { proposeTrade, respondToTrade, cancelTrade, type TradeMovement, type PickMovement } from "@/actions/trades";
+import { proposeTrade, respondToTrade, cancelTrade, type TradeMovement, type PickMovement, type CurrentPickMovement } from "@/actions/trades";
+import { resolvePickOwnerId } from "@/lib/draft-pick-owners";
 
-type Player = { id: number; name: string; division: string; worldRanking: number | null };
+type Player = { id: number; name: string; division: string; worldRanking: number | null; pickLabel?: string | null };
 type FuturePick = { seasonYear: number; round: number; originalTeamId: number; currentTeamId: number };
-type Team = { id: number; teamName: string; roster: Player[]; picks: FuturePick[] };
+/** A slot of the CURRENT draft (pre-draft, tradeable while the draft is pending). */
+type CurrentDraftPick = { overallPick: number; round: number; posInRound: number; label: string; ownerTeamId: number; originalTeamId: number };
+type Team = { id: number; teamName: string; roster: Player[]; picks: FuturePick[]; currentPicks: CurrentDraftPick[] };
 type Step = "teams" | "players" | "review";
 
 const NEXT_SEASON = new Date().getFullYear() + 1;
@@ -24,6 +27,13 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
   const [selectedTeamIds, setSelectedTeamIds] = useState<Set<number>>(new Set());
   const [movements, setMovements] = useState<TradeMovement[]>([]);
   const [pickMovements, setPickMovements] = useState<PickMovement[]>([]);
+  const [currentPickMovements, setCurrentPickMovements] = useState<CurrentPickMovement[]>([]);
+  // Draft phase drives what's tradeable: order-not-assigned locks the page;
+  // "pending" trades pick slots; "in_progress" trades drafted players (labeled
+  // by pick); "complete" trades players normally.
+  const [orderAssigned, setOrderAssigned] = useState(true);
+  const [draftStatus, setDraftStatus] = useState<string | null>(null);
+  const [draftNumTeams, setDraftNumTeams] = useState(0);
   const [message, setMessage] = useState("");
   const [submitting, startSubmitTransition] = useTransition();
   // True when this trades page was entered via ?with=&want= from another
@@ -92,6 +102,73 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
       swapByOriginal.set(`${s.round}:${s.original_team_id}`, s.current_team_id),
     );
 
+    // ── Current-draft pick ownership (this draft, separate from keeper futures) ─
+    const { data: draftRow } = await supabase
+      .from("drafts")
+      .select("id, status, total_rounds, third_round_reversal")
+      .eq("league_id", lid)
+      .maybeSingle();
+    const cdDraftId = (draftRow as any)?.id ?? null;
+    const cdStatus = (draftRow as any)?.status ?? null;
+    const cdRounds = (draftRow as any)?.total_rounds ?? 0;
+    const cdTrr = !!(draftRow as any)?.third_round_reversal;
+
+    const { data: posMembers } = await supabase
+      .from("league_members")
+      .select("id, draft_position")
+      .eq("league_id", lid);
+    const positioned = (posMembers ?? [])
+      .filter((m: any) => m.draft_position != null)
+      .map((m: any) => ({ id: m.id as number, draftPosition: m.draft_position as number }));
+    const cdNumTeams = positioned.length;
+    const cdOrderAssigned = (posMembers ?? []).length > 0 && cdNumTeams === (posMembers ?? []).length;
+
+    const { data: cdOwnerRows } = cdDraftId
+      ? await supabase
+          .from("current_draft_pick_owners")
+          .select("overall_pick, owner_team_id")
+          .eq("draft_id", cdDraftId)
+      : { data: [] };
+    const cdOverrides = new Map<number, number>(
+      (cdOwnerRows ?? []).map((r: any) => [r.overall_pick, r.owner_team_id]),
+    );
+
+    function labelFor(overall: number): string {
+      const round = Math.ceil(overall / Math.max(1, cdNumTeams));
+      const pos = ((overall - 1) % Math.max(1, cdNumTeams)) + 1;
+      return `${round}.${String(pos).padStart(2, "0")}`;
+    }
+
+    // Drafted players → "R.PP" labels (used when trading made picks mid-draft).
+    const { data: cdMade } = cdDraftId
+      ? await supabase.from("draft_picks").select("pick_number, player_id").eq("draft_id", cdDraftId)
+      : { data: [] };
+    const pickLabelByPlayer = new Map<number, string>();
+    (cdMade ?? []).forEach((p: any) => {
+      if (p.player_id != null) pickLabelByPlayer.set(p.player_id, labelFor(p.pick_number));
+    });
+
+    // A team's unused current-draft slots — only while the draft is "pending".
+    function currentPicksForTeam(teamId: number): CurrentDraftPick[] {
+      if (!cdOrderAssigned || cdDraftId == null || cdNumTeams === 0 || cdStatus !== "pending") return [];
+      const out: CurrentDraftPick[] = [];
+      const total = cdNumTeams * cdRounds;
+      for (let overall = 1; overall <= total; overall++) {
+        const owner = resolvePickOwnerId(overall, positioned, cdTrr, cdOverrides);
+        if (owner !== teamId) continue;
+        const orig = resolvePickOwnerId(overall, positioned, cdTrr, null);
+        out.push({
+          overallPick: overall,
+          round: Math.ceil(overall / cdNumTeams),
+          posInRound: ((overall - 1) % cdNumTeams) + 1,
+          label: labelFor(overall),
+          ownerTeamId: teamId,
+          originalTeamId: orig ?? teamId,
+        });
+      }
+      return out;
+    }
+
     function buildTeam(m: { id: number; team_name: string }): Team {
       const spots = (allRosters ?? []).filter((r) => r.team_id === m.id);
       const roster: Player[] = spots
@@ -100,6 +177,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
           name: s.players.name,
           division: s.players.division,
           worldRanking: s.players.world_ranking,
+          pickLabel: pickLabelByPlayer.get(s.players.id) ?? null,
         }))
         .sort((a, b) => {
           if (a.division !== b.division) return a.division === "MPO" ? -1 : 1;
@@ -125,13 +203,16 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
         }
       }
       picks.sort((a, b) => a.round - b.round);
-      return { id: m.id, teamName: m.team_name, roster, picks };
+      return { id: m.id, teamName: m.team_name, roster, picks, currentPicks: currentPicksForTeam(m.id) };
     }
 
     const me = buildTeam(myMember);
     setMyTeam(me);
     const others = (members ?? []).filter((m) => m.id !== myMember.id).map(buildTeam);
     setOtherTeams(others);
+    setOrderAssigned(cdOrderAssigned);
+    setDraftStatus(cdStatus);
+    setDraftNumTeams(cdNumTeams);
 
     if (applyPrefill) {
       const sp = new URLSearchParams(window.location.search);
@@ -158,6 +239,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
         proposer:league_members!trades_proposer_id_fkey(id, team_name),
         trade_players(player_id, from_team_id, to_team_id, players(name, division)),
         trade_picks(season_year, round, original_team_id, from_team_id, to_team_id),
+        trade_current_picks(overall_pick, from_team_id, to_team_id),
         trade_participants(team_id, status, league_members!inner(team_name))
       `)
       .eq("league_id", lid)
@@ -180,6 +262,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
     if (selectedTeamIds.size === 0) return;
     setMovements([]);
     setPickMovements([]);
+    setCurrentPickMovements([]);
     setMessage("");
     setStep("players");
   }
@@ -218,6 +301,21 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
     );
   }
 
+  function toggleCurrentPick(p: CurrentDraftPick, fromTeamId: number) {
+    setCurrentPickMovements((prev) => {
+      const existing = prev.find((m) => m.overallPick === p.overallPick);
+      if (existing) return prev.filter((m) => m.overallPick !== p.overallPick);
+      const defaultTo = fromTeamId === myTeam?.id ? [...selectedTeamIds][0] : myTeam?.id;
+      if (defaultTo == null) return prev;
+      return [...prev, { overallPick: p.overallPick, fromTeamId, toTeamId: defaultTo }];
+    });
+  }
+  function setCurrentPickDestination(overallPick: number, toTeamId: number) {
+    setCurrentPickMovements((prev) =>
+      prev.map((m) => (m.overallPick === overallPick ? { ...m, toTeamId } : m)),
+    );
+  }
+
   function isInMovements(playerId: number) {
     return movements.some((m) => m.playerId === playerId);
   }
@@ -244,12 +342,13 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
 
   function handleSend() {
     if (!leagueId || selectedTeamIds.size === 0) return;
-    if (movements.length === 0 && pickMovements.length === 0) return;
+    if (movements.length === 0 && pickMovements.length === 0 && currentPickMovements.length === 0) return;
     startSubmitTransition(async () => {
-      await proposeTrade(leagueId, [...selectedTeamIds], movements, message, pickMovements);
+      await proposeTrade(leagueId, [...selectedTeamIds], movements, message, pickMovements, currentPickMovements);
       setSelectedTeamIds(new Set());
       setMovements([]);
       setPickMovements([]);
+      setCurrentPickMovements([]);
       setMessage("");
       setStep("teams");
       load(leagueId);
@@ -267,6 +366,23 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
   }
 
   if (loading) return <div className="text-gray-400 text-sm">Loading...</div>;
+
+  // Trading is gated until the draft order is assigned.
+  if (!orderAssigned) {
+    return (
+      <div className="max-w-2xl">
+        <h2 className="text-white font-bold text-xl mb-3">Trades</h2>
+        <div className="bg-[#1a1d23] rounded-2xl p-10 border border-white/5 text-center">
+          <p className="text-3xl mb-3">🔒</p>
+          <p className="text-white font-semibold">Trading opens once the draft order is set</p>
+          <p className="text-gray-400 text-sm mt-1.5 max-w-sm mx-auto">
+            Your commissioner needs to assign the draft order first. After that you can trade
+            draft picks here — and players once the draft is underway.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const involvedTeams: Team[] = myTeam
     ? [myTeam, ...otherTeams.filter((t) => selectedTeamIds.has(t.id))]
@@ -288,6 +404,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
                 leagueId={leagueId ?? 0}
                 trade={trade}
                 myTeamId={myTeam?.id ?? 0}
+                numTeams={draftNumTeams}
                 onRespond={handleRespond}
                 onCancel={handleCancel}
               />
@@ -406,7 +523,8 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
   // ── Step: players ────────────────────────────────────────────────
   if (step === "players") {
     const filteredPickMovements = pickMovements.filter((p) => allowedDestIds.has(p.toTeamId));
-    const canReview = filteredMovements.length > 0 || filteredPickMovements.length > 0;
+    const filteredCurrentPicks = currentPickMovements.filter((p) => allowedDestIds.has(p.toTeamId));
+    const canReview = filteredMovements.length > 0 || filteredPickMovements.length > 0 || filteredCurrentPicks.length > 0;
 
     return (
       <div className="max-w-5xl pb-24">
@@ -453,6 +571,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
                         key={p.id}
                         leagueId={leagueId ?? 0}
                         player={p}
+                        pickLabel={draftStatus === "in_progress" ? p.pickLabel ?? undefined : undefined}
                         selected={!!mv}
                         onToggle={() => togglePlayer(p.id, team.id)}
                         movement={mv}
@@ -463,6 +582,34 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
                       />
                     );
                   })}
+                  {team.currentPicks.length > 0 && (
+                    <>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mt-3 px-1">
+                        Draft picks
+                      </p>
+                      {team.currentPicks.map((p) => {
+                        const mv = currentPickMovements.find((m) => m.overallPick === p.overallPick);
+                        return (
+                          <SelectableCurrentPickCard
+                            key={p.overallPick}
+                            pick={p}
+                            originalTeamName={
+                              involvedTeams.find((t) => t.id === p.originalTeamId)?.teamName ??
+                              otherTeams.find((t) => t.id === p.originalTeamId)?.teamName ??
+                              null
+                            }
+                            currentTeamId={team.id}
+                            selected={!!mv}
+                            onToggle={() => toggleCurrentPick(p, team.id)}
+                            destinationTeamId={mv?.toTeamId ?? null}
+                            involvedTeams={involvedTeams}
+                            onChangeDestination={(toId) => setCurrentPickDestination(p.overallPick, toId)}
+                            showDestinationPicker={involvedTeams.length > 2}
+                          />
+                        );
+                      })}
+                    </>
+                  )}
                   {team.picks.length > 0 && (
                     <>
                       <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mt-3 px-1">
@@ -503,11 +650,14 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
           <div className="max-w-5xl flex items-center justify-between">
             <div>
               <p className="text-white font-semibold text-sm">Trade Proposal</p>
-              {(filteredMovements.length > 0 || filteredPickMovements.length > 0) && (
+              {(filteredMovements.length > 0 || filteredPickMovements.length > 0 || filteredCurrentPicks.length > 0) && (
                 <p className="text-gray-400 text-xs mt-0.5">
                   {filteredMovements.length} player{filteredMovements.length !== 1 ? "s" : ""}
+                  {filteredCurrentPicks.length > 0 && (
+                    <> · {filteredCurrentPicks.length} draft pick{filteredCurrentPicks.length !== 1 ? "s" : ""}</>
+                  )}
                   {filteredPickMovements.length > 0 && (
-                    <> · {filteredPickMovements.length} pick{filteredPickMovements.length !== 1 ? "s" : ""}</>
+                    <> · {filteredPickMovements.length} future pick{filteredPickMovements.length !== 1 ? "s" : ""}</>
                   )}
                 </p>
               )}
@@ -551,6 +701,18 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
     sentPicksByTeam.get(p.fromTeamId)!.push(p);
   }
 
+  const filteredCurrent = currentPickMovements.filter((p) => allowedDestIds.has(p.toTeamId));
+  const receivedCurrentByTeam = new Map<number, CurrentPickMovement[]>();
+  const sentCurrentByTeam = new Map<number, CurrentPickMovement[]>();
+  for (const p of filteredCurrent) {
+    if (!receivedCurrentByTeam.has(p.toTeamId)) receivedCurrentByTeam.set(p.toTeamId, []);
+    receivedCurrentByTeam.get(p.toTeamId)!.push(p);
+    if (!sentCurrentByTeam.has(p.fromTeamId)) sentCurrentByTeam.set(p.fromTeamId, []);
+    sentCurrentByTeam.get(p.fromTeamId)!.push(p);
+  }
+  const currentPickLabel = new Map<number, string>();
+  for (const t of involvedTeams) for (const cp of t.currentPicks) currentPickLabel.set(cp.overallPick, cp.label);
+
   return (
     <div className="max-w-3xl space-y-4 pb-12">
       <div className="flex items-center gap-3">
@@ -569,7 +731,12 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
           const sent = sentByTeam.get(team.id) ?? [];
           const receivedPicks = receivedPicksByTeam.get(team.id) ?? [];
           const sentPicks = sentPicksByTeam.get(team.id) ?? [];
-          if (received.length === 0 && sent.length === 0 && receivedPicks.length === 0 && sentPicks.length === 0) return null;
+          const receivedCurrent = receivedCurrentByTeam.get(team.id) ?? [];
+          const sentCurrent = sentCurrentByTeam.get(team.id) ?? [];
+          if (
+            received.length === 0 && sent.length === 0 && receivedPicks.length === 0 &&
+            sentPicks.length === 0 && receivedCurrent.length === 0 && sentCurrent.length === 0
+          ) return null;
           return (
             <div key={team.id} className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
               <p className="text-white font-semibold mb-4">{team.teamName}</p>
@@ -589,6 +756,16 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
                         />
                       ) : null;
                     })}
+                    {receivedCurrent.map((p) => {
+                      const from = teamById.get(p.fromTeamId);
+                      return (
+                        <ReviewCurrentPick
+                          key={`c-${p.overallPick}`}
+                          label={currentPickLabel.get(p.overallPick) ?? `#${p.overallPick}`}
+                          note={from ? `from ${from.teamName}` : undefined}
+                        />
+                      );
+                    })}
                     {receivedPicks.map((p) => {
                       const from = teamById.get(p.fromTeamId);
                       return (
@@ -600,7 +777,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
                         />
                       );
                     })}
-                    {received.length === 0 && receivedPicks.length === 0 && <p className="text-gray-400 text-xs">—</p>}
+                    {received.length === 0 && receivedPicks.length === 0 && receivedCurrent.length === 0 && <p className="text-gray-400 text-xs">—</p>}
                   </div>
                 </div>
                 <div>
@@ -618,6 +795,16 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
                         />
                       ) : null;
                     })}
+                    {sentCurrent.map((p) => {
+                      const to = teamById.get(p.toTeamId);
+                      return (
+                        <ReviewCurrentPick
+                          key={`c-${p.overallPick}`}
+                          label={currentPickLabel.get(p.overallPick) ?? `#${p.overallPick}`}
+                          note={to ? `to ${to.teamName}` : undefined}
+                        />
+                      );
+                    })}
                     {sentPicks.map((p) => {
                       const to = teamById.get(p.toTeamId);
                       return (
@@ -629,7 +816,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
                         />
                       );
                     })}
-                    {sent.length === 0 && sentPicks.length === 0 && <p className="text-gray-400 text-xs">—</p>}
+                    {sent.length === 0 && sentPicks.length === 0 && sentCurrent.length === 0 && <p className="text-gray-400 text-xs">—</p>}
                   </div>
                 </div>
               </div>
@@ -719,6 +906,7 @@ function TeamRosterCard({ leagueId, player }: { leagueId: number; player: Player
 function SelectablePlayerCard({
   leagueId,
   player,
+  pickLabel,
   selected,
   onToggle,
   movement,
@@ -729,6 +917,7 @@ function SelectablePlayerCard({
 }: {
   leagueId: number;
   player: Player;
+  pickLabel?: string;
   selected: boolean;
   onToggle: () => void;
   movement: TradeMovement | undefined;
@@ -780,7 +969,7 @@ function SelectablePlayerCard({
           onClick={(e) => e.stopPropagation()}
           className="text-white font-semibold text-sm leading-tight truncate hover:underline block"
         >
-          {player.name}
+          {pickLabel && <span className="text-gray-400 font-mono mr-1">{pickLabel}</span>}{player.name}
         </Link>
         {player.worldRanking != null && (
           <p className="text-gray-400 text-xs mt-0.5">#{player.worldRanking}</p>
@@ -938,19 +1127,129 @@ function ReviewPlayer({ leagueId, player, note }: { leagueId: number; player: Pl
   );
 }
 
+function SelectableCurrentPickCard({
+  pick,
+  originalTeamName,
+  currentTeamId,
+  selected,
+  onToggle,
+  destinationTeamId,
+  involvedTeams,
+  onChangeDestination,
+  showDestinationPicker,
+}: {
+  pick: CurrentDraftPick;
+  originalTeamName: string | null;
+  currentTeamId: number;
+  selected: boolean;
+  onToggle: () => void;
+  destinationTeamId: number | null;
+  involvedTeams: Team[];
+  onChangeDestination: (toTeamId: number) => void;
+  showDestinationPicker: boolean;
+}) {
+  const isOriginal = pick.originalTeamId === currentTeamId;
+  const destOptions = involvedTeams.filter((t) => t.id !== currentTeamId);
+  return (
+    <div
+      className={`rounded-xl overflow-hidden border transition ${
+        selected ? "border-[#36D7B7]/50 ring-1 ring-[#36D7B7]/20" : "border-white/5 hover:border-white/15"
+      }`}
+    >
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onToggle}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}
+        className="px-3 py-1.5 flex items-center justify-between cursor-pointer bg-[#4B3DFF]/15"
+      >
+        <span className="text-[10px] font-bold uppercase tracking-wider text-[#9b91ff] font-mono">
+          Pick {pick.label}
+        </span>
+        <div
+          className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition"
+          style={
+            selected
+              ? { borderColor: "#36D7B7", background: "#36D7B7" }
+              : { borderColor: "rgba(255,255,255,0.25)", background: "transparent" }
+          }
+        >
+          {selected && (
+            <svg className="w-2.5 h-2.5" viewBox="0 0 10 10" fill="none">
+              <path d="M2 5l2.5 2.5L8 3" stroke="#000" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </div>
+      </div>
+      <div className="bg-[#1a1d23] px-3 py-2">
+        <p className="text-white font-semibold text-sm leading-tight">Pick {pick.label}</p>
+        <p className="text-gray-400 text-xs mt-0.5">
+          {isOriginal ? `Round ${pick.round}` : `From ${originalTeamName ?? "another team"}`}
+        </p>
+        {selected && showDestinationPicker && destOptions.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-1">
+            <span className="text-[10px] text-gray-400 uppercase tracking-wide">to</span>
+            {destOptions.map((t) => {
+              const isDest = destinationTeamId === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onChangeDestination(t.id); }}
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-semibold transition ${
+                    isDest
+                      ? "bg-[#36D7B7] text-black"
+                      : "bg-white/5 text-gray-400 hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  {t.teamName}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ReviewCurrentPick({ label, note }: { label: string; note?: string }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <div
+        className="w-8 h-8 rounded-full flex items-center justify-center text-[#9b91ff] text-[10px] font-bold font-mono shrink-0"
+        style={{ background: "rgba(75,61,255,0.18)" }}
+      >
+        {label}
+      </div>
+      <div className="min-w-0">
+        <p className="text-white text-sm font-medium leading-tight">Pick {label}</p>
+        <p className="text-xs font-semibold text-[#9b91ff]">Draft pick</p>
+        {note && <p className="text-gray-400 text-[10px] mt-0.5">{note}</p>}
+      </div>
+    </div>
+  );
+}
+
 function PendingTradeCard({
   leagueId,
   trade,
   myTeamId,
+  numTeams,
   onRespond,
   onCancel,
 }: {
   leagueId: number;
   trade: any;
   myTeamId: number;
+  numTeams: number;
   onRespond: (id: number, accept: boolean) => void;
   onCancel: (id: number) => void;
 }) {
+  const pickLabel = (overall: number) => {
+    const n = Math.max(1, numTeams);
+    return `${Math.ceil(overall / n)}.${String(((overall - 1) % n) + 1).padStart(2, "0")}`;
+  };
   const isProposer = trade.proposer?.id === myTeamId;
   const participants: any[] = trade.trade_participants ?? [];
   const myParticipant = participants.find((p) => p.team_id === myTeamId);
@@ -962,6 +1261,8 @@ function PendingTradeCard({
   const fromMe = (trade.trade_players ?? []).filter((tp: any) => tp.from_team_id === myTeamId);
   const picksToMe = (trade.trade_picks ?? []).filter((tp: any) => tp.to_team_id === myTeamId);
   const picksFromMe = (trade.trade_picks ?? []).filter((tp: any) => tp.from_team_id === myTeamId);
+  const currentToMe = (trade.trade_current_picks ?? []).filter((tp: any) => tp.to_team_id === myTeamId);
+  const currentFromMe = (trade.trade_current_picks ?? []).filter((tp: any) => tp.from_team_id === myTeamId);
 
   return (
     <div className="bg-[#1a1d23] rounded-2xl p-5 border border-[#4B3DFF]/25">
@@ -988,12 +1289,17 @@ function PendingTradeCard({
                 {tp.players?.name}
               </Link>
             ))}
+            {currentToMe.map((tp: any) => (
+              <p key={`c-${tp.overall_pick}`} className="text-[#9b91ff] font-mono">
+                Pick {pickLabel(tp.overall_pick)}
+              </p>
+            ))}
             {picksToMe.map((tp: any) => (
               <p key={`p-${tp.round}-${tp.original_team_id}`} className="text-[#F5A524]">
                 {tp.season_year} Round {tp.round} pick
               </p>
             ))}
-            {toMe.length === 0 && picksToMe.length === 0 && <p className="text-gray-400">—</p>}
+            {toMe.length === 0 && picksToMe.length === 0 && currentToMe.length === 0 && <p className="text-gray-400">—</p>}
           </div>
           <div>
             <p className="text-gray-400 font-semibold mb-1">You give up</p>
@@ -1006,12 +1312,17 @@ function PendingTradeCard({
                 {tp.players?.name}
               </Link>
             ))}
+            {currentFromMe.map((tp: any) => (
+              <p key={`c-${tp.overall_pick}`} className="text-[#9b91ff] font-mono">
+                Pick {pickLabel(tp.overall_pick)}
+              </p>
+            ))}
             {picksFromMe.map((tp: any) => (
               <p key={`p-${tp.round}-${tp.original_team_id}`} className="text-[#F5A524]">
                 {tp.season_year} Round {tp.round} pick
               </p>
             ))}
-            {fromMe.length === 0 && picksFromMe.length === 0 && <p className="text-gray-400">—</p>}
+            {fromMe.length === 0 && picksFromMe.length === 0 && currentFromMe.length === 0 && <p className="text-gray-400">—</p>}
           </div>
         </div>
       )}

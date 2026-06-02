@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { startDraft, pauseDraft, resumeDraft, makeDraftPick, undoLastPick, undoPick, commissionerMakePick } from "@/actions/drafts";
 import { autoPickFromRankings, autoPickExpired } from "@/actions/rankings";
+import { resolvePickOwnerId, type PickOwnerOverrides } from "@/lib/draft-pick-owners";
 
 type DraftInfo = {
   id: number;
@@ -34,6 +35,7 @@ type Props = {
   leagueId: number;
   draft: DraftInfo | null;
   members: Member[];
+  pickOwnerOverrides?: { overallPick: number; ownerTeamId: number }[];
   picks: PickInfo[];
   availablePlayers: AvailablePlayer[];
   myRankings?: MyRanking[];
@@ -201,7 +203,7 @@ function splitName(full: string): { first: string; last: string } {
   return { first: parts.slice(0, -1).join(" "), last: parts[parts.length - 1] };
 }
 
-export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, myRankings = [], myMemberId, isCommissioner, mpoSlots = 4, fpoSlots = 2, rosterSize = 14, readOnly }: Props) {
+export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], picks, availablePlayers, myRankings = [], myMemberId, isCommissioner, mpoSlots = 4, fpoSlots = 2, rosterSize = 14, readOnly }: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("all");
   const [bottomTab, setBottomTab] = useState<BottomTab>("available");
@@ -284,19 +286,23 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
   }, [readOnly, draft?.status, router]);
 
   const N = members.length;
+  const teamNameById = useMemo(() => new Map(members.map((m) => [m.id, m.teamName])), [members]);
   const totalRounds = draft?.totalRounds ?? 0;
   const currentPick = draft?.currentPick ?? 1;
 
-  // Compute whose turn it is
+  const pickOwnerMap = useMemo<PickOwnerOverrides>(() => {
+    const m = new Map<number, number>();
+    for (const o of pickOwnerOverrides) m.set(o.overallPick, o.ownerTeamId);
+    return m;
+  }, [pickOwnerOverrides]);
+
+  // Compute whose turn it is (honoring any traded pick slots)
   let currentPickTeamId: number | null = null;
   let currentRound = 1;
   const trr = !!draft?.thirdRoundReversal;
   if (draft && (draft.status === "in_progress" || draft.status === "paused") && N > 0) {
     currentRound = Math.ceil(currentPick / N);
-    const posInRound = currentPick - (currentRound - 1) * N;
-    const reversed = isRoundReversed(currentRound, trr);
-    const slot = reversed ? N - posInRound + 1 : posInRound;
-    currentPickTeamId = members.find((m) => m.draftPosition === slot)?.id ?? null;
+    currentPickTeamId = resolvePickOwnerId(currentPick, members, trr, pickOwnerMap);
   }
   const isMyPick = draft?.status === "in_progress" && currentPickTeamId !== null && currentPickTeamId === myMemberId;
 
@@ -380,6 +386,20 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
       const isCurrent =
         pickNum === currentPick && (draft?.status === "in_progress" || draft?.status === "paused");
 
+      // If this slot was traded, surface who owns it now so everyone can see.
+      const tradedOwnerId = pickOwnerMap.get(pickNum);
+      const tradedTo =
+        tradedOwnerId != null && tradedOwnerId !== m.id ? teamNameById.get(tradedOwnerId) ?? null : null;
+      const tradedBadge = tradedTo ? (
+        <div
+          className="inline-flex items-center gap-0.5 self-start max-w-full text-[9px] font-bold leading-none bg-black/45 text-white px-1 py-0.5 rounded mb-0.5"
+          title={`Traded to ${tradedTo}`}
+        >
+          <span aria-hidden>↗</span>
+          <span className="truncate">{tradedTo}</span>
+        </div>
+      ) : null;
+
       if (pick) {
         const { first, last } = splitName(pick.playerName);
         const cellStyle = { background: divBg(pick.playerDivision), color: "var(--pick-fg)" } as const;
@@ -397,6 +417,7 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
             className="flex flex-col p-2 min-h-[80px] rounded-lg transition hover:ring-2 hover:ring-white/30 hover:brightness-110 cursor-pointer"
             title={`View ${pick.playerName}'s profile`}
           >
+            {tradedBadge}
             <div className="flex justify-between items-center">
               <span className="text-[10px] font-mono" style={{ color: "var(--pick-fg-muted)", opacity: 0.7 }}>{pickLabel}</span>
               {/* Division label hidden when the ✕ overlay takes its corner. */}
@@ -448,6 +469,7 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
             key={`${round}-${m.id}`}
             className="flex flex-col items-center justify-center p-2 min-h-[80px] rounded-lg bg-[#36D7B7]/10 ring-2 ring-[#36D7B7] ring-inset"
           >
+            {tradedBadge}
             <span className="text-[#36D7B7] text-[10px] font-mono">{pickLabel}</span>
             <span className="text-[#36D7B7] text-xs font-semibold animate-pulse mt-1">on the clock</span>
           </div>
@@ -458,6 +480,7 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
             key={`${round}-${m.id}`}
             className="flex flex-col p-2 min-h-[80px] rounded-lg bg-[#1a1d23]"
           >
+            {tradedBadge}
             <div className="flex justify-start">
               <span className="text-white/20 text-[10px] font-mono">{pickLabel}</span>
             </div>
@@ -758,17 +781,17 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
                       >
                         {player.name}
                       </Link>
-                      <span className={`text-xs font-semibold shrink-0 ${divColor(player.division)}`}>
-                        {player.division}
-                      </span>
                       {player.pdgaRating != null && (
                         <span
-                          className="text-xs text-gray-400 font-semibold tabular-nums shrink-0 ml-auto"
+                          className="text-xs text-gray-400 font-semibold tabular-nums shrink-0"
                           title="Current PDGA Rating"
                         >
                           {player.pdgaRating}
                         </span>
                       )}
+                      <span className={`text-xs font-semibold shrink-0 ${divColor(player.division)}`}>
+                        {player.division}
+                      </span>
                     </div>
                   </div>
                 ))

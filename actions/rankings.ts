@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { regenerateLeagueMatchups } from "@/actions/matchups";
-import { snakeSlot } from "@/lib/snake-order";
+import { resolvePickOwnerId, buildPickOwnerOverrides } from "@/lib/draft-pick-owners";
 
 /** Replace a user's ranking list for this league with the given ordered ids. */
 export async function setRankings(leagueId: number, playerIds: number[]): Promise<void> {
@@ -201,7 +201,7 @@ export async function autoPickExpired(leagueId: number): Promise<void> {
 
   const { data: draft } = await admin
     .from("drafts")
-    .select("status, current_pick, seconds_per_pick, current_pick_started_at, third_round_reversal")
+    .select("id, status, current_pick, seconds_per_pick, current_pick_started_at, third_round_reversal")
     .eq("league_id", leagueId)
     .single();
   if (!draft || draft.status !== "in_progress") return;
@@ -211,30 +211,34 @@ export async function autoPickExpired(leagueId: number): Promise<void> {
   const elapsedSec = (Date.now() - startedMs) / 1000;
   if (elapsedSec < (draft.seconds_per_pick ?? 60)) return;
 
-  // Find the on-clock team to pick FOR.
+  // Find the on-clock team to pick FOR (honoring any traded pick slots).
   const { data: members } = await admin
     .from("league_members")
     .select("id, user_id, draft_position")
     .eq("league_id", leagueId)
     .not("draft_position", "is", null)
     .order("draft_position");
-  const numTeams = members?.length ?? 0;
-  if (numTeams === 0) return;
+  if (!members || members.length === 0) return;
 
-  const pick = draft.current_pick;
-  const { slot: draftSlot } = snakeSlot(
-    pick,
-    numTeams,
+  const { data: ownerRows } = await admin
+    .from("current_draft_pick_owners")
+    .select("overall_pick, owner_team_id")
+    .eq("draft_id", (draft as any).id);
+
+  const onClockId = resolvePickOwnerId(
+    draft.current_pick,
+    (members as any[]).map((m) => ({ id: m.id, draftPosition: m.draft_position })),
     (draft as any).third_round_reversal ?? false,
+    buildPickOwnerOverrides(ownerRows as any),
   );
-  const onClock = members?.find((m: any) => m.draft_position === draftSlot);
+  const onClock = (members as any[]).find((m) => m.id === onClockId);
   if (!onClock) return;
 
   const pickedPlayerId = await pickBestAvailableForTeam(
     admin,
     leagueId,
-    (onClock as any).id,
-    (onClock as any).user_id ?? null,
+    onClock.id,
+    onClock.user_id ?? null,
   );
   if (pickedPlayerId == null) return;
 

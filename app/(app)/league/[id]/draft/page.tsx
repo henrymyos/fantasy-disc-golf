@@ -74,6 +74,17 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
     .eq("draft_id", draft?.id ?? 0)
     .order("pick_number");
 
+  // Traded pick-slot ownership for the current draft (empty in untraded
+  // drafts). Lets the board show the right team on the clock for traded slots.
+  const { data: pickOwnerRows } = await supabase
+    .from("current_draft_pick_owners")
+    .select("overall_pick, owner_team_id")
+    .eq("draft_id", draft?.id ?? 0);
+  const pickOwnerOverrides = (pickOwnerRows ?? []).map((r: any) => ({
+    overallPick: r.overall_pick as number,
+    ownerTeamId: r.owner_team_id as number,
+  }));
+
   const { data: rosteredSpots } = await supabase
     .from("rosters")
     .select("player_id")
@@ -270,6 +281,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
           thirdRoundReversal: !!(draft as any).third_round_reversal,
         } : null}
         members={members}
+        pickOwnerOverrides={pickOwnerOverrides}
         picks={picks}
         availablePlayers={availablePlayers}
         myRankings={myRankings}

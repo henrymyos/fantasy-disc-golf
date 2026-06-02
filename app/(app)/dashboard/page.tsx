@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { resolvePickOwnerId, buildPickOwnerOverrides } from "@/lib/draft-pick-owners";
 import type { League } from "@/types";
 
 export default async function DashboardPage() {
@@ -42,7 +43,7 @@ export default async function DashboardPage() {
     const [{ data: draftRows }, { data: memberRows }] = await Promise.all([
       supabase
         .from("drafts")
-        .select("id, league_id, status, current_pick, total_rounds")
+        .select("id, league_id, status, current_pick, total_rounds, third_round_reversal")
         .in("status", ["in_progress", "paused"])
         .in("league_id", activeLeagueIds),
       supabase
@@ -52,6 +53,21 @@ export default async function DashboardPage() {
         .not("draft_position", "is", null),
     ]);
 
+    // Traded pick-slot ownership for these drafts (honored for the on-clock team).
+    const draftIds = (draftRows ?? []).map((d: any) => d.id);
+    const { data: ownerRows } = draftIds.length > 0
+      ? await supabase
+          .from("current_draft_pick_owners")
+          .select("draft_id, overall_pick, owner_team_id")
+          .in("draft_id", draftIds)
+      : { data: [] };
+    const ownersByDraft = new Map<number, { overall_pick: number; owner_team_id: number }[]>();
+    (ownerRows ?? []).forEach((r: any) => {
+      const arr = ownersByDraft.get(r.draft_id) ?? [];
+      arr.push({ overall_pick: r.overall_pick, owner_team_id: r.owner_team_id });
+      ownersByDraft.set(r.draft_id, arr);
+    });
+
     activeDrafts = (draftRows ?? []).map((draft) => {
       const members = (memberRows ?? []).filter((m) => m.league_id === draft.league_id);
       const numTeams = members.length;
@@ -60,10 +76,13 @@ export default async function DashboardPage() {
 
       const pick = draft.current_pick;
       const round = Math.ceil(pick / numTeams);
-      const posInRound = pick - (round - 1) * numTeams;
-      const isReversed = round % 2 === 0;
-      const draftSlot = isReversed ? numTeams - posInRound + 1 : posInRound;
-      const onClockMember = members.find((m) => m.draft_position === draftSlot);
+      const onClockId = resolvePickOwnerId(
+        pick,
+        members.map((m) => ({ id: m.id, draftPosition: m.draft_position })),
+        !!(draft as any).third_round_reversal,
+        buildPickOwnerOverrides(ownersByDraft.get((draft as any).id)),
+      );
+      const onClockMember = members.find((m) => m.id === onClockId);
 
       return {
         leagueId: draft.league_id,

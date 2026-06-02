@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { enqueueNotification } from "@/lib/notifications";
+import { resolvePickOwnerId } from "@/lib/draft-pick-owners";
 
 export type TradeMovement = {
   playerId: number;
@@ -20,12 +21,20 @@ export type PickMovement = {
   toTeamId: number;
 };
 
+/** A slot of the CURRENT draft being traded (identified by overall pick). */
+export type CurrentPickMovement = {
+  overallPick: number;
+  fromTeamId: number;
+  toTeamId: number;
+};
+
 export async function proposeTrade(
   leagueId: number,
   receiverTeamIds: number[],
   movements: TradeMovement[],
   message: string,
   pickMovements: PickMovement[] = [],
+  currentPickMovements: CurrentPickMovement[] = [],
 ): Promise<void> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -45,7 +54,23 @@ export async function proposeTrade(
   // A trade must move at least one player or pick.
   const filtered = movements.filter((m) => m.fromTeamId !== m.toTeamId);
   const filteredPicks = pickMovements.filter((p) => p.fromTeamId !== p.toTeamId);
-  if (filtered.length === 0 && filteredPicks.length === 0) return;
+  let filteredCurrentPicks = currentPickMovements.filter((p) => p.fromTeamId !== p.toTeamId);
+
+  // Current-draft pick slots can only be traded while the draft hasn't started.
+  let currentDraftId: number | null = null;
+  if (filteredCurrentPicks.length > 0) {
+    const { data: draftRow } = await admin
+      .from("drafts")
+      .select("id, status")
+      .eq("league_id", leagueId)
+      .single();
+    if (!draftRow || (draftRow as any).status !== "pending") {
+      filteredCurrentPicks = [];
+    } else {
+      currentDraftId = (draftRow as any).id;
+    }
+  }
+  if (filtered.length === 0 && filteredPicks.length === 0 && filteredCurrentPicks.length === 0) return;
 
   const { data: trade, error } = await admin
     .from("trades")
@@ -78,6 +103,18 @@ export async function proposeTrade(
         season_year: p.seasonYear,
         round: p.round,
         original_team_id: p.originalTeamId,
+        from_team_id: p.fromTeamId,
+        to_team_id: p.toTeamId,
+      })),
+    );
+  }
+
+  if (filteredCurrentPicks.length > 0 && currentDraftId != null) {
+    await admin.from("trade_current_picks").insert(
+      filteredCurrentPicks.map((p) => ({
+        trade_id: trade.id,
+        draft_id: currentDraftId,
+        overall_pick: p.overallPick,
         from_team_id: p.fromTeamId,
         to_team_id: p.toTeamId,
       })),
@@ -213,6 +250,43 @@ export async function respondToTrade(tradeId: number, accept: boolean): Promise<
       },
       { onConflict: "league_id,season_year,round,original_team_id" },
     );
+  }
+
+  // Execute current-draft pick-slot swaps — but only while the draft is still
+  // pending (slots lock once it starts). The new owner picks at that slot.
+  const { data: currentPicks } = await admin
+    .from("trade_current_picks")
+    .select("draft_id, overall_pick, to_team_id")
+    .eq("trade_id", tradeId);
+  if ((currentPicks ?? []).length > 0) {
+    const { data: draftRow } = await admin
+      .from("drafts")
+      .select("id, status, third_round_reversal")
+      .eq("league_id", trade.league_id)
+      .single();
+    if (draftRow && (draftRow as any).status === "pending") {
+      const { data: membs } = await admin
+        .from("league_members")
+        .select("id, draft_position")
+        .eq("league_id", trade.league_id)
+        .not("draft_position", "is", null)
+        .order("draft_position");
+      const memberSlots = (membs ?? []).map((m: any) => ({ id: m.id, draftPosition: m.draft_position }));
+      const trr = !!(draftRow as any).third_round_reversal;
+      for (const cp of currentPicks!) {
+        // original_team_id = the true snake-default owner (for display/chains).
+        const originalOwner = resolvePickOwnerId((cp as any).overall_pick, memberSlots, trr, null);
+        await admin.from("current_draft_pick_owners").upsert(
+          {
+            draft_id: (cp as any).draft_id,
+            overall_pick: (cp as any).overall_pick,
+            owner_team_id: (cp as any).to_team_id,
+            original_team_id: originalOwner ?? (cp as any).to_team_id,
+          },
+          { onConflict: "draft_id,overall_pick" },
+        );
+      }
+    }
   }
 
   await admin
