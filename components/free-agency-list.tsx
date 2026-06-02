@@ -12,6 +12,7 @@ type Player = {
   division: string;
   worldRanking: number | null;
   overallRank: number | null;
+  pdgaRating: number | null;
 };
 
 type FreeAgent = Player & { totalPoints: number; nextWeekPoints: number | null };
@@ -381,6 +382,15 @@ function PlayerRow({
       >
         {player.division}
       </span>
+
+      {player.pdgaRating != null && (
+        <span
+          className="text-[11px] font-semibold tabular-nums text-gray-400 shrink-0 w-9 text-right"
+          title="Current PDGA Rating"
+        >
+          {player.pdgaRating}
+        </span>
+      )}
 
       {rightSlot}
     </div>

@@ -2,18 +2,23 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runPdgaImport } from "@/lib/pdga-import";
 import { runRankingsSync } from "@/lib/rankings-sync";
+import { runRatingsSync } from "@/lib/ratings-sync";
 
 // Vercel Cron hits this on the schedule defined in vercel.json. The request
 // carries an Authorization: Bearer ${CRON_SECRET} header that Vercel adds
 // automatically — we verify it so the endpoint isn't open to the internet.
 //
-// Each run does two things: (1) re-imports PDGA tournament results/scores,
-// then (2) re-sorts the player pool to the latest official PDGA World Rankings.
-// The rankings sync is best-effort — a scrape failure there is reported but
-// does not fail the score import.
+// Each run does three things: (1) re-imports PDGA tournament results/scores,
+// (2) re-sorts the player pool to the latest official PDGA World Rankings, and
+// (3) refreshes each player's current PDGA Rating. The rankings and ratings
+// syncs are best-effort — a scrape failure there is reported but does not fail
+// the score import.
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// Ratings sync fetches one throttled request per player (PDGA rate-limits), so
+// allow the maximum headroom. It writes incrementally and is best-effort, so a
+// timeout just means it resumes next run.
+export const maxDuration = 300;
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -37,10 +42,18 @@ export async function GET(request: Request) {
       rankings = { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
 
+    let ratings: unknown;
+    try {
+      ratings = await runRatingsSync(supabase);
+    } catch (err) {
+      ratings = { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+
     return NextResponse.json({
       ok: true,
       ...result,
       rankings,
+      ratings,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

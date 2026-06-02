@@ -30,7 +30,7 @@ export default async function PlayerPage({
 
   const { data: player } = await supabase
     .from("players")
-    .select("id, name, division, world_ranking, overall_rank")
+    .select("id, name, division, world_ranking, overall_rank, pdga_rating")
     .eq("id", playerId)
     .single();
   if (!player) notFound();
@@ -261,6 +261,15 @@ export default async function PlayerPage({
               >
                 {player.division}
               </span>
+              {(player as any).pdga_rating != null && (
+                <span
+                  className="text-xs font-bold px-2 py-0.5 rounded tabular-nums"
+                  style={{ color: accentColor, background: `${accentColor}20` }}
+                  title="Current PDGA Rating"
+                >
+                  {(player as any).pdga_rating} rated
+                </span>
+              )}
               {player.world_ranking && (
                 <span className="text-gray-400 text-xs">#{player.world_ranking} world ranking</span>
               )}

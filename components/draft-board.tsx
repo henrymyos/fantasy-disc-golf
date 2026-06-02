@@ -17,7 +17,7 @@ type DraftInfo = {
 };
 type Member = { id: number; teamName: string; draftPosition: number };
 type PickInfo = { pickNumber: number; teamId: number; playerId: number | null; playerName: string; playerDivision: string };
-type AvailablePlayer = { id: number; name: string; division: string; worldRanking: number | null; overallRank: number | null; totalPoints?: number };
+type AvailablePlayer = { id: number; name: string; division: string; worldRanking: number | null; overallRank: number | null; pdgaRating?: number | null; totalPoints?: number };
 type Tab = "all" | "mpo" | "fpo";
 type BottomTab = "available" | "team";
 type PanelSize = "small" | "medium" | "large" | "full";
@@ -761,6 +761,14 @@ export function DraftBoard({ leagueId, draft, members, picks, availablePlayers, 
                       <span className={`text-xs font-semibold shrink-0 ${divColor(player.division)}`}>
                         {player.division}
                       </span>
+                      {player.pdgaRating != null && (
+                        <span
+                          className="text-xs text-gray-400 font-semibold tabular-nums shrink-0 ml-auto"
+                          title="Current PDGA Rating"
+                        >
+                          {player.pdgaRating}
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))

@@ -83,7 +83,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
 
   const { data: allPlayers } = await supabase
     .from("players")
-    .select("id, name, division, world_ranking, overall_rank");
+    .select("id, name, division, world_ranking, overall_rank, pdga_rating");
 
   // This user's personal player rankings for this league (set on the
   // rankings page). When present, the available-players panel can sort by
@@ -134,6 +134,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
       division: p.division,
       worldRanking: p.world_ranking,
       overallRank: p.overall_rank,
+      pdgaRating: (p as any).pdga_rating ?? null,
       totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
     }));
 
