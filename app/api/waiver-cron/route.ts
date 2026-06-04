@@ -5,6 +5,7 @@ import {
   runWaiverProcessing,
 } from "@/actions/rosters";
 import { runLineupUnsetCheck } from "@/lib/lineup-unset-check";
+import { autoFinalizeDueWeeks } from "@/lib/auto-finalize";
 
 // Daily Vercel cron. Two responsibilities:
 //   1. When a tournament starts today, lock waivers for every league and reset
@@ -67,7 +68,11 @@ export async function GET(request: Request) {
     }
   }
 
-  // 3) Lineup-unset notifications for any tournament within the next 6h.
+  // 3) Auto-finalize any week whose event ended and whose Wednesday review
+  //    deadline has passed (then advance the week). Self-gated per league.
+  const autoFinalized = await autoFinalizeDueWeeks(admin);
+
+  // 4) Lineup-unset notifications for any tournament within the next 6h.
   const lineupCheck = await runLineupUnsetCheck(admin, 6);
 
   return NextResponse.json({
@@ -77,6 +82,7 @@ export async function GET(request: Request) {
     startingToday: (startingToday ?? []).map((t: any) => t.name),
     lockedLeagueIds: locked,
     processedLeagueIds: processed,
+    autoFinalized,
     lineupNotificationsSent: lineupCheck.notificationsSent,
   });
 }

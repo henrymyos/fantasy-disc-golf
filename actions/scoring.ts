@@ -5,9 +5,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { BONUS_POINTS, getPointsForDivision } from "@/lib/scoring-constants";
-import { fantasyPointsFromResult, resolveScoringRules } from "@/lib/scoring-rules";
-import { generateWeeklyRecap } from "@/lib/weekly-recap";
 import { enqueueNotification } from "@/lib/notifications";
+import { finalizeWeekScoresCore, advanceWeekCore } from "@/lib/scoring-finalize";
 
 export async function createTournament(leagueId: number, name: string, week: number): Promise<void> {
   const supabase = await createClient();
@@ -98,101 +97,12 @@ export async function finalizeWeekScores(leagueId: number, week: number): Promis
   const admin = createAdminClient();
   const { data: league } = await admin
     .from("leagues")
-    .select("commissioner_id, scoring_rules")
+    .select("commissioner_id")
     .eq("id", leagueId)
     .single();
   if (!league || (league as any).commissioner_id !== user.id) return;
-  const rules = resolveScoringRules((league as any).scoring_rules);
 
-  const { data: tournaments } = await admin.from("tournaments").select("id").eq("week", week);
-  const tournamentIds = (tournaments ?? []).map((t) => t.id);
-  if (tournamentIds.length === 0) return;
-
-  // Pull the raw result fields so we can re-apply the league's custom rules
-  // (placement table + bonus values) on top of the stored fantasy_points.
-  const { data: results } = await admin
-    .from("tournament_results")
-    .select("player_id, finishing_position, hot_round_count, bogey_free_count, ace_count, under_par_strokes, over_par_strokes, eagle_count, fantasy_points, players(division)")
-    .in("tournament_id", tournamentIds);
-
-  const playerPoints: Record<number, number> = {};
-  (results ?? []).forEach((r: any) => {
-    const division = r.players?.division ?? "MPO";
-    const pts = fantasyPointsFromResult(rules, {
-      finishing_position: r.finishing_position,
-      hot_round_count: r.hot_round_count,
-      bogey_free_count: r.bogey_free_count,
-      ace_count: r.ace_count,
-      under_par_strokes: r.under_par_strokes,
-      over_par_strokes: r.over_par_strokes,
-      eagle_count: r.eagle_count,
-      division,
-    });
-    playerPoints[r.player_id] = (playerPoints[r.player_id] ?? 0) + pts;
-  });
-
-  const { data: starters } = await admin.from("rosters").select("team_id, player_id").eq("league_id", leagueId).eq("is_starter", true);
-
-  const teamScores: Record<number, number> = {};
-  (starters ?? []).forEach((s) => {
-    teamScores[s.team_id] = (teamScores[s.team_id] ?? 0) + (playerPoints[s.player_id] ?? 0);
-  });
-
-  const { data: matchups } = await admin.from("matchups").select("id, team1_id, team2_id").eq("league_id", leagueId).eq("week", week);
-
-  for (const m of matchups ?? []) {
-    await admin.from("matchups").update({
-      team1_score: teamScores[m.team1_id] ?? 0,
-      team2_score: teamScores[m.team2_id] ?? 0,
-      is_final: true,
-    }).eq("id", m.id);
-  }
-
-  // Auto-generate the templated weekly recap once every matchup is final.
-  await generateWeeklyRecap(admin, leagueId, week);
-
-  // Notify each team's owner of the win/loss for this week.
-  const teamUserMap = new Map<number, string | null>();
-  const { data: teamMembers } = await admin
-    .from("league_members")
-    .select("id, team_name, user_id")
-    .eq("league_id", leagueId);
-  for (const tm of teamMembers ?? []) {
-    teamUserMap.set((tm as any).id, (tm as any).user_id ?? null);
-  }
-  const nameById = new Map<number, string>(
-    (teamMembers ?? []).map((m: any) => [m.id, m.team_name as string]),
-  );
-
-  for (const m of matchups ?? []) {
-    const s1 = teamScores[m.team1_id] ?? 0;
-    const s2 = teamScores[m.team2_id] ?? 0;
-    const u1 = teamUserMap.get(m.team1_id);
-    const u2 = teamUserMap.get(m.team2_id);
-    const t1Name = nameById.get(m.team1_id) ?? "Team 1";
-    const t2Name = nameById.get(m.team2_id) ?? "Team 2";
-    const link = `/league/${leagueId}/matchups/${m.id}`;
-    if (u1) {
-      const verdict = s1 === s2 ? "tied with" : s1 > s2 ? "won against" : "lost to";
-      await enqueueNotification(admin, {
-        userId: u1,
-        leagueId,
-        kind: "weekly_result",
-        body: `Week ${week}: you ${verdict} ${t2Name} ${s1.toFixed(1)}-${s2.toFixed(1)}.`,
-        link,
-      });
-    }
-    if (u2) {
-      const verdict = s2 === s1 ? "tied with" : s2 > s1 ? "won against" : "lost to";
-      await enqueueNotification(admin, {
-        userId: u2,
-        leagueId,
-        kind: "weekly_result",
-        body: `Week ${week}: you ${verdict} ${t1Name} ${s2.toFixed(1)}-${s1.toFixed(1)}.`,
-        link,
-      });
-    }
-  }
+  await finalizeWeekScoresCore(admin, leagueId, week);
 
   revalidatePath(`/league/${leagueId}/scoring`);
   revalidatePath(`/league/${leagueId}/matchups`);
@@ -205,56 +115,11 @@ export async function advanceWeek(leagueId: number): Promise<void> {
   if (!user) redirect("/login");
 
   const admin = createAdminClient();
-  const { data: league } = await admin.from("leagues").select("commissioner_id, current_week").eq("id", leagueId).single();
+  const { data: league } = await admin.from("leagues").select("commissioner_id").eq("id", leagueId).single();
   if (!league || league.commissioner_id !== user.id) return;
 
-  const nextWeek = league.current_week + 1;
-
-  const { data: members } = await admin.from("league_members").select("id").eq("league_id", leagueId).order("joined_at");
-  if (!members || members.length < 2) return;
-
-  // Only generate matchups if none exist yet for next week (the season-wide
-  // generator runs on draft completion, so this is just a fallback for old
-  // leagues or hand-rolled flows).
-  const { count: existing } = await admin
-    .from("matchups")
-    .select("id", { count: "exact", head: true })
-    .eq("league_id", leagueId)
-    .eq("week", nextWeek);
-  if ((existing ?? 0) === 0) {
-    const pairs = generateMatchups(members.map((m) => m.id), nextWeek);
-    await admin.from("matchups").insert(
-      pairs.map(([t1, t2]) => ({
-        league_id: leagueId,
-        week: nextWeek,
-        team1_id: t1,
-        team2_id: t2,
-        team1_score: 0,
-        team2_score: 0,
-      }))
-    );
-  }
-
-  await admin.from("leagues").update({ current_week: nextWeek }).eq("id", leagueId);
+  await advanceWeekCore(admin, leagueId);
 
   revalidatePath(`/league/${leagueId}/scoring`);
   revalidatePath(`/league/${leagueId}`);
-}
-
-function generateMatchups(teamIds: number[], week: number): [number, number][] {
-  const pairs: [number, number][] = [];
-  const teams = [...teamIds];
-  if (teams.length % 2 !== 0) teams.push(-1);
-  const half = teams.length / 2;
-  const fixed = teams[0];
-  const rotating = teams.slice(1);
-  const shift = (week - 1) % rotating.length;
-  const newRotating = [...rotating.slice(shift), ...rotating.slice(0, shift)];
-  const schedule = [fixed, ...newRotating];
-  for (let i = 0; i < half; i++) {
-    const t1 = schedule[i];
-    const t2 = schedule[schedule.length - 1 - i];
-    if (t1 !== -1 && t2 !== -1) pairs.push([t1, t2]);
-  }
-  return pairs;
 }

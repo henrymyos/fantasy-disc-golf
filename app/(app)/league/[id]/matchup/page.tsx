@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { applyProjectionVariance } from "@/lib/projections";
 import { getActiveTournament } from "@/lib/lineup-lock";
+import { fantasyPointsFromResult, resolveScoringRules } from "@/lib/scoring-rules";
 
 type StarterRow = {
   rosterId: number;
@@ -61,10 +62,14 @@ export default async function MyMatchupPage({
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, name, current_week, mpo_starters, fpo_starters")
+    .select("id, name, current_week, mpo_starters, fpo_starters, scoring_rules")
     .eq("id", id)
     .single();
   if (!league) notFound();
+
+  // Score live under THIS league's rules (placement table + bonus values), not
+  // the default-rule fantasy_points stored on the shared results row.
+  const rules = resolveScoringRules((league as any).scoring_rules);
 
   const mpoSlots: number = (league as any).mpo_starters ?? 4;
   const fpoSlots: number = (league as any).fpo_starters ?? 2;
@@ -182,19 +187,32 @@ export default async function MyMatchupPage({
   const { data: results } = playerIds.length > 0
     ? await supabase
         .from("tournament_results")
-        .select("player_id, tournament_id, fantasy_points")
+        .select("player_id, tournament_id, finishing_position, hot_round_count, bogey_free_count, ace_count, under_par_strokes, over_par_strokes, eagle_count, players(division)")
         .in("player_id", playerIds)
     : { data: [] };
 
   const totals = new Map<number, { sum: number; count: number }>();
   const actuals = new Map<number, number>();
   (results ?? []).forEach((r: any) => {
+    // Recompute per-player points under the league's rules (incl. the
+    // provisional hot-round bonus, which the import re-derives against the
+    // field on every refresh).
+    const pts = fantasyPointsFromResult(rules, {
+      finishing_position: r.finishing_position,
+      hot_round_count: r.hot_round_count,
+      bogey_free_count: r.bogey_free_count,
+      ace_count: r.ace_count,
+      under_par_strokes: r.under_par_strokes,
+      over_par_strokes: r.over_par_strokes,
+      eagle_count: r.eagle_count,
+      division: r.players?.division ?? "MPO",
+    });
     const cur = totals.get(r.player_id) ?? { sum: 0, count: 0 };
-    cur.sum += Number(r.fantasy_points ?? 0);
+    cur.sum += pts;
     cur.count += 1;
     totals.set(r.player_id, cur);
     if (weekTournamentId != null && r.tournament_id === weekTournamentId) {
-      actuals.set(r.player_id, (actuals.get(r.player_id) ?? 0) + Number(r.fantasy_points ?? 0));
+      actuals.set(r.player_id, (actuals.get(r.player_id) ?? 0) + pts);
     }
   });
 
