@@ -371,6 +371,14 @@ function PlayerRow({
         >
           {player.name}
         </Link>
+        {player.pdgaRating != null && (
+          <span
+            className="text-[11px] font-semibold tabular-nums text-gray-400 shrink-0"
+            title="Current PDGA Rating"
+          >
+            {player.pdgaRating}
+          </span>
+        )}
         {ownerName && (
           <span className="text-gray-400 text-xs truncate">→ {ownerName}</span>
         )}
@@ -382,15 +390,6 @@ function PlayerRow({
       >
         {player.division}
       </span>
-
-      {player.pdgaRating != null && (
-        <span
-          className="text-[11px] font-semibold tabular-nums text-gray-400 shrink-0 w-9 text-right"
-          title="Current PDGA Rating"
-        >
-          {player.pdgaRating}
-        </span>
-      )}
 
       {rightSlot}
     </div>
