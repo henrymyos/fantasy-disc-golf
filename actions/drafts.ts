@@ -108,7 +108,7 @@ export async function randomizeDraftOrder(leagueId: number): Promise<void> {
 
   const { data: draft } = await admin
     .from("drafts")
-    .select("status")
+    .select("id, status")
     .eq("league_id", leagueId)
     .single();
   if (!draft || draft.status !== "pending") return;
@@ -127,6 +127,11 @@ export async function randomizeDraftOrder(leagueId: number): Promise<void> {
       .update({ draft_position: i + 1 })
       .eq("id", shuffled[i].id);
   }
+
+  // Changing the order changes which slots belong to whom, so any current-draft
+  // pick trades made under the old order are voided (back to snake default).
+  await admin.from("current_draft_pick_owners").delete().eq("draft_id", (draft as any).id);
+  await admin.from("trade_current_picks").delete().eq("draft_id", (draft as any).id);
 
   revalidatePath(`/league/${leagueId}/draft`);
   revalidatePath(`/league/${leagueId}`);

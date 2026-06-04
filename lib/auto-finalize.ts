@@ -49,33 +49,34 @@ export async function autoFinalizeDueWeeks(admin: SupabaseClient): Promise<strin
   for (const league of leagues ?? []) {
     if ((league as any).draft_status !== "complete") continue;
     const leagueId = (league as any).id as number;
-    let week = (league as any).current_week as number;
+    const week = (league as any).current_week as number;
 
-    // Bounded catch-up in case several weeks are past due.
-    for (let guard = 0; guard < 40; guard++) {
-      const endDate = endByWeek.get(week);
-      if (!endDate) break; // no event this week — leave it to the commissioner
-      if (now < wednesdayAfter(endDate).getTime()) break; // review window still open
+    const endDate = endByWeek.get(week);
+    if (!endDate) continue; // no event this week — leave it to the commissioner
+    if (now < wednesdayAfter(endDate).getTime()) continue; // review window still open
 
-      // Score against the freshest results (once per cron run).
+    // A behind league advances at most one week per daily run — avoids a burst
+    // of finalized weeks + notifications all at once. It catches up over days.
+    const { data: ms } = await admin
+      .from("matchups")
+      .select("is_final")
+      .eq("league_id", leagueId)
+      .eq("week", week);
+    const hasMatchups = (ms ?? []).length > 0;
+    const alreadyFinal = hasMatchups && (ms ?? []).every((m: any) => m.is_final);
+
+    // Don't auto-advance a week that never had matchups (nothing to finalize).
+    if (!hasMatchups) continue;
+
+    if (!alreadyFinal) {
       if (!imported) {
         try { await runPdgaImport(admin); } catch { /* fall back to stored results */ }
         imported = true;
       }
-
-      const { data: ms } = await admin
-        .from("matchups")
-        .select("is_final")
-        .eq("league_id", leagueId)
-        .eq("week", week);
-      const alreadyFinal = (ms ?? []).length > 0 && (ms ?? []).every((m: any) => m.is_final);
-      if (!alreadyFinal) {
-        await finalizeWeekScoresCore(admin, leagueId, week);
-        done.push(`${leagueId}:${week}`);
-      }
-      await advanceWeekCore(admin, leagueId);
-      week += 1;
+      await finalizeWeekScoresCore(admin, leagueId, week);
+      done.push(`${leagueId}:${week}`);
     }
+    await advanceWeekCore(admin, leagueId);
   }
   return done;
 }
