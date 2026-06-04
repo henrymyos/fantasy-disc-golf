@@ -3,7 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { applyProjectionVariance } from "@/lib/projections";
 import { getActiveTournament } from "@/lib/lineup-lock";
-import { fantasyPointsFromResult, resolveScoringRules } from "@/lib/scoring-rules";
+import { fantasyPointsFromResult, resolveScoringRules, describeScoreContributions } from "@/lib/scoring-rules";
 
 type StarterRow = {
   rosterId: number;
@@ -15,6 +15,17 @@ type StarterRow = {
   projected: number | null;
   paceProjected: number | null;
   isOut: boolean;
+  breakdown: string | null;
+};
+
+type WeekStat = {
+  finishing_position: number | null;
+  hot_round_count: number;
+  bogey_free_count: number;
+  ace_count: number;
+  under_par_strokes: number;
+  over_par_strokes: number;
+  eagle_count: number;
 };
 
 // Standard-normal CDF via Abramowitz & Stegun 7.1.26 approximation.
@@ -193,6 +204,7 @@ export default async function MyMatchupPage({
 
   const totals = new Map<number, { sum: number; count: number }>();
   const actuals = new Map<number, number>();
+  const weekStats = new Map<number, WeekStat>();
   (results ?? []).forEach((r: any) => {
     // Recompute per-player points under the league's rules (incl. the
     // provisional hot-round bonus, which the import re-derives against the
@@ -213,6 +225,18 @@ export default async function MyMatchupPage({
     totals.set(r.player_id, cur);
     if (weekTournamentId != null && r.tournament_id === weekTournamentId) {
       actuals.set(r.player_id, (actuals.get(r.player_id) ?? 0) + pts);
+      const ws = weekStats.get(r.player_id) ?? {
+        finishing_position: null, hot_round_count: 0, bogey_free_count: 0,
+        ace_count: 0, under_par_strokes: 0, over_par_strokes: 0, eagle_count: 0,
+      };
+      ws.finishing_position = r.finishing_position ?? ws.finishing_position;
+      ws.hot_round_count += Number(r.hot_round_count ?? 0);
+      ws.bogey_free_count += Number(r.bogey_free_count ?? 0);
+      ws.ace_count += Number(r.ace_count ?? 0);
+      ws.under_par_strokes += Number(r.under_par_strokes ?? 0);
+      ws.over_par_strokes += Number(r.over_par_strokes ?? 0);
+      ws.eagle_count += Number(r.eagle_count ?? 0);
+      weekStats.set(r.player_id, ws);
     }
   });
 
@@ -235,6 +259,8 @@ export default async function MyMatchupPage({
     if (inProgress && actual != null) {
       paceProjected = Math.round((actual / paceDivisor) * 10) / 10;
     }
+    const ws = weekStats.get(s.player_id);
+    const breakdown = actual != null && ws ? describeScoreContributions(rules, ws) : null;
     return {
       rosterId: s.id,
       playerId: s.player_id,
@@ -245,6 +271,7 @@ export default async function MyMatchupPage({
       projected,
       paceProjected,
       isOut,
+      breakdown,
     };
   }
 
@@ -514,23 +541,30 @@ function NameCell({
   if (!row) return <div className={`text-gray-400 text-sm ${right ? "text-right" : ""}`}>—</div>;
   const accent = row.division === "MPO" ? "#4B3DFF" : "#36D7B7";
   return (
-    <div className={`flex items-center gap-1.5 sm:gap-2 min-w-0 ${right ? "flex-row-reverse text-right" : ""}`}>
-      <span
-        className="hidden sm:inline-block text-[10px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0"
-        style={{ color: accent, background: `${accent}20` }}
-      >
-        {row.division}
-      </span>
-      <Link
-        href={`/league/${leagueId}/player/${row.playerId}`}
-        className={`text-sm font-medium truncate hover:underline min-w-0 ${row.isOut ? "text-gray-400" : "text-white"}`}
-      >
-        {row.name}
-      </Link>
-      {row.isOut && (
-        <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0 text-red-400 bg-red-500/15">
-          OUT
+    <div className={`min-w-0 ${right ? "text-right" : ""}`}>
+      <div className={`flex items-center gap-1.5 sm:gap-2 min-w-0 ${right ? "flex-row-reverse" : ""}`}>
+        <span
+          className="hidden sm:inline-block text-[10px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0"
+          style={{ color: accent, background: `${accent}20` }}
+        >
+          {row.division}
         </span>
+        <Link
+          href={`/league/${leagueId}/player/${row.playerId}`}
+          className={`text-sm font-medium truncate hover:underline min-w-0 ${row.isOut ? "text-gray-400" : "text-white"}`}
+        >
+          {row.name}
+        </Link>
+        {row.isOut && (
+          <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0 text-red-400 bg-red-500/15">
+            OUT
+          </span>
+        )}
+      </div>
+      {row.breakdown && (
+        <p className="text-[10px] text-gray-500 leading-tight truncate mt-0.5" title={row.breakdown}>
+          {row.breakdown}
+        </p>
       )}
     </div>
   );

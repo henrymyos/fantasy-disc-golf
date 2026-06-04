@@ -84,6 +84,51 @@ export function fantasyPointsFromResult(
   return Math.round((placement + bonus) * 10) / 10;
 }
 
+function ordinal(n: number): string {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
+}
+
+/**
+ * A short, human breakdown of what's driving a player's score — placement plus
+ * any bonus categories the league actually scores (non-zero value) that the
+ * player earned. e.g. "1st · 2 hot rounds · 1 clean round · 14 birdies".
+ * Returns null when there's nothing to show.
+ */
+export function describeScoreContributions(
+  rules: ScoringRules,
+  stats: {
+    finishing_position?: number | null;
+    hot_round_count?: number | null;
+    bogey_free_count?: number | null;
+    ace_count?: number | null;
+    under_par_strokes?: number | null;
+    over_par_strokes?: number | null;
+    eagle_count?: number | null;
+  },
+): string | null {
+  const parts: string[] = [];
+  const pos = Number(stats.finishing_position ?? 0);
+  if (pos > 0) parts.push(ordinal(pos));
+
+  const b = rules.bonusPoints;
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const add = (count: number | null | undefined, value: number, render: (n: number) => string) => {
+    const n = Number(count ?? 0);
+    if (n > 0 && value !== 0) parts.push(render(n));
+  };
+
+  add(stats.hot_round_count, b.hotRound, (n) => plural(n, "hot round"));
+  add(stats.bogey_free_count, b.bogeyFree, (n) => plural(n, "clean round"));
+  add(stats.eagle_count, b.eagle, (n) => plural(n, "eagle"));
+  add(stats.ace_count, b.ace, (n) => plural(n, "ace"));
+  add(stats.under_par_strokes, b.birdie, (n) => plural(n, "birdie"));
+  add(stats.over_par_strokes, b.bogey, (n) => plural(n, "bogey"));
+
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
 export function defaultMpoTable(): Record<number, number> {
   return { ...MPO_PLACEMENT_POINTS };
 }
