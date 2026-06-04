@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { addFreeAgent } from "@/actions/rosters";
+import { addFreeAgent, placeWaiverClaim } from "@/actions/rosters";
 
 type RosterPlayer = {
   player_id: number;
@@ -13,22 +13,29 @@ export function AddWithDropModal({
   addPlayer,
   myRoster,
   openSpots,
+  mode = "add",
 }: {
   leagueId: number;
   addPlayer: { id: number; name: string; division: string };
   myRoster: RosterPlayer[];
   openSpots: number;
+  mode?: "add" | "waiver";
 }) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
   const [pending, startTransition] = useTransition();
 
+  const isWaiver = mode === "waiver";
   const rosterFull = openSpots === 0;
 
   function handleConfirm() {
     if (rosterFull && selected == null) return;
     startTransition(async () => {
-      await addFreeAgent(leagueId, addPlayer.id, selected ?? undefined);
+      if (isWaiver) {
+        await placeWaiverClaim(leagueId, addPlayer.id, selected ?? undefined);
+      } else {
+        await addFreeAgent(leagueId, addPlayer.id, selected ?? undefined);
+      }
       setOpen(false);
       setSelected(null);
     });
@@ -42,9 +49,13 @@ export function AddWithDropModal({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-xs bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white py-2 rounded-full font-medium transition shrink-0 ml-2 w-16 text-center min-h-[40px] md:min-h-0 md:py-1.5 inline-flex items-center justify-center"
+        className={`text-xs py-2 rounded-full font-medium transition shrink-0 ml-2 w-16 text-center min-h-[40px] md:min-h-0 md:py-1.5 inline-flex items-center justify-center ${
+          isWaiver
+            ? "bg-yellow-400 hover:bg-yellow-300 text-black"
+            : "bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white"
+        }`}
       >
-        Add
+        {isWaiver ? "Claim" : "Add"}
       </button>
 
       {open && (
@@ -58,7 +69,9 @@ export function AddWithDropModal({
           >
             {/* Header */}
             <div className="px-5 pt-5 pb-4 border-b border-white/5">
-              <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-1">Adding</p>
+              <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-1">
+                {isWaiver ? "Claiming" : "Adding"}
+              </p>
               <div className="flex items-center gap-2">
                 <span
                   className="text-xs font-bold uppercase px-2 py-0.5 rounded"
@@ -69,7 +82,9 @@ export function AddWithDropModal({
                 <p className="text-white font-bold text-base">{addPlayer.name}</p>
               </div>
               {rosterFull ? (
-                <p className="text-gray-400 text-xs mt-2">Your roster is full. Pick a player to drop.</p>
+                <p className="text-gray-400 text-xs mt-2">
+                  Your roster is full. Pick a player to drop {isWaiver ? "if this claim is granted." : "."}
+                </p>
               ) : (
                 <p className="text-[#36D7B7] text-xs font-medium mt-2 bg-[#36D7B7]/10 border border-[#36D7B7]/20 rounded-lg px-3 py-1.5">
                   You have {openSpots} open spot{openSpots !== 1 ? "s" : ""}. Optionally drop a player.
@@ -128,7 +143,7 @@ export function AddWithDropModal({
                 disabled={(rosterFull && selected == null) || pending}
                 className="flex-1 bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-40"
               >
-                {pending ? "Adding..." : "Confirm"}
+                {pending ? (isWaiver ? "Claiming..." : "Adding...") : isWaiver ? "Place claim" : "Confirm"}
               </button>
             </div>
           </div>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
+import { reorderWaiverClaims, cancelWaiverClaim } from "@/actions/rosters";
 
 type RosterTx = {
   id: number;
@@ -22,11 +23,20 @@ type CompletedTrade = {
   gave: string[];
 };
 
+type PendingClaim = {
+  id: number;
+  addName: string;
+  addDivision: string;
+  dropName: string | null;
+  dropDivision: string | null;
+};
+
 type Props = {
   leagueId: number;
   myTeamId: number;
   rosterTxs: RosterTx[];
   completedTrades: CompletedTrade[];
+  pendingClaims?: PendingClaim[];
 };
 
 function timeAgo(iso: string) {
@@ -40,8 +50,33 @@ function timeAgo(iso: string) {
   return "just now";
 }
 
-export function TeamActionsPanel({ leagueId, myTeamId, rosterTxs, completedTrades }: Props) {
+export function TeamActionsPanel({ leagueId, myTeamId, rosterTxs, completedTrades, pendingClaims = [] }: Props) {
   const [showTx, setShowTx] = useState(false);
+  const [order, setOrder] = useState<PendingClaim[]>(pendingClaims);
+  const [pending, startTransition] = useTransition();
+
+  // Re-sync local order when the set of claims changes (added/cancelled), but
+  // not on every render (which would clobber an in-flight reorder).
+  const claimKey = pendingClaims.map((c) => c.id).join(",");
+  useEffect(() => {
+    setOrder(pendingClaims);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [claimKey]);
+
+  function move(index: number, dir: -1 | 1) {
+    const target = index + dir;
+    if (target < 0 || target >= order.length) return;
+    const next = [...order];
+    [next[index], next[target]] = [next[target], next[index]];
+    setOrder(next);
+    startTransition(() => reorderWaiverClaims(leagueId, next.map((c) => c.id)));
+  }
+
+  function cancel(claim: PendingClaim) {
+    if (!window.confirm(`Cancel your waiver claim for ${claim.addName}?`)) return;
+    setOrder((prev) => prev.filter((c) => c.id !== claim.id));
+    startTransition(() => cancelWaiverClaim(leagueId, claim.id));
+  }
 
   const hasActivity = rosterTxs.length > 0 || completedTrades.length > 0;
 
@@ -71,19 +106,80 @@ export function TeamActionsPanel({ leagueId, myTeamId, rosterTxs, completedTrade
         </Link>
         <button
           onClick={() => setShowTx((v) => !v)}
-          className={`flex-1 text-sm font-semibold px-4 py-2.5 rounded-xl border transition ${
+          className={`flex-1 text-sm font-semibold px-4 py-2.5 rounded-xl border transition inline-flex items-center justify-center gap-2 ${
             showTx
               ? "bg-[#4B3DFF]/20 border-[#4B3DFF]/40 text-[#a09aff]"
               : "bg-[#1a1d23] hover:bg-[#23262e] border-white/5 text-white"
           }`}
         >
           Transactions
+          {order.length > 0 && (
+            <span className="bg-yellow-400 text-black text-[10px] font-bold leading-none px-1.5 py-0.5 rounded-full">
+              {order.length}
+            </span>
+          )}
         </button>
       </div>
 
       {/* Transactions panel */}
       {showTx && (
-        <div className="bg-[#1a1d23] rounded-2xl border border-white/5 overflow-hidden">
+        <div className="space-y-3">
+          {/* Pending waiver claims — own block, reorderable; #1 is attempted first */}
+          {order.length > 0 && (
+            <div className="bg-[#1a1d23] rounded-2xl border border-yellow-400/20 overflow-hidden">
+              <div className="px-4 py-2.5 flex items-center justify-between bg-yellow-400/5">
+                <p className="text-yellow-300 text-[11px] font-bold uppercase tracking-wide">Waiver claims pending</p>
+                <span className="text-gray-500 text-[10px]">#1 is attempted first</span>
+              </div>
+              <div className="divide-y divide-white/5">
+                {order.map((c, i) => (
+                  <div key={c.id} className="flex items-center gap-2 px-3 py-2.5">
+                    <span className="text-gray-400 text-xs font-mono w-4 text-center shrink-0">{i + 1}</span>
+                    <div className="flex flex-col -my-1 shrink-0 text-gray-400">
+                      <button
+                        type="button"
+                        disabled={pending || i === 0}
+                        onClick={() => move(i, -1)}
+                        aria-label="Move up"
+                        className="hover:text-white disabled:opacity-25 disabled:cursor-not-allowed leading-none"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={pending || i === order.length - 1}
+                        onClick={() => move(i, 1)}
+                        aria-label="Move down"
+                        className="hover:text-white disabled:opacity-25 disabled:cursor-not-allowed leading-none"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                      </button>
+                    </div>
+                    <p className="flex-1 min-w-0 text-white text-sm truncate">
+                      <span className="text-[#36D7B7]">+</span> {c.addName}
+                      {c.dropName && (
+                        <>
+                          <span className="text-gray-500 mx-1.5">/</span>
+                          <span className="text-red-400">−</span> {c.dropName}
+                        </>
+                      )}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => cancel(c)}
+                      disabled={pending}
+                      aria-label="Cancel claim"
+                      className="text-gray-400 hover:text-red-400 text-lg leading-none px-1 shrink-0 transition"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="bg-[#1a1d23] rounded-2xl border border-white/5 overflow-hidden">
           {!hasActivity ? (
             <p className="text-gray-400 text-sm text-center py-8">No recent transactions</p>
           ) : (
@@ -163,6 +259,7 @@ export function TeamActionsPanel({ leagueId, myTeamId, rosterTxs, completedTrade
               })}
             </div>
           )}
+          </div>
         </div>
       )}
     </div>

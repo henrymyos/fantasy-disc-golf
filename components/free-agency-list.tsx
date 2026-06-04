@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AddWithDropModal } from "@/components/add-with-drop-modal";
-import { cancelWaiverClaim, placeWaiverClaim } from "@/actions/rosters";
+import { cancelWaiverClaim } from "@/actions/rosters";
 
 type Player = {
   id: number;
@@ -97,14 +97,13 @@ export function FreeAgencyList({
         );
       }
       return (
-        <form action={placeWaiverClaim.bind(null, leagueId, player.id, undefined)} className="shrink-0 ml-2">
-          <button
-            type="submit"
-            className="text-xs bg-yellow-400 hover:bg-yellow-300 text-black py-2 rounded-full font-medium transition w-16 text-center min-h-[40px] md:min-h-0 md:py-1.5 inline-flex items-center justify-center"
-          >
-            Claim
-          </button>
-        </form>
+        <AddWithDropModal
+          mode="waiver"
+          leagueId={leagueId}
+          addPlayer={{ id: player.id, name: player.name, division: player.division }}
+          myRoster={myRoster}
+          openSpots={openSpots}
+        />
       );
     }
     return (

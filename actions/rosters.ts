@@ -445,16 +445,63 @@ export async function placeWaiverClaim(
     .maybeSingle();
   if (rostered) return;
 
+  // Append to the end of this team's pending-claim queue.
+  const { data: existing } = await admin
+    .from("waiver_claims")
+    .select("claim_order")
+    .eq("league_id", leagueId)
+    .eq("team_id", member.id)
+    .eq("status", "pending");
+  const nextOrder =
+    (existing ?? []).reduce((max, c) => Math.max(max, (c as any).claim_order ?? 0), 0) + 1;
+
   await admin.from("waiver_claims").insert({
     league_id: leagueId,
     team_id: member.id,
     player_id: playerId,
     drop_player_id: dropPlayerId ?? null,
     priority: (member as any).waiver_priority ?? null,
+    claim_order: nextOrder,
     status: "pending",
   });
 
   revalidatePath(`/league/${leagueId}/free-agency`);
+  revalidatePath(`/league/${leagueId}/lineups`);
+}
+
+/** Reorder a member's own pending waiver claims. `orderedClaimIds` is the new
+ *  priority order (first = attempted first). */
+export async function reorderWaiverClaims(leagueId: number, orderedClaimIds: number[]): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const admin = createAdminClient();
+  const { data: member } = await admin
+    .from("league_members")
+    .select("id")
+    .eq("league_id", leagueId)
+    .eq("user_id", user.id)
+    .single();
+  if (!member) return;
+
+  // Only reorder this member's own pending claims.
+  const { data: mine } = await admin
+    .from("waiver_claims")
+    .select("id")
+    .eq("league_id", leagueId)
+    .eq("team_id", member.id)
+    .eq("status", "pending");
+  const mineIds = new Set((mine ?? []).map((c) => (c as any).id as number));
+
+  let order = 1;
+  for (const id of orderedClaimIds) {
+    if (!mineIds.has(id)) continue;
+    await admin.from("waiver_claims").update({ claim_order: order }).eq("id", id);
+    order++;
+  }
+
+  revalidatePath(`/league/${leagueId}/lineups`);
 }
 
 export async function cancelWaiverClaim(leagueId: number, claimId: number): Promise<void> {
@@ -600,14 +647,16 @@ export async function runWaiverProcessing(leagueId: number): Promise<void> {
 
   const { data: claims } = await admin
     .from("waiver_claims")
-    .select("id, team_id, player_id, drop_player_id, submitted_at, league_members!inner(waiver_priority)")
+    .select("id, team_id, player_id, drop_player_id, submitted_at, claim_order, league_members!inner(waiver_priority)")
     .eq("league_id", leagueId)
     .eq("status", "pending")
+    .order("claim_order", { ascending: true, nullsFirst: false })
     .order("submitted_at", { ascending: true });
 
   if (!claims || claims.length === 0) return;
 
-  // Group claims by team, sorted by team waiver priority, then by submission.
+  // Group claims by team, sorted by team waiver priority, then the member's
+  // chosen claim order (first listed is attempted first).
   const byTeam = new Map<number, any[]>();
   for (const c of claims) {
     const list = byTeam.get(c.team_id) ?? [];

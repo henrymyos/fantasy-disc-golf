@@ -249,6 +249,30 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
     };
   });
 
+  // This team's pending waiver claims (shown + reorderable in the panel).
+  const { data: claimRows } = await supabase
+    .from("waiver_claims")
+    .select("id, player_id, drop_player_id, claim_order, submitted_at")
+    .eq("league_id", id)
+    .eq("team_id", myMember.id)
+    .eq("status", "pending")
+    .order("claim_order", { ascending: true, nullsFirst: false })
+    .order("submitted_at", { ascending: true });
+  const claimPlayerIds = [
+    ...new Set((claimRows ?? []).flatMap((c: any) => [c.player_id, c.drop_player_id]).filter(Boolean)),
+  ] as number[];
+  const { data: claimPlayers } = claimPlayerIds.length > 0
+    ? await supabase.from("players").select("id, name, division").in("id", claimPlayerIds)
+    : { data: [] };
+  const claimPmap = new Map<number, any>((claimPlayers ?? []).map((p: any) => [p.id, p]));
+  const pendingWaiverClaims = (claimRows ?? []).map((c: any) => ({
+    id: c.id as number,
+    addName: claimPmap.get(c.player_id)?.name ?? "Unknown",
+    addDivision: claimPmap.get(c.player_id)?.division ?? "MPO",
+    dropName: c.drop_player_id ? (claimPmap.get(c.drop_player_id)?.name ?? null) : null,
+    dropDivision: c.drop_player_id ? (claimPmap.get(c.drop_player_id)?.division ?? null) : null,
+  }));
+
   return (
     <div className="max-w-2xl space-y-4">
       {overRoster && (
@@ -281,6 +305,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
         myTeamId={myMember.id}
         rosterTxs={rosterTxs}
         completedTrades={completedTrades}
+        pendingClaims={pendingWaiverClaims}
       />
 
       <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
