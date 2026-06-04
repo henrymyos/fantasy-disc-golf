@@ -7,6 +7,7 @@ import { MobileTopBar } from "@/components/mobile-top-bar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { ProfileMenu } from "@/components/profile-menu";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
+import { InstallProvider, InstallSidebarItem } from "@/components/install-prompt";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -28,6 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .is("read_at", null);
 
   return (
+    <InstallProvider>
     <div className="min-h-screen bg-[#0f1117]">
       <ServiceWorkerRegister />
       {/* Mobile top bar (hidden md+) */}
@@ -45,6 +47,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </Link>
 
         <SidebarNav />
+
+        <InstallSidebarItem />
 
         <div className="border-t border-white/5 pt-4 mt-4">
           <ProfileMenu
@@ -64,5 +68,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
       <MobileBottomNav />
     </div>
+    </InstallProvider>
   );
 }

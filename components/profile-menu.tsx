@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
+import { InstallMenuItem } from "@/components/install-prompt";
 
 type Theme = "dark" | "light";
 type Variant = "sidebar" | "topbar";
@@ -190,6 +191,10 @@ export function ProfileMenu({
               </span>
             )}
           </Link>
+
+          {/* Install app — only in the mobile menu; desktop has it in the
+              sidebar above the profile. */}
+          {variant === "topbar" && <InstallMenuItem />}
 
           <div className="my-1 border-t border-white/5" />
 
