@@ -77,6 +77,12 @@ export default async function LeagueSettingsPage({
           subtitle={isCommissioner ? "Name, roster, scoring mode" : "View league details"}
         />
 
+        <Tile
+          href={`${base}/members`}
+          title="Members"
+          subtitle={isCommissioner ? "Remove teams, hand off commissioner" : "View teams · leave league"}
+        />
+
         {isCommissioner && (
           <Tile
             href={`${base}/season`}

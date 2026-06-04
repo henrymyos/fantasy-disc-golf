@@ -30,8 +30,18 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup");
-  const isPublicRoute = isAuthRoute || pathname === "/";
+  // Entry auth pages we bounce signed-in users away from.
+  const isAuthEntry =
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/signup") ||
+    pathname.startsWith("/forgot-password");
+  // Routes reachable without (normal) auth. /reset-password and /auth carry a
+  // recovery/confirmation session, so they must NOT redirect a signed-in user.
+  const isPublicRoute =
+    isAuthEntry ||
+    pathname.startsWith("/reset-password") ||
+    pathname.startsWith("/auth") ||
+    pathname === "/";
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();
@@ -39,7 +49,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && isAuthRoute) {
+  if (user && isAuthEntry) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);
