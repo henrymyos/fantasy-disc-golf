@@ -151,17 +151,18 @@ export default async function MyMatchupPage({
     weekTournamentId = (upcomingT as any)?.id ?? null;
   }
 
-  // Registered-player set for the target tournament. When populated, any
-  // roster player NOT in this set is OUT for the event (projected 0).
+  // Registered-player set + the event name/dates for this week's matchup.
   let registeredSet: Set<number> | null = null;
+  let weekTournamentName: string | null = activeTournament?.name ?? null;
   if (weekTournamentId != null) {
     const { data: regRow } = await supabase
       .from("tournaments")
-      .select("registered_player_ids")
+      .select("name, registered_player_ids")
       .eq("id", weekTournamentId)
       .maybeSingle();
     const ids = (regRow as any)?.registered_player_ids as number[] | null;
     if (ids && ids.length > 0) registeredSet = new Set(ids);
+    weekTournamentName = (regRow as any)?.name ?? weekTournamentName;
   }
 
   // When a tournament is active, estimate how far through it we are so we
@@ -356,6 +357,7 @@ export default async function MyMatchupPage({
         <h2 className="text-white font-bold text-xl">Your Matchup</h2>
         <p className="text-gray-400 text-sm mt-1">
           Week {(matchup as any).week}
+          {weekTournamentName && <> · <span className="text-gray-300">{weekTournamentName}</span></>}
           {isFinal ? " · Final" : " · live projection"}
         </p>
       </div>
@@ -596,26 +598,38 @@ function PointsCell({
     );
   }
 
-  // Sleeper-style: actual on top, pace-adjusted finishing projection below,
-  // colored against the original season projection.
-  let paceColor = "text-gray-400";
-  if (row.paceProjected != null && row.projected != null && row.projected > 0) {
-    const diff = row.paceProjected - row.projected;
-    const tol = Math.max(1.5, row.projected * 0.08); // within ~8% is "similar"
-    if (diff > tol) paceColor = "text-[#36D7B7]"; // green — outpacing
-    else if (diff < -tol) paceColor = "text-red-400"; // red — underpacing
-  }
-
-  return (
-    <div className={alignClass}>
-      <p className="text-white text-sm font-semibold tabular-nums">
-        {row.actual.toFixed(1)}
-      </p>
-      {row.paceProjected != null && (
-        <p className={`text-[10px] tabular-nums ${paceColor}`}>
+  // Live (event in progress): actual on top, pace projection (vs projection) below.
+  if (row.paceProjected != null) {
+    return (
+      <div className={alignClass}>
+        <p className="text-white text-sm font-semibold tabular-nums">{row.actual.toFixed(1)}</p>
+        <p className={`text-[10px] tabular-nums ${colorVsProjection(row.paceProjected, row.projected)}`}>
           ~{row.paceProjected.toFixed(1)}
         </p>
+      </div>
+    );
+  }
+
+  // Final / past: actual colored vs projection, with the projection in gray below.
+  return (
+    <div className={alignClass}>
+      <p className={`text-sm font-semibold tabular-nums ${colorVsProjection(row.actual, row.projected)}`}>
+        {row.actual.toFixed(1)}
+      </p>
+      {row.projected != null && (
+        <p className="text-[10px] tabular-nums text-gray-500">~{row.projected.toFixed(1)}</p>
       )}
     </div>
   );
+}
+
+/** Colors an actual score relative to its projection: green = beat it,
+ *  red = under it, gray = about as expected. */
+function colorVsProjection(actual: number, projected: number | null): string {
+  if (projected == null || projected <= 0) return "text-white";
+  const tol = Math.max(1.5, projected * 0.08);
+  const diff = actual - projected;
+  if (diff > tol) return "text-[#36D7B7]";
+  if (diff < -tol) return "text-red-400";
+  return "text-gray-300";
 }

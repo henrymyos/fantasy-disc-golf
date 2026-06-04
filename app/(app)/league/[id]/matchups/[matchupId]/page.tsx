@@ -99,11 +99,20 @@ export default async function MatchupDetailPage({
   // the actual results that produced its locked score.
   const { data: weekTournaments } = await supabase
     .from("tournaments")
-    .select("id, start_date, end_date, lock_at, registered_player_ids")
+    .select("id, name, start_date, end_date, lock_at, registered_player_ids")
     .eq("week", matchup.week)
     .order("start_date", { ascending: true });
   const weekTournamentIds = new Set((weekTournaments ?? []).map((t: any) => t.id as number));
   const primaryTournament = (weekTournaments ?? [])[0] as any | undefined;
+  const weekTournamentName: string | null = primaryTournament?.name ?? null;
+  const weekDateLabel: string | null = (() => {
+    if (!primaryTournament?.start_date) return null;
+    const fmt = (d: string) =>
+      new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+    const s = fmt(primaryTournament.start_date);
+    const e = primaryTournament.end_date ? fmt(primaryTournament.end_date) : s;
+    return s === e ? s : `${s} – ${e}`;
+  })();
 
   // The week's event is "in progress" when now is between its lock/start and end.
   let inProgress = false;
@@ -303,7 +312,7 @@ export default async function MatchupDetailPage({
           />
           <div className="text-center shrink-0">
             <span className="text-gray-400 text-xs font-bold uppercase tracking-widest">
-              {isFinal ? "Final" : inProgress ? "Live" : `Week ${matchup.week}`}
+              {isFinal ? "Final" : inProgress ? "Live" : "vs"}
             </span>
           </div>
           <TeamHeader
@@ -317,6 +326,12 @@ export default async function MatchupDetailPage({
             right
           />
         </div>
+
+        <p className="text-center text-gray-400 text-xs mt-3">
+          Week {matchup.week}
+          {weekTournamentName && <> · <span className="text-gray-300">{weekTournamentName}</span></>}
+          {weekDateLabel && <span className="text-gray-500"> · {weekDateLabel}</span>}
+        </p>
 
         {!isFinal && (
           <div className="mt-5">
@@ -493,6 +508,17 @@ function NameCell({
   );
 }
 
+/** Colors an actual score relative to its projection: green = beat it,
+ *  red = under it, gray = about as expected. */
+function colorVsProjection(actual: number, projected: number | null): string {
+  if (projected == null || projected <= 0) return "text-white";
+  const tol = Math.max(1.5, projected * 0.08);
+  const diff = actual - projected;
+  if (diff > tol) return "text-[#36D7B7]";
+  if (diff < -tol) return "text-red-400";
+  return "text-gray-300";
+}
+
 function PointsCell({
   row,
   align,
@@ -502,25 +528,40 @@ function PointsCell({
 }) {
   if (!row) return <div />;
   const alignClass = align === "right" ? "text-right" : "text-left";
-  if (row.actual == null && row.isOut) {
+
+  // Pre-event: projection only (0.0 in red when the player is OUT).
+  if (row.actual == null) {
+    if (row.isOut) {
+      return <p className={`text-sm tabular-nums font-semibold text-red-400 ${alignClass}`}>0.0</p>;
+    }
     return (
-      <p className={`text-sm tabular-nums font-semibold text-red-400 ${alignClass}`}>
-        0.0
+      <p className={`text-sm tabular-nums font-semibold text-gray-400 ${alignClass}`}>
+        {row.projected != null ? `~${row.projected.toFixed(1)}` : "—"}
       </p>
     );
   }
-  const display = row.actual != null
-    ? `${row.actual.toFixed(1)}`
-    : row.projected != null
-      ? `~${row.projected.toFixed(1)}`
-      : "—";
+
+  // Live (event in progress): actual on top, pace projection (vs projection) below.
+  if (row.paceProjected != null) {
+    return (
+      <div className={alignClass}>
+        <p className="text-white text-sm font-semibold tabular-nums">{row.actual.toFixed(1)}</p>
+        <p className={`text-[10px] tabular-nums ${colorVsProjection(row.paceProjected, row.projected)}`}>
+          ~{row.paceProjected.toFixed(1)}
+        </p>
+      </div>
+    );
+  }
+
+  // Final / past: actual colored vs projection, with the projection in gray below.
   return (
-    <p
-      className={`text-sm tabular-nums font-semibold ${
-        row.actual != null ? "text-[#36D7B7]" : "text-gray-400"
-      } ${alignClass}`}
-    >
-      {display}
-    </p>
+    <div className={alignClass}>
+      <p className={`text-sm font-semibold tabular-nums ${colorVsProjection(row.actual, row.projected)}`}>
+        {row.actual.toFixed(1)}
+      </p>
+      {row.projected != null && (
+        <p className="text-[10px] tabular-nums text-gray-500">~{row.projected.toFixed(1)}</p>
+      )}
+    </div>
   );
 }
