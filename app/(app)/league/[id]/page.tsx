@@ -9,12 +9,16 @@ import {
   formatEventLocation,
 } from "@/lib/dgpt-2026-schedule";
 import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
+import { rankTeams } from "@/lib/standings";
 import { applyProjectionVariance } from "@/lib/projections";
 import { getActiveTournament } from "@/lib/lineup-lock";
 import { LeagueChat } from "@/components/league-chat";
 import { CopyButton } from "@/components/copy-button";
+import { InviteLink } from "@/components/invite-link";
 import { getActivityFeed } from "@/lib/activity-feed";
 import { fetchDiscGolfNews } from "@/lib/news-feed";
+import { computeSetupSteps, setupProgress } from "@/lib/league-setup";
+import { OnboardingChecklist } from "@/components/onboarding-checklist";
 
 // Standard-normal CDF via Abramowitz & Stegun 7.1.26 approximation.
 function normalCdfOnDashboard(x: number): number {
@@ -39,11 +43,13 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, name, current_week, starters_count, selected_event_slugs, waivers_locked, scoring_mode, invite_code, max_teams")
+    .select("id, name, current_week, starters_count, selected_event_slugs, waivers_locked, scoring_mode, scoring_rules, invite_code, max_teams, commissioner_id")
     .eq("id", id)
     .single();
 
   if (!league) notFound();
+
+  const isCommissioner = (league as any).commissioner_id === user.id;
 
   const activeTournament = await getActiveTournament(supabase);
   const waiversActive = (league as any).waivers_locked === true || activeTournament !== null;
@@ -57,10 +63,16 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   const { data: draft } = await supabase
     .from("drafts")
-    .select("status")
+    .select("status, scheduled_at")
     .eq("league_id", id)
     .single();
   const showMockDraft = draft?.status !== "complete";
+
+  // Setup checklist: any-matchup existence is needed; member count comes from
+  // the members query below, so steps are assembled after that.
+  const { count: anyMatchupCount } = isCommissioner
+    ? await supabase.from("matchups").select("id", { count: "exact", head: true }).eq("league_id", id)
+    : { count: 0 };
 
   const { data: members } = await supabase
     .from("league_members")
@@ -138,11 +150,31 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
     }
   }
 
-  const standings = (members ?? [])
-    .map((m) => ({ ...m, ...winsMap[m.id] }))
-    .sort((a, b) => b.wins - a.wins || b.points - a.points);
+  const ranked = rankTeams(winsMap, (allMatchups ?? []) as any, {
+    headToHead: scoringMode === "head_to_head",
+  });
+  const membersById = new Map((members ?? []).map((m) => [m.id, m]));
+  const standings = ranked
+    .map((e) => {
+      const m = membersById.get(e.teamId);
+      return m ? { ...m, wins: e.wins, losses: e.losses, points: e.points, strengthOfSchedule: e.strengthOfSchedule } : null;
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
 
   const myMembership = (members ?? []).find((m) => m.user_id === user.id);
+
+  const setupSteps = isCommissioner
+    ? computeSetupSteps(`/league/${id}`, {
+        memberCount: (members ?? []).length,
+        maxTeams: (league as any).max_teams ?? null,
+        scheduleConfigured: (league as any).selected_event_slugs != null,
+        matchupsGenerated: (anyMatchupCount ?? 0) > 0,
+        scoringConfigured: (league as any).scoring_rules != null,
+        draftStatus: draft?.status ?? null,
+        draftScheduledAt: (draft as any)?.scheduled_at ?? null,
+      })
+    : null;
+  const setupComplete = setupSteps ? setupProgress(setupSteps).complete : true;
 
   const activity = await getActivityFeed(supabase, Number(id), 15);
   const news = await fetchDiscGolfNews(6);
@@ -332,7 +364,16 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                     </div>
                     <div className="text-right">
                       <p className="text-white text-sm font-semibold">{t.wins}-{t.losses}</p>
-                      <p className="text-gray-400 text-xs">{t.points.toFixed(0)} pts</p>
+                      <p
+                        className="text-gray-400 text-xs"
+                        title={
+                          (t as any).strengthOfSchedule >= 0
+                            ? `Strength of schedule: ${Math.round((t as any).strengthOfSchedule * 100)}% (avg opponent win rate)`
+                            : "Strength of schedule: —"
+                        }
+                      >
+                        {t.points.toFixed(0)} pts
+                      </p>
                     </div>
                   </Link>
                 );
@@ -347,13 +388,20 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
       {/* This week's matchups */}
       <div className="lg:col-span-2 space-y-4">
+        {setupSteps && !setupComplete && (
+          <OnboardingChecklist steps={setupSteps} />
+        )}
+
         {showInviteCode && (
-          <div className="bg-[#1a1d23] rounded-xl px-4 py-2.5 border border-[#4B3DFF]/30 flex items-center gap-3">
-            <span className="text-gray-400 text-xs shrink-0">Invite code</span>
-            <span className="flex-1 min-w-0 font-mono text-white font-bold tracking-widest select-all truncate">
-              {inviteCode}
-            </span>
-            <CopyButton value={inviteCode!} label="Copy invite code" className="h-8 w-8" />
+          <div className="bg-[#1a1d23] rounded-xl px-4 py-3 border border-[#4B3DFF]/30 space-y-2">
+            <div className="flex items-center gap-3">
+              <span className="text-gray-400 text-xs shrink-0">Invite code</span>
+              <span className="flex-1 min-w-0 font-mono text-white font-bold tracking-widest select-all truncate">
+                {inviteCode}
+              </span>
+              <CopyButton value={inviteCode!} label="Copy invite code" className="h-8 w-8" />
+            </div>
+            <InviteLink code={inviteCode!} leagueName={league.name} />
           </div>
         )}
 

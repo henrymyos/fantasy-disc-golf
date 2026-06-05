@@ -1,11 +1,14 @@
 "use client";
 
-import { useActionState } from "react";
+import { Suspense, useActionState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { joinLeague, type LeagueActionState } from "@/actions/leagues";
 
-export default function JoinLeaguePage() {
+function JoinLeagueForm() {
   const [state, action, pending] = useActionState<LeagueActionState, FormData>(joinLeague, null);
+  const searchParams = useSearchParams();
+  const prefilledCode = (searchParams.get("code") ?? "").toUpperCase();
 
   return (
     <div className="max-w-md">
@@ -24,9 +27,13 @@ export default function JoinLeaguePage() {
             <input
               name="inviteCode"
               required
+              defaultValue={prefilledCode}
               className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white placeholder-gray-600 focus:outline-none focus:border-[#4B3DFF] transition uppercase tracking-wider font-mono"
               placeholder="AB12CD34"
             />
+            {prefilledCode && (
+              <p className="text-gray-500 text-xs mt-1">Code filled in from your invite link.</p>
+            )}
             {state?.errors?.inviteCode && (
               <p className="text-red-400 text-xs mt-1">{state.errors.inviteCode[0]}</p>
             )}
@@ -59,5 +66,13 @@ export default function JoinLeaguePage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function JoinLeaguePage() {
+  return (
+    <Suspense fallback={<div className="max-w-md text-gray-400 text-sm">Loading…</div>}>
+      <JoinLeagueForm />
+    </Suspense>
   );
 }

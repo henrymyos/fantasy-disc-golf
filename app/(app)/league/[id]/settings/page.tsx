@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { deleteLeague } from "@/actions/leagues";
 import { CopyButton } from "@/components/copy-button";
+import { InviteLink } from "@/components/invite-link";
 import { DGPT_2026_SCHEDULE, effectiveSelection, getPlayoffSlugs } from "@/lib/dgpt-2026-schedule";
 
 export default async function LeagueSettingsPage({
@@ -58,15 +59,36 @@ export default async function LeagueSettingsPage({
 
   return (
     <div className="max-w-2xl space-y-5">
+      {isCommissioner && (
+        <Link
+          href={`/league/${id}/commish`}
+          className="block bg-[#4B3DFF]/10 hover:bg-[#4B3DFF]/15 rounded-2xl border border-[#4B3DFF]/30 p-4 transition group"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-white font-bold text-base leading-tight">Commissioner Dashboard</p>
+              <p className="text-gray-400 text-xs mt-0.5">Setup checklist, dues, pending items, and every control in one place</p>
+            </div>
+            <span className="text-[#a09aff] group-hover:translate-x-0.5 transition text-lg shrink-0">→</span>
+          </div>
+        </Link>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         {inviteCode && (
-          <div className="col-span-2 sm:col-span-1 bg-[#1a1d23] rounded-2xl border border-white/5 p-4 min-h-[120px] flex flex-col justify-between">
-            <p className="text-white font-bold text-base leading-tight">Invite Code</p>
-            <div className="flex items-center gap-2">
-              <span className="flex-1 min-w-0 font-mono text-white font-bold text-lg tracking-wider border border-white/10 rounded-lg px-3 py-2 bg-white/5 select-all text-center break-all">
-                {inviteCode}
-              </span>
-              <CopyButton value={inviteCode} label="Copy invite code" />
+          <div className="col-span-2 bg-[#1a1d23] rounded-2xl border border-white/5 p-4 space-y-3">
+            <div>
+              <p className="text-white font-bold text-base leading-tight mb-1.5">Invite Code</p>
+              <div className="flex items-center gap-2">
+                <span className="flex-1 min-w-0 font-mono text-white font-bold text-lg tracking-wider border border-white/10 rounded-lg px-3 py-2 bg-white/5 select-all text-center break-all">
+                  {inviteCode}
+                </span>
+                <CopyButton value={inviteCode} label="Copy invite code" />
+              </div>
+            </div>
+            <div>
+              <p className="text-gray-400 text-xs mb-1.5">Or share a one-tap join link</p>
+              <InviteLink code={inviteCode} leagueName={league.name} />
             </div>
           </div>
         )}

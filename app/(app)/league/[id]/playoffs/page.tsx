@@ -7,8 +7,9 @@ import {
   PLAYOFF_COUNT,
 } from "@/lib/dgpt-2026-schedule";
 import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
+import { rankTeams } from "@/lib/standings";
 
-type Seed = { id: number; team_name: string; wins: number; losses: number; points: number };
+type Seed = { id: number; team_name: string; wins: number; losses: number; points: number; sos: number };
 
 function nextPowerOfTwo(n: number): number {
   return Math.pow(2, Math.ceil(Math.log2(Math.max(2, n))));
@@ -81,9 +82,18 @@ export default async function PlayoffsPage({ params }: { params: Promise<{ id: s
     }
   }
 
-  const standings: Seed[] = (members ?? [])
-    .map((m) => ({ ...m, ...winsMap[m.id] }))
-    .sort((a, b) => b.wins - a.wins || b.points - a.points);
+  const ranked = rankTeams(winsMap, (allMatchups ?? []) as any, {
+    headToHead: scoringMode === "head_to_head",
+  });
+  const membersById = new Map((members ?? []).map((m) => [m.id, m]));
+  const standings: Seed[] = ranked
+    .map((e) => {
+      const m = membersById.get(e.teamId);
+      return m
+        ? { id: m.id, team_name: m.team_name, wins: e.wins, losses: e.losses, points: e.points, sos: e.strengthOfSchedule }
+        : null;
+    })
+    .filter((x): x is Seed => x !== null);
 
   // Bracket size: round up the number of playoff events + 1 to next power of two.
   // Top seeds get byes if size > playoffEvents.length + 1.
@@ -170,20 +180,42 @@ export default async function PlayoffsPage({ params }: { params: Promise<{ id: s
         </div>
       )}
 
-      {standings.length > bracketSize && (
+      {standings.length > 0 && (
         <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
-          <h3 className="text-white font-semibold mb-3">Missed the cut</h3>
-          <div className="space-y-1">
-            {standings.slice(bracketSize).map((t, i) => (
-              <div key={t.id} className="flex items-center justify-between py-1.5 px-2 text-sm">
-                <div className="flex items-center gap-3">
-                  <span className="text-gray-400 text-xs font-mono w-5">#{bracketSize + i + 1}</span>
-                  <span className="text-white">{t.team_name}</span>
-                </div>
-                <span className="text-gray-400 text-xs">{t.wins}-{t.losses}</span>
-              </div>
-            ))}
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-white font-semibold">Seeding &amp; tiebreakers</h3>
+            <span className="text-gray-400 text-[11px]">SoS = avg opponent win rate</span>
           </div>
+          <div className="grid grid-cols-[1.5rem_1fr_auto_auto_auto] gap-x-3 gap-y-0 text-xs">
+            <div className="contents text-gray-500">
+              <span></span>
+              <span className="pb-1">Team</span>
+              <span className="pb-1 text-right">W-L</span>
+              <span className="pb-1 text-right">Pts</span>
+              <span className="pb-1 text-right">SoS</span>
+            </div>
+            {standings.map((t, i) => {
+              const inBracket = i < bracketSize;
+              return (
+                <div
+                  key={t.id}
+                  className={`contents ${i === bracketSize ? "[&>*]:border-t [&>*]:border-dashed [&>*]:border-[#4B3DFF]/40 [&>*]:pt-2" : ""}`}
+                >
+                  <span className={`py-1.5 font-mono ${inBracket ? "text-[#4B3DFF]" : "text-gray-500"}`}>#{i + 1}</span>
+                  <span className={`py-1.5 truncate ${inBracket ? "text-white" : "text-gray-300"}`}>{t.team_name}</span>
+                  <span className="py-1.5 text-right text-gray-300">{t.wins}-{t.losses}</span>
+                  <span className="py-1.5 text-right text-gray-400">{t.points.toFixed(0)}</span>
+                  <span className="py-1.5 text-right text-gray-400">
+                    {t.sos >= 0 ? `${Math.round(t.sos * 100)}%` : "—"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-gray-500 text-[11px] mt-3 leading-relaxed">
+            Ties broken by: head-to-head record{scoringMode !== "head_to_head" ? " (when applicable)" : ""}, then total points,
+            then strength of schedule. The dashed line marks the {bracketSize}-team playoff cut.
+          </p>
         </div>
       )}
     </div>
