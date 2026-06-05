@@ -1,9 +1,10 @@
 import {
-  DGPT_2026_SCHEDULE,
   formatEventDateRange,
   formatEventLocation,
   type DgptEvent,
 } from "@/lib/dgpt-2026-schedule";
+import { createClient } from "@/lib/supabase/server";
+import { getScheduleEvents } from "@/lib/schedule";
 
 const MAJOR_SLUGS = new Set(["champions-cup", "pdga-pro-worlds", "usdgc"]);
 
@@ -15,8 +16,11 @@ function eventTier(event: DgptEvent): { label: string; color: string } {
 }
 
 export default async function ProTourPage() {
+  const supabase = await createClient();
   const today = new Date().toISOString().slice(0, 10);
-  const recentEvents = DGPT_2026_SCHEDULE
+  const season = new Date().getUTCFullYear();
+  const allEvents = await getScheduleEvents(supabase, season);
+  const recentEvents = allEvents
     .filter((e) => e.endDate <= today)
     .sort((a, b) => b.endDate.localeCompare(a.endDate))
     .slice(0, 6);

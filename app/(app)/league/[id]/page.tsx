@@ -3,11 +3,11 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { LeagueMember, Matchup } from "@/types";
 import {
-  DGPT_2026_SCHEDULE,
   effectiveSelection,
   formatEventDateRange,
   formatEventLocation,
 } from "@/lib/dgpt-2026-schedule";
+import { getScheduleEvents, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
 import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
 import { rankTeams } from "@/lib/standings";
 import { applyProjectionVariance } from "@/lib/projections";
@@ -43,7 +43,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, name, current_week, starters_count, selected_event_slugs, waivers_locked, scoring_mode, scoring_rules, invite_code, max_teams, commissioner_id")
+    .select("id, name, current_week, starters_count, selected_event_slugs, waivers_locked, scoring_mode, scoring_rules, invite_code, max_teams, commissioner_id, season_year")
     .eq("id", id)
     .single();
 
@@ -54,9 +54,10 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   const activeTournament = await getActiveTournament(supabase);
   const waiversActive = (league as any).waivers_locked === true || activeTournament !== null;
 
-  const selectedSlugs = new Set(effectiveSelection((league as any).selected_event_slugs));
+  const scheduleEvents = await getScheduleEvents(supabase, (league as any).season_year ?? DEFAULT_SEASON_YEAR);
+  const selectedSlugs = new Set(effectiveSelection((league as any).selected_event_slugs, scheduleEvents));
   const today = new Date().toISOString().slice(0, 10);
-  const upcomingEvents = DGPT_2026_SCHEDULE
+  const upcomingEvents = scheduleEvents
     .filter((e) => selectedSlugs.has(e.slug) && e.startDate > today)
     .sort((a, b) => a.startDate.localeCompare(b.startDate))
     .slice(0, 6);

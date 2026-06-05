@@ -41,9 +41,13 @@ export const DGPT_2026_SCHEDULE: DgptEvent[] = [
 export const DGPT_2026_SLUGS = DGPT_2026_SCHEDULE.map((e) => e.slug);
 
 /** Resolves the effective season list given a possibly-null stored selection.
- *  Null/undefined => all events. */
-export function effectiveSelection(stored: string[] | null | undefined): string[] {
-  if (stored == null) return DGPT_2026_SLUGS;
+ *  Null/undefined => all events for the provided schedule (defaults to the
+ *  static 2026 list when no data-driven schedule is supplied). */
+export function effectiveSelection(
+  stored: string[] | null | undefined,
+  events: DgptEvent[] = DGPT_2026_SCHEDULE,
+): string[] {
+  if (stored == null) return events.map((e) => e.slug);
   return stored;
 }
 
@@ -71,13 +75,15 @@ export function formatEventLocation(e: DgptEvent): string {
 export const PLAYOFF_COUNT = 3;
 
 /** Returns the slugs of the last N selected events (chronologically by end date)
- *  that should be treated as playoffs. */
+ *  that should be treated as playoffs. Operates on the provided schedule
+ *  (defaults to the static 2026 list when no data-driven schedule is given). */
 export function getPlayoffSlugs(
   selectedSlugs: Iterable<string>,
-  n: number = PLAYOFF_COUNT
+  n: number = PLAYOFF_COUNT,
+  events: DgptEvent[] = DGPT_2026_SCHEDULE,
 ): string[] {
   const selectedSet = new Set(selectedSlugs);
-  const selectedEvents = DGPT_2026_SCHEDULE.filter((e) => selectedSet.has(e.slug));
+  const selectedEvents = events.filter((e) => selectedSet.has(e.slug));
   selectedEvents.sort((a, b) => b.endDate.localeCompare(a.endDate));
   return selectedEvents.slice(0, n).map((e) => e.slug);
 }

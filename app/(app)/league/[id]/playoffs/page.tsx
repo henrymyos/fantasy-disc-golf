@@ -1,11 +1,11 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
-  DGPT_2026_SCHEDULE,
   effectiveSelection,
   getPlayoffSlugs,
   PLAYOFF_COUNT,
 } from "@/lib/dgpt-2026-schedule";
+import { getScheduleEvents, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
 import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
 import { rankTeams } from "@/lib/standings";
 
@@ -23,10 +23,12 @@ export default async function PlayoffsPage({ params }: { params: Promise<{ id: s
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, name, current_week, scoring_mode, selected_event_slugs")
+    .select("id, name, current_week, scoring_mode, selected_event_slugs, season_year")
     .eq("id", id)
     .single();
   if (!league) notFound();
+
+  const scheduleEvents = await getScheduleEvents(supabase, (league as any).season_year ?? DEFAULT_SEASON_YEAR);
 
   const scoringMode = (((league as any).scoring_mode ?? "head_to_head") as
     | "head_to_head"
@@ -34,9 +36,9 @@ export default async function PlayoffsPage({ params }: { params: Promise<{ id: s
     | "median");
 
   // Playoff slate is the last N selected events.
-  const selectedSlugs = effectiveSelection((league as any).selected_event_slugs);
-  const playoffSlugs = getPlayoffSlugs(selectedSlugs);
-  const playoffEvents = DGPT_2026_SCHEDULE.filter((e) => playoffSlugs.includes(e.slug))
+  const selectedSlugs = effectiveSelection((league as any).selected_event_slugs, scheduleEvents);
+  const playoffSlugs = getPlayoffSlugs(selectedSlugs, PLAYOFF_COUNT, scheduleEvents);
+  const playoffEvents = scheduleEvents.filter((e) => playoffSlugs.includes(e.slug))
     .sort((a, b) => a.startDate.localeCompare(b.startDate));
 
   // Compute standings — same logic as the league dashboard.

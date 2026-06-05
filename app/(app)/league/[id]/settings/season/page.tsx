@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { DGPT_2026_SCHEDULE, effectiveSelection } from "@/lib/dgpt-2026-schedule";
+import { effectiveSelection } from "@/lib/dgpt-2026-schedule";
+import { getScheduleEvents, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
 import { EditSeasonForm } from "@/components/edit-season-form";
 
 export default async function EditSeasonPage({
@@ -16,7 +17,7 @@ export default async function EditSeasonPage({
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, name, commissioner_id, selected_event_slugs")
+    .select("id, name, commissioner_id, selected_event_slugs, season_year")
     .eq("id", id)
     .single();
   if (!league) notFound();
@@ -25,16 +26,20 @@ export default async function EditSeasonPage({
     redirect(`/league/${id}/settings`);
   }
 
+  const seasonYear = (league as any).season_year ?? DEFAULT_SEASON_YEAR;
+  const events = await getScheduleEvents(supabase, seasonYear);
+
   // Drop any stale slugs that aren't on the current schedule (e.g., removed
   // events) so the displayed count doesn't exceed the schedule total.
-  const scheduleSlugs = new Set(DGPT_2026_SCHEDULE.map((e) => e.slug));
-  const selected = effectiveSelection((league as any).selected_event_slugs)
+  const scheduleSlugs = new Set(events.map((e) => e.slug));
+  const selected = effectiveSelection((league as any).selected_event_slugs, events)
     .filter((s) => scheduleSlugs.has(s));
 
   return (
     <EditSeasonForm
       leagueId={id}
-      events={DGPT_2026_SCHEDULE}
+      seasonYear={seasonYear}
+      events={events}
       initialSelected={selected}
     />
   );

@@ -5,13 +5,14 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildSeasonSchedule } from "@/lib/matchup-scheduler";
-import { effectiveSelection, getPlayoffSlugs } from "@/lib/dgpt-2026-schedule";
+import { effectiveSelection, getPlayoffSlugs, PLAYOFF_COUNT, type DgptEvent } from "@/lib/dgpt-2026-schedule";
+import { getScheduleEvents, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
 
-function regularSeasonWeekCount(selectedSlugs: string[]): number {
+function regularSeasonWeekCount(selectedSlugs: string[], events: DgptEvent[]): number {
   // Total selected events minus the playoff slate at the end. Fall back to 14
   // weeks if the selection looks empty so users always get a schedule.
   if (!selectedSlugs || selectedSlugs.length === 0) return 14;
-  const playoffs = new Set(getPlayoffSlugs(selectedSlugs));
+  const playoffs = new Set(getPlayoffSlugs(selectedSlugs, PLAYOFF_COUNT, events));
   return Math.max(1, selectedSlugs.length - playoffs.size);
 }
 
@@ -23,7 +24,7 @@ export async function regenerateLeagueMatchups(leagueId: number): Promise<void> 
 
   const { data: league } = await admin
     .from("leagues")
-    .select("selected_event_slugs, current_week")
+    .select("selected_event_slugs, current_week, season_year")
     .eq("id", leagueId)
     .single();
   if (!league) return;
@@ -35,8 +36,9 @@ export async function regenerateLeagueMatchups(leagueId: number): Promise<void> 
     .order("joined_at");
   if (!members || members.length < 2) return;
 
-  const selectedSlugs = effectiveSelection((league as any).selected_event_slugs);
-  const totalWeeks = regularSeasonWeekCount(selectedSlugs);
+  const events = await getScheduleEvents(admin, (league as any).season_year ?? DEFAULT_SEASON_YEAR);
+  const selectedSlugs = effectiveSelection((league as any).selected_event_slugs, events);
+  const totalWeeks = regularSeasonWeekCount(selectedSlugs, events);
   const schedule = buildSeasonSchedule(
     members.map((m: any) => ({ id: m.id, divisionName: m.division_name })),
     totalWeeks,

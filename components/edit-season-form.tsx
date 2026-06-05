@@ -14,11 +14,12 @@ import {
 
 type Props = {
   leagueId: string;
+  seasonYear: number;
   events: DgptEvent[];
   initialSelected: string[];
 };
 
-export function EditSeasonForm({ leagueId, events, initialSelected }: Props) {
+export function EditSeasonForm({ leagueId, seasonYear, events, initialSelected }: Props) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(() => new Set(initialSelected));
   const [pending, startTransition] = useTransition();
@@ -84,7 +85,7 @@ export function EditSeasonForm({ leagueId, events, initialSelected }: Props) {
 
   const total = events.length;
   const count = selected.size;
-  const playoffSet = useMemo(() => new Set(getPlayoffSlugs(selected)), [selected]);
+  const playoffSet = useMemo(() => new Set(getPlayoffSlugs(selected, PLAYOFF_COUNT, events)), [selected, events]);
   const playoffCount = playoffSet.size;
   const regularCount = Math.max(0, count - playoffCount);
 
@@ -106,7 +107,7 @@ export function EditSeasonForm({ leagueId, events, initialSelected }: Props) {
           </span>
         </div>
         <p className="text-gray-400 text-sm mt-2">
-          Select which 2026 DGPT events count toward the season. The last {PLAYOFF_COUNT}{" "}
+          Select which {seasonYear} DGPT events count toward the season. The last {PLAYOFF_COUNT}{" "}
           selected events of the year are marked as <span className="text-[#F5A524] font-semibold">PLAYOFFS</span>.
         </p>
       </div>

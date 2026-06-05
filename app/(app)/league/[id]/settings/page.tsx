@@ -4,7 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { deleteLeague } from "@/actions/leagues";
 import { CopyButton } from "@/components/copy-button";
 import { InviteLink } from "@/components/invite-link";
-import { DGPT_2026_SCHEDULE, effectiveSelection, getPlayoffSlugs } from "@/lib/dgpt-2026-schedule";
+import { effectiveSelection, getPlayoffSlugs } from "@/lib/dgpt-2026-schedule";
+import { getScheduleEvents, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
 
 export default async function LeagueSettingsPage({
   params,
@@ -18,7 +19,7 @@ export default async function LeagueSettingsPage({
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, name, commissioner_id, invite_code, selected_event_slugs")
+    .select("id, name, commissioner_id, invite_code, selected_event_slugs, season_year")
     .eq("id", id)
     .single();
   if (!league) notFound();
@@ -47,13 +48,13 @@ export default async function LeagueSettingsPage({
     .eq("status", "complete");
 
   const inviteCode = (league as any).invite_code as string | null;
-  const selectedSlugs = effectiveSelection((league as any).selected_event_slugs);
-  const validSelected = selectedSlugs.filter((s) =>
-    DGPT_2026_SCHEDULE.some((e) => e.slug === s),
-  );
+  const events = await getScheduleEvents(supabase, (league as any).season_year ?? DEFAULT_SEASON_YEAR);
+  const eventSlugs = new Set(events.map((e) => e.slug));
+  const selectedSlugs = effectiveSelection((league as any).selected_event_slugs, events);
+  const validSelected = selectedSlugs.filter((s) => eventSlugs.has(s));
   const selectedCount = validSelected.length;
-  const playoffCount = getPlayoffSlugs(validSelected).length;
-  const totalEvents = DGPT_2026_SCHEDULE.length;
+  const playoffCount = getPlayoffSlugs(validSelected, undefined, events).length;
+  const totalEvents = events.length;
 
   const base = `/league/${id}/settings`;
 

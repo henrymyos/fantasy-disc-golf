@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { z } from "zod";
-import { DGPT_2026_SCHEDULE } from "@/lib/dgpt-2026-schedule";
+import { getScheduleEvents, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
 
 function generateInviteCode(): string {
   return Math.random().toString(36).substring(2, 10).toUpperCase();
@@ -229,13 +229,16 @@ export async function setSelectedEvents(
 
   const { data: league } = await admin
     .from("leagues")
-    .select("commissioner_id")
+    .select("commissioner_id, season_year")
     .eq("id", leagueId)
     .single();
 
   if (!league || league.commissioner_id !== user.id) {
     throw new Error("Not authorized");
   }
+
+  const seasonYear = (league as any).season_year ?? DEFAULT_SEASON_YEAR;
+  const events = await getScheduleEvents(admin, seasonYear);
 
   const cleaned = Array.from(new Set(slugs.filter((s) => typeof s === "string" && s.length > 0)));
 
@@ -247,7 +250,7 @@ export async function setSelectedEvents(
   lockBoundary.setDate(lockBoundary.getDate() + 30);
   const lockBoundaryIso = lockBoundary.toISOString().slice(0, 10);
   const lockedSlugs = new Set(
-    DGPT_2026_SCHEDULE.filter((e) => e.startDate <= lockBoundaryIso).map((e) => e.slug),
+    events.filter((e) => e.startDate <= lockBoundaryIso).map((e) => e.slug),
   );
 
   const { data: current } = await admin
