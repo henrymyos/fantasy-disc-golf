@@ -73,6 +73,22 @@ export async function autoFinalizeDueWeeks(admin: SupabaseClient): Promise<strin
         try { await runPdgaImport(admin); } catch { /* fall back to stored results */ }
         imported = true;
       }
+      // Graceful degradation: if the week's event still has no results (PDGA
+      // hasn't posted them or the import failed), wait rather than locking a
+      // bogus 0-0 result for everyone. A later cron run will pick it up once
+      // results exist; the commissioner can also finalize manually.
+      const { data: weekTourneys } = await admin.from("tournaments").select("id").eq("week", week);
+      const weekTids = (weekTourneys ?? []).map((t: any) => t.id);
+      let hasResults = false;
+      if (weekTids.length > 0) {
+        const { count: rc } = await admin
+          .from("tournament_results")
+          .select("id", { count: "exact", head: true })
+          .in("tournament_id", weekTids);
+        hasResults = (rc ?? 0) > 0;
+      }
+      if (!hasResults) continue;
+
       await finalizeWeekScoresCore(admin, leagueId, week);
       done.push(`${leagueId}:${week}`);
     }

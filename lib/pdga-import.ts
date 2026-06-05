@@ -359,11 +359,19 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
     }
   }
 
-  const { error: delErr } = await supabase
-    .from("tournament_results")
-    .delete()
-    .neq("id", -1);
-  if (delErr) throw delErr;
+  // Graceful degradation: only replace results for events that actually
+  // produced rows this run. If PDGA is down, an event hasn't posted results
+  // yet, or a scrape returns empty, we leave that event's existing results
+  // untouched instead of wiping them — so a transient failure never zeroes out
+  // already-imported (and possibly finalized) scores.
+  const scrapedEventIds = new Set<number>(rowsToInsert.map((r) => r.tournament_id as number));
+  for (const tid of scrapedEventIds) {
+    const { error: delErr } = await supabase
+      .from("tournament_results")
+      .delete()
+      .eq("tournament_id", tid);
+    if (delErr) throw delErr;
+  }
 
   for (let i = 0; i < rowsToInsert.length; i += 500) {
     const chunk = rowsToInsert.slice(i, i + 500);
