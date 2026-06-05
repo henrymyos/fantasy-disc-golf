@@ -116,6 +116,14 @@ export default async function LeagueSettingsPage({
 
         {isCommissioner && (
           <Tile
+            href={`${base}/season-rollover`}
+            title="Start Next Season"
+            subtitle="Archive, carry keepers, and open a fresh draft"
+          />
+        )}
+
+        {isCommissioner && (
+          <Tile
             href={`${base}/divisions`}
             title="Divisions & Matchups"
             subtitle="Set divisions and edit the schedule"

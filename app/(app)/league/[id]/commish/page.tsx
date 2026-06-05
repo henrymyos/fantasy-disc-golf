@@ -168,7 +168,7 @@ export default async function CommishDashboard({ params }: { params: Promise<{ i
           {(league as any).keepers_per_team > 0 && (
             <QuickLink href={`${base}/settings/keepers`} label="Keepers" />
           )}
-          <QuickLink href={`${base}/settings/season`} label="Start next season" />
+          <QuickLink href={`${base}/settings/season-rollover`} label="Start next season" />
         </div>
       </div>
     </div>
