@@ -19,6 +19,8 @@ import { getActivityFeed } from "@/lib/activity-feed";
 import { fetchDiscGolfNews } from "@/lib/news-feed";
 import { computeSetupSteps, setupProgress } from "@/lib/league-setup";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
+import { stripeEnabled } from "@/lib/stripe";
+import { createDuesCheckout } from "@/actions/dues";
 
 // Standard-normal CDF via Abramowitz & Stegun 7.1.26 approximation.
 function normalCdfOnDashboard(x: number): number {
@@ -43,7 +45,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, name, current_week, starters_count, selected_event_slugs, waivers_locked, scoring_mode, scoring_rules, invite_code, max_teams, commissioner_id, season_year")
+    .select("id, name, current_week, starters_count, selected_event_slugs, waivers_locked, scoring_mode, scoring_rules, invite_code, max_teams, commissioner_id, season_year, dues_amount")
     .eq("id", id)
     .single();
 
@@ -77,7 +79,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   const { data: members } = await supabase
     .from("league_members")
-    .select("id, team_name, user_id, is_commissioner, waiver_priority, profiles(username)")
+    .select("id, team_name, user_id, is_commissioner, waiver_priority, dues_paid, profiles(username)")
     .eq("league_id", id)
     .order("joined_at");
 
@@ -176,6 +178,10 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
       })
     : null;
   const setupComplete = setupSteps ? setupProgress(setupSteps).complete : true;
+
+  const duesAmount = Number((league as any).dues_amount ?? 0);
+  const myDuesUnpaid = !!myMembership && duesAmount > 0 && !(myMembership as any).dues_paid;
+  const canPayOnline = stripeEnabled();
 
   const activity = await getActivityFeed(supabase, Number(id), 15);
   const news = await fetchDiscGolfNews(6);
@@ -391,6 +397,32 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
       <div className="lg:col-span-2 space-y-4">
         {setupSteps && !setupComplete && (
           <OnboardingChecklist steps={setupSteps} />
+        )}
+
+        {myDuesUnpaid && (
+          <div className="bg-[#1a1d23] rounded-2xl px-4 py-3.5 border border-yellow-400/25 flex items-center justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <p className="text-white text-sm font-semibold">League dues: ${duesAmount.toFixed(0)} due</p>
+              <p className="text-gray-400 text-xs mt-0.5">
+                {canPayOnline ? "Pay securely with a card." : "Settle up with your commissioner."}
+              </p>
+            </div>
+            {canPayOnline && (
+              <form
+                action={async () => {
+                  "use server";
+                  await createDuesCheckout(Number(id));
+                }}
+              >
+                <button
+                  type="submit"
+                  className="bg-[#4B3DFF] hover:bg-[#3a2eff] text-white text-sm font-semibold px-4 py-2 rounded-lg transition shrink-0"
+                >
+                  Pay ${duesAmount.toFixed(0)}
+                </button>
+              </form>
+            )}
+          </div>
         )}
 
         {showInviteCode && (

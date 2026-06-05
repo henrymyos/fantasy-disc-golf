@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { DuesEditor } from "@/components/dues-editor";
 import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
+import { stripeEnabled } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
 
@@ -90,6 +91,13 @@ export default async function DuesPage({
         <h2 className="text-white font-bold text-xl">Dues &amp; Payouts</h2>
         <p className="text-gray-400 text-sm mt-1">
           Track who&apos;s paid in and how the pot splits at the end of the season.
+        </p>
+        <p className="text-xs mt-2">
+          {stripeEnabled() ? (
+            <span className="text-[#36D7B7]">● Online card payments are on — members can pay their dues from the league home, and it marks them paid automatically.</span>
+          ) : (
+            <span className="text-gray-500">○ Online payments are off (manual tracking). Set Stripe keys to let members pay by card.</span>
+          )}
         </p>
       </div>
 
