@@ -9,6 +9,13 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("username")
+    .eq("id", user.id)
+    .single();
+  const username = profile?.username ?? "there";
+
   const { data: memberships } = await supabase
     .from("league_members")
     .select("league_id, team_name, is_commissioner, leagues(id, name, current_week, draft_status, invite_code, max_teams)")
@@ -21,6 +28,20 @@ export default async function DashboardPage() {
     isCommissioner: m.is_commissioner,
     membershipId: m.league_id,
   }));
+
+  // Current team counts per league (one query, counted in memory).
+  const leagueIds = leagues.map((l) => l.id);
+  const { data: memberCountRows } = leagueIds.length
+    ? await supabase.from("league_members").select("league_id").in("league_id", leagueIds)
+    : { data: [] as { league_id: number }[] };
+  const countByLeague = new Map<number, number>();
+  (memberCountRows ?? []).forEach((r: { league_id: number }) => {
+    countByLeague.set(r.league_id, (countByLeague.get(r.league_id) ?? 0) + 1);
+  });
+
+  const commissionerCount = leagues.filter((l) => l.isCommissioner).length;
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   const activeLeagueIds = leagues
     .filter((l) => l.draft_status === "in_progress" || l.draft_status === "paused")
@@ -98,9 +119,15 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="max-w-3xl">
-      <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-white">My Leagues</h1>
+    <div className="max-w-3xl space-y-6">
+      {/* Greeting + actions */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">
+            {greeting}, <span className="text-[#4B3DFF]">{username}</span>
+          </h1>
+          <p className="text-gray-400 text-sm mt-0.5">Here&apos;s what&apos;s happening in your leagues.</p>
+        </div>
         <div className="flex gap-2 sm:gap-3">
           <Link
             href="/league/join"
@@ -117,8 +144,15 @@ export default async function DashboardPage() {
         </div>
       </div>
 
+      {/* Quick stats */}
+      <div className="grid grid-cols-3 gap-3">
+        <StatTile label="Leagues" value={leagues.length} />
+        <StatTile label="Commissioner" value={commissionerCount} />
+        <StatTile label="Live drafts" value={activeDrafts.length} accent={activeDrafts.length > 0} />
+      </div>
+
       {activeDrafts.length > 0 && (
-        <div className="mb-6 space-y-3">
+        <div className="space-y-3">
           <div className="flex items-center gap-2">
             <span className="relative flex h-2.5 w-2.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -171,53 +205,66 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {leagues.length === 0 ? (
-        <div className="bg-[#1a1d23] rounded-2xl p-12 border border-white/5 text-center">
-          <p className="text-4xl mb-3">🥏</p>
-          <h2 className="text-white font-semibold text-lg mb-1">No leagues yet</h2>
-          <p className="text-gray-400 text-sm mb-6">Create a new league or join one with an invite code</p>
-          <Link
-            href="/league/new"
-            className="inline-block px-6 py-2.5 bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white text-sm font-semibold rounded-lg transition"
-          >
-            Create Your First League
-          </Link>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {leagues.map((league) => (
+      <div className="space-y-3">
+        <h2 className="text-white font-semibold text-sm uppercase tracking-wider text-gray-400">My Leagues</h2>
+        {leagues.length === 0 ? (
+          <div className="bg-[#1a1d23] rounded-2xl p-12 border border-white/5 text-center">
+            <p className="text-4xl mb-3">🥏</p>
+            <h3 className="text-white font-semibold text-lg mb-1">No leagues yet</h3>
+            <p className="text-gray-400 text-sm mb-6">Create a new league or join one with an invite code</p>
+            <Link
+              href="/league/new"
+              className="inline-block px-6 py-2.5 bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white text-sm font-semibold rounded-lg transition"
+            >
+              Create Your First League
+            </Link>
+          </div>
+        ) : (
+          leagues.map((league) => (
             <Link
               key={league.id}
               href={`/league/${league.id}`}
-              className="block bg-[#1a1d23] hover:bg-[#1e2028] border border-white/5 hover:border-[#4B3DFF]/40 rounded-2xl p-5 transition group"
+              className="flex items-center gap-4 bg-[#1a1d23] hover:bg-[#1e2028] border border-white/5 hover:border-[#4B3DFF]/40 rounded-2xl p-4 transition group"
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <h2 className="text-white font-semibold text-lg group-hover:text-[#4B3DFF] transition">
-                      {league.name}
-                    </h2>
-                    {league.isCommissioner && (
-                      <span className="text-xs bg-[#36D7B7]/20 text-[#36D7B7] px-2 py-0.5 rounded-full font-medium">
-                        Commissioner
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-gray-400 text-sm">
-                    Your team: <span className="text-gray-300">{league.myTeamName}</span>
-                    {" · "}
-                    Week {league.current_week}
-                  </p>
+              <div className="w-11 h-11 rounded-xl bg-[#4B3DFF]/20 border border-[#4B3DFF]/30 flex items-center justify-center text-[#4B3DFF] font-black text-lg shrink-0">
+                {league.name?.[0]?.toUpperCase() ?? "?"}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-white font-semibold truncate group-hover:text-[#4B3DFF] transition">
+                    {league.name}
+                  </h3>
+                  {league.isCommissioner && (
+                    <span className="shrink-0 text-[10px] bg-[#36D7B7]/20 text-[#36D7B7] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide">
+                      Commish
+                    </span>
+                  )}
                 </div>
-                <div className="text-right">
-                  <DraftBadge status={league.draft_status} />
-                  <p className="text-gray-400 text-xs mt-1">Code: {league.invite_code}</p>
-                </div>
+                <p className="text-gray-400 text-xs mt-0.5 truncate">
+                  <span className="text-gray-300">{league.myTeamName}</span>
+                  {" · "}
+                  {(countByLeague.get(league.id) ?? 0)}/{league.max_teams} teams
+                  {" · "}Week {league.current_week}
+                </p>
+              </div>
+              <div className="text-right shrink-0">
+                <DraftBadge status={league.draft_status} />
+                <p className="text-gray-500 text-[10px] mt-1 font-mono">{league.invite_code}</p>
               </div>
             </Link>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
+
+    </div>
+  );
+}
+
+function StatTile({ label, value, accent = false }: { label: string; value: number; accent?: boolean }) {
+  return (
+    <div className={`rounded-2xl border p-4 ${accent ? "bg-[#36D7B7]/10 border-[#36D7B7]/30" : "bg-[#1a1d23] border-white/5"}`}>
+      <p className={`text-2xl font-black ${accent ? "text-[#36D7B7]" : "text-white"}`}>{value}</p>
+      <p className="text-gray-400 text-xs mt-0.5">{label}</p>
     </div>
   );
 }
