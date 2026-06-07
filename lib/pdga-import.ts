@@ -73,14 +73,25 @@ async function fetchFirstTeeTime(pdgaId: number, startDate: string | null): Prom
 
 async function fetchRoundJson(pdgaId: number, division: "MPO" | "FPO", round: number): Promise<any | null> {
   const url = `https://www.pdga.com/apps/tournament/live-api/live_results_fetch_round?TournID=${pdgaId}&Division=${division}&Round=${round}`;
-  try {
-    const r = await fetch(url, { cache: "no-store" });
-    if (!r.ok) return null;
-    const data = await r.json();
-    return data?.data ?? null;
-  } catch {
-    return null;
+  // Retry transient failures (rate-limit 429 / 5xx / network) with backoff so a
+  // full-season import gets complete round data instead of silently dropping
+  // bonus stats for throttled events. A 404 means the round doesn't exist —
+  // return immediately, no retry.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const r = await fetch(url, { cache: "no-store" });
+      if (r.status === 404) return null;
+      if (!r.ok) {
+        await new Promise((res) => setTimeout(res, 500 * (attempt + 1)));
+        continue;
+      }
+      const data = await r.json();
+      return data?.data ?? null;
+    } catch {
+      await new Promise((res) => setTimeout(res, 500 * (attempt + 1)));
+    }
   }
+  return null;
 }
 
 /**
@@ -272,7 +283,6 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
   }
 
   const rowsToInsert: any[] = [];
-  const eventsWithBonus = new Set<number>();
   const unmatched: Array<{ event: string; name: string; pdgaNumber: number; division: "MPO" | "FPO" }> = [];
   const eventSummaries: ImportResult["events"] = [];
 
@@ -298,11 +308,6 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
     // Pull per-player hot rounds, bogey-free rounds, aces — and the set of
     // every PDGA# / name that appears in any round (= registered field).
     const { bonus: bonusByPdga, registered } = await computeBonusesForEvent(event.pdgaId);
-    let eventHadBonus = false;
-    for (const b of bonusByPdga.values()) {
-      if (b.hot || b.bogey || b.ace || b.under || b.over || b.eagle) { eventHadBonus = true; break; }
-    }
-    if (eventHadBonus) eventsWithBonus.add(event.dbId);
 
     // Update the lock-at timestamp from PDGA's round 1 tee times.
     const lockAtIso = await fetchFirstTeeTime(event.pdgaId, event.startDate);
@@ -370,23 +375,24 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
     }
   }
 
-  // Graceful degradation: replace results per event that produced rows this
-  // run. Two safeguards:
-  //   1. Events with no rows at all (PDGA down / not posted yet) are left
-  //      untouched — a transient failure never zeroes out finalized scores.
-  //   2. If an event produced rows but NO bonus data this run, yet already has
-  //      bonus data stored, we preserve it — a throttled bonus fetch on a retry
-  //      can't wipe good birdie/bogey data.
+  // Graceful, monotonic per-event replace. For each event that produced rows
+  // this run, only overwrite the stored results if this scrape is at least as
+  // complete (total birdie strokes) as what's already stored. This means:
+  //   - an event with no rows at all (PDGA down / not posted) is left untouched;
+  //   - a throttled/partial scrape can never degrade good birdie/bogey data;
+  //   - a fuller scrape (more rounds fetched) always wins.
+  // New events with no stored bonus data always import (existing total = 0).
   const scrapedEventIds = new Set<number>(rowsToInsert.map((r) => r.tournament_id as number));
   for (const tid of scrapedEventIds) {
-    if (!eventsWithBonus.has(tid)) {
-      const { count: existingBonus } = await supabase
-        .from("tournament_results")
-        .select("id", { count: "exact", head: true })
-        .eq("tournament_id", tid)
-        .or("under_par_strokes.gt.0,over_par_strokes.gt.0,hot_round_count.gt.0");
-      if ((existingBonus ?? 0) > 0) continue; // preserve stored bonuses
-    }
+    const evRows = rowsToInsert.filter((r) => (r.tournament_id as number) === tid);
+    const newBirdie = evRows.reduce((s, r) => s + Number(r.under_par_strokes ?? 0), 0);
+
+    const { data: existing } = await supabase
+      .from("tournament_results")
+      .select("under_par_strokes")
+      .eq("tournament_id", tid);
+    const existingBirdie = (existing ?? []).reduce((s, r: any) => s + Number(r.under_par_strokes ?? 0), 0);
+    if (existingBirdie > 0 && newBirdie < existingBirdie) continue; // keep the fuller data
 
     const { error: delErr } = await supabase
       .from("tournament_results")
@@ -394,7 +400,6 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
       .eq("tournament_id", tid);
     if (delErr) throw delErr;
 
-    const evRows = rowsToInsert.filter((r) => (r.tournament_id as number) === tid);
     for (let i = 0; i < evRows.length; i += 500) {
       const { error } = await supabase.from("tournament_results").insert(evRows.slice(i, i + 500));
       if (error) throw error;
