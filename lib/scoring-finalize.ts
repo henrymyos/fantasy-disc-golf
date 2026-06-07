@@ -33,7 +33,10 @@ export async function finalizeWeekScoresCore(
   admin: SupabaseClient,
   leagueId: number,
   week: number,
+  opts: { notify?: boolean; recap?: boolean } = {},
 ): Promise<void> {
+  const notify = opts.notify ?? true;
+  const recap = opts.recap ?? true;
   const { data: league } = await admin
     .from("leagues")
     .select("scoring_rules")
@@ -90,7 +93,9 @@ export async function finalizeWeekScoresCore(
     }).eq("id", (m as any).id);
   }
 
-  await generateWeeklyRecap(admin, leagueId, week);
+  if (recap) await generateWeeklyRecap(admin, leagueId, week);
+
+  if (!notify) return;
 
   const { data: teamMembers } = await admin
     .from("league_members")

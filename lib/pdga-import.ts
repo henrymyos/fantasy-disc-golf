@@ -101,9 +101,14 @@ async function computeBonusesForEvent(pdgaId: number): Promise<{
   const registered: Array<{ pdgaNum: number | null; name: string }> = [];
 
   for (const division of ["MPO", "FPO"] as const) {
-    const roundResponses = await Promise.all(
-      [1, 2, 3, 4, 5, 6].map((r) => fetchRoundJson(pdgaId, division, r)),
-    );
+    // Fetch rounds sequentially with a small gap instead of a 12-wide burst —
+    // PDGA's live API rate-limits concurrent bursts, which silently returns
+    // empty bonus data for some events when importing the whole season at once.
+    const roundResponses: Array<any | null> = [];
+    for (const r of [1, 2, 3, 4, 5, 6]) {
+      roundResponses.push(await fetchRoundJson(pdgaId, division, r));
+      await new Promise((res) => setTimeout(res, 120));
+    }
 
     for (const data of roundResponses) {
       if (!data?.scores) continue;
@@ -267,6 +272,7 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
   }
 
   const rowsToInsert: any[] = [];
+  const eventsWithBonus = new Set<number>();
   const unmatched: Array<{ event: string; name: string; pdgaNumber: number; division: "MPO" | "FPO" }> = [];
   const eventSummaries: ImportResult["events"] = [];
 
@@ -292,6 +298,11 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
     // Pull per-player hot rounds, bogey-free rounds, aces — and the set of
     // every PDGA# / name that appears in any round (= registered field).
     const { bonus: bonusByPdga, registered } = await computeBonusesForEvent(event.pdgaId);
+    let eventHadBonus = false;
+    for (const b of bonusByPdga.values()) {
+      if (b.hot || b.bogey || b.ace || b.under || b.over || b.eagle) { eventHadBonus = true; break; }
+    }
+    if (eventHadBonus) eventsWithBonus.add(event.dbId);
 
     // Update the lock-at timestamp from PDGA's round 1 tee times.
     const lockAtIso = await fetchFirstTeeTime(event.pdgaId, event.startDate);
@@ -359,24 +370,35 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
     }
   }
 
-  // Graceful degradation: only replace results for events that actually
-  // produced rows this run. If PDGA is down, an event hasn't posted results
-  // yet, or a scrape returns empty, we leave that event's existing results
-  // untouched instead of wiping them — so a transient failure never zeroes out
-  // already-imported (and possibly finalized) scores.
+  // Graceful degradation: replace results per event that produced rows this
+  // run. Two safeguards:
+  //   1. Events with no rows at all (PDGA down / not posted yet) are left
+  //      untouched — a transient failure never zeroes out finalized scores.
+  //   2. If an event produced rows but NO bonus data this run, yet already has
+  //      bonus data stored, we preserve it — a throttled bonus fetch on a retry
+  //      can't wipe good birdie/bogey data.
   const scrapedEventIds = new Set<number>(rowsToInsert.map((r) => r.tournament_id as number));
   for (const tid of scrapedEventIds) {
+    if (!eventsWithBonus.has(tid)) {
+      const { count: existingBonus } = await supabase
+        .from("tournament_results")
+        .select("id", { count: "exact", head: true })
+        .eq("tournament_id", tid)
+        .or("under_par_strokes.gt.0,over_par_strokes.gt.0,hot_round_count.gt.0");
+      if ((existingBonus ?? 0) > 0) continue; // preserve stored bonuses
+    }
+
     const { error: delErr } = await supabase
       .from("tournament_results")
       .delete()
       .eq("tournament_id", tid);
     if (delErr) throw delErr;
-  }
 
-  for (let i = 0; i < rowsToInsert.length; i += 500) {
-    const chunk = rowsToInsert.slice(i, i + 500);
-    const { error } = await supabase.from("tournament_results").insert(chunk);
-    if (error) throw error;
+    const evRows = rowsToInsert.filter((r) => (r.tournament_id as number) === tid);
+    for (let i = 0; i < evRows.length; i += 500) {
+      const { error } = await supabase.from("tournament_results").insert(evRows.slice(i, i + 500));
+      if (error) throw error;
+    }
   }
 
   return {
