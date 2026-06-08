@@ -44,6 +44,8 @@ export async function saveScoringRules(
   await admin.from("leagues").update({ scoring_rules: clean }).eq("id", leagueId);
   revalidatePath(`/league/${leagueId}/settings/scoring`);
   revalidatePath(`/league/${leagueId}`);
+  // Refresh the setup checklist on the commissioner dashboard too.
+  revalidatePath(`/league/${leagueId}/commish`);
 }
 
 export async function resetScoringRules(leagueId: number): Promise<void> {

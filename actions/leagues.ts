@@ -276,6 +276,9 @@ export async function setSelectedEvents(
 
   revalidatePath(`/league/${leagueId}/settings`);
   revalidatePath(`/league/${leagueId}/settings/season`);
+  // Refresh the setup checklist surfaces so the "schedule chosen" step updates.
+  revalidatePath(`/league/${leagueId}`);
+  revalidatePath(`/league/${leagueId}/commish`);
 }
 
 export async function deleteLeague(leagueId: string): Promise<void> {

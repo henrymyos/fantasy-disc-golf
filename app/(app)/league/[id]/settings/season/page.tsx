@@ -45,6 +45,7 @@ export default async function EditSeasonPage({
       seasonYear={seasonYear}
       events={events}
       initialSelected={selected}
+      hasExplicitSelection={(league as any).selected_event_slugs != null}
     />
   );
 }

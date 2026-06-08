@@ -17,9 +17,13 @@ type Props = {
   seasonYear: number;
   events: DgptEvent[];
   initialSelected: string[];
+  /** Whether the league has ever explicitly saved a schedule. When false, the
+   *  default (all events) is shown but not yet persisted, so Save stays enabled
+   *  to let the commissioner confirm it (which completes the setup step). */
+  hasExplicitSelection: boolean;
 };
 
-export function EditSeasonForm({ leagueId, seasonYear, events, initialSelected }: Props) {
+export function EditSeasonForm({ leagueId, seasonYear, events, initialSelected, hasExplicitSelection }: Props) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(() => new Set(initialSelected));
   const [pending, startTransition] = useTransition();
@@ -31,6 +35,12 @@ export function EditSeasonForm({ leagueId, seasonYear, events, initialSelected }
     for (const s of selected) if (!initialSet.has(s)) return true;
     return false;
   }, [selected, initialSet]);
+
+  // When the league has never explicitly saved a schedule, the default (all
+  // events) is shown but not persisted. Keep Save enabled so the commissioner
+  // can confirm it — which persists selected_event_slugs and completes the
+  // "Choose your season schedule" setup step.
+  const needsConfirm = !hasExplicitSelection && savedAt === null;
 
   // Tournaments are locked in once they've already happened or start within
   // a week — the slate is committed at that point.
@@ -206,14 +216,17 @@ export function EditSeasonForm({ leagueId, seasonYear, events, initialSelected }
             {dirty && (
               <p className="text-gray-400 text-xs mt-0.5">Unsaved changes</p>
             )}
+            {needsConfirm && !dirty && (
+              <p className="text-gray-400 text-xs mt-0.5">Confirm to set your schedule</p>
+            )}
           </div>
           <button
             type="button"
             onClick={save}
-            disabled={pending || !dirty}
+            disabled={pending || (!dirty && !needsConfirm)}
             className="bg-[#4B3DFF] hover:bg-[#3a2eff] disabled:bg-white/10 disabled:text-gray-400 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition disabled:cursor-not-allowed"
           >
-            {pending ? "Saving..." : "Save"}
+            {pending ? "Saving..." : needsConfirm && !dirty ? "Confirm schedule" : "Save"}
           </button>
         </div>
       </div>
