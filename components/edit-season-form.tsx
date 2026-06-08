@@ -33,8 +33,8 @@ export function EditSeasonForm({ leagueId, seasonYear, events, initialSelected }
   }, [selected, initialSet]);
 
   // Tournaments are locked in once they've already happened or start within
-  // a month — the slate is committed at that point.
-  const LOCK_WINDOW_DAYS = 30;
+  // a week — the slate is committed at that point.
+  const LOCK_WINDOW_DAYS = 7;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const lockBoundary = new Date(today);
@@ -141,7 +141,7 @@ export function EditSeasonForm({ leagueId, seasonYear, events, initialSelected }
               type="button"
               onClick={() => toggle(event.slug)}
               disabled={locked}
-              title={locked ? "Locked — tournament has started or is within a month" : undefined}
+              title={locked ? "Locked — tournament has started or is within a week" : undefined}
               className={`w-full flex items-center gap-4 px-4 py-3.5 text-left transition ${
                 i !== 0 ? "border-t border-white/5" : ""
               } ${locked ? "cursor-not-allowed" : "hover:bg-white/[0.03]"} ${

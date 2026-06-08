@@ -242,12 +242,12 @@ export async function setSelectedEvents(
 
   const cleaned = Array.from(new Set(slugs.filter((s) => typeof s === "string" && s.length > 0)));
 
-  // Re-apply the same lock window enforced in the UI: events that started
-  // within the next month (or already happened) can't have their inclusion
-  // changed, so preserve their current state regardless of the submitted set.
+  // Re-apply the same lock window enforced in the UI: events that start within
+  // the next week (or already happened) can't have their inclusion changed, so
+  // preserve their current state regardless of the submitted set.
   const lockBoundary = new Date();
   lockBoundary.setHours(0, 0, 0, 0);
-  lockBoundary.setDate(lockBoundary.getDate() + 30);
+  lockBoundary.setDate(lockBoundary.getDate() + 7);
   const lockBoundaryIso = lockBoundary.toISOString().slice(0, 10);
   const lockedSlugs = new Set(
     events.filter((e) => e.startDate <= lockBoundaryIso).map((e) => e.slug),
