@@ -3,6 +3,9 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { computeSetupSteps, setupProgress } from "@/lib/league-setup";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
+import { effectiveSelection } from "@/lib/dgpt-2026-schedule";
+import { getScheduleEvents, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
+import { isSeasonOver } from "@/lib/season-status";
 
 export default async function CommishDashboard({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -13,7 +16,7 @@ export default async function CommishDashboard({ params }: { params: Promise<{ i
   const { data: league } = await supabase
     .from("leagues")
     .select(
-      "id, name, commissioner_id, max_teams, current_week, selected_event_slugs, scoring_rules, scoring_mode, dues_amount, waivers_locked, keepers_per_team",
+      "id, name, commissioner_id, max_teams, current_week, selected_event_slugs, scoring_rules, scoring_mode, dues_amount, waivers_locked, keepers_per_team, season_year",
     )
     .eq("id", id)
     .single();
@@ -21,6 +24,12 @@ export default async function CommishDashboard({ params }: { params: Promise<{ i
   if ((league as any).commissioner_id !== user.id) redirect(`/league/${id}/settings`);
 
   const base = `/league/${id}`;
+
+  const scheduleEvents = await getScheduleEvents(supabase, (league as any).season_year ?? DEFAULT_SEASON_YEAR);
+  const seasonOver = isSeasonOver(
+    scheduleEvents,
+    effectiveSelection((league as any).selected_event_slugs, scheduleEvents),
+  );
 
   const [
     { data: members },
@@ -168,7 +177,7 @@ export default async function CommishDashboard({ params }: { params: Promise<{ i
           {(league as any).keepers_per_team > 0 && (
             <QuickLink href={`${base}/settings/keepers`} label="Keepers" />
           )}
-          <QuickLink href={`${base}/settings/season-rollover`} label="Start next season" />
+          {seasonOver && <QuickLink href={`${base}/settings/season-rollover`} label="Start next season" />}
         </div>
       </div>
     </div>

@@ -6,6 +6,7 @@ import { CopyButton } from "@/components/copy-button";
 import { InviteLink } from "@/components/invite-link";
 import { effectiveSelection, getPlayoffSlugs } from "@/lib/dgpt-2026-schedule";
 import { getScheduleEvents, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
+import { isSeasonOver } from "@/lib/season-status";
 
 export default async function LeagueSettingsPage({
   params,
@@ -55,6 +56,7 @@ export default async function LeagueSettingsPage({
   const selectedCount = validSelected.length;
   const playoffCount = getPlayoffSlugs(validSelected, undefined, events).length;
   const totalEvents = events.length;
+  const seasonOver = isSeasonOver(events, validSelected);
 
   const base = `/league/${id}/settings`;
 
@@ -114,7 +116,7 @@ export default async function LeagueSettingsPage({
           />
         )}
 
-        {isCommissioner && (
+        {isCommissioner && seasonOver && (
           <Tile
             href={`${base}/season-rollover`}
             title="Start Next Season"
