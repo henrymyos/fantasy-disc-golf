@@ -19,25 +19,65 @@ function rowToEvent(r: any): DgptEvent {
   };
 }
 
+async function seasonHasEvents(supabase: SupabaseClient, year: number): Promise<boolean> {
+  const { count } = await supabase
+    .from("schedule_events")
+    .select("id", { count: "exact", head: true })
+    .eq("season_year", year);
+  return (count ?? 0) > 0;
+}
+
+/**
+ * Resolves which season's schedule to actually show for a requested year. A
+ * league's stored season_year may not have a loaded schedule (e.g. older
+ * leagues labelled 2025 that play the 2026 slate, or a future year not added
+ * yet). Order of preference: the requested year → the current calendar year →
+ * the latest available season → the default. This keeps the schedule from ever
+ * rendering empty just because the label year has no rows.
+ */
+export async function resolveScheduleYear(
+  supabase: SupabaseClient,
+  requestedYear: number = DEFAULT_SEASON_YEAR,
+): Promise<number> {
+  if (await seasonHasEvents(supabase, requestedYear)) return requestedYear;
+
+  const currentYear = new Date().getUTCFullYear();
+  if (currentYear !== requestedYear && (await seasonHasEvents(supabase, currentYear))) {
+    return currentYear;
+  }
+
+  const { data: latest } = await supabase
+    .from("schedule_events")
+    .select("season_year")
+    .order("season_year", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const latestYear = (latest as any)?.season_year as number | undefined;
+  if (latestYear != null) return latestYear;
+
+  return DEFAULT_SEASON_YEAR;
+}
+
 /**
  * Loads the schedule for a season from the data-driven schedule_events table.
- * Falls back to the static 2026 list when the table has no rows for the season
- * (e.g. first deploy before the seed ran), so the app never renders an empty
- * schedule for the current year.
+ * Resolves the requested year to one that actually has a schedule (see
+ * resolveScheduleYear), and falls back to the static 2026 list as a last
+ * resort, so the app never renders an empty schedule.
  */
 export async function getScheduleEvents(
   supabase: SupabaseClient,
   seasonYear: number = DEFAULT_SEASON_YEAR,
 ): Promise<DgptEvent[]> {
+  const year = await resolveScheduleYear(supabase, seasonYear);
   const { data, error } = await supabase
     .from("schedule_events")
     .select("slug, name, start_date, end_date, city, state, country, course, pdga_event_id, sort_order")
-    .eq("season_year", seasonYear)
+    .eq("season_year", year)
     .order("sort_order", { ascending: true })
     .order("start_date", { ascending: true });
 
   if (error || !data || data.length === 0) {
-    return seasonYear === DEFAULT_SEASON_YEAR ? DGPT_2026_SCHEDULE : [];
+    return DGPT_2026_SCHEDULE;
   }
   return data.map(rowToEvent);
 }

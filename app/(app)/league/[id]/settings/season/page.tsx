@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { effectiveSelection } from "@/lib/dgpt-2026-schedule";
-import { getScheduleEvents, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
+import { getScheduleEvents, resolveScheduleYear, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
 import { EditSeasonForm } from "@/components/edit-season-form";
 
 export default async function EditSeasonPage({
@@ -26,7 +26,11 @@ export default async function EditSeasonPage({
     redirect(`/league/${id}/settings`);
   }
 
-  const seasonYear = (league as any).season_year ?? DEFAULT_SEASON_YEAR;
+  // The league's stored season_year may not have a loaded schedule (e.g. an
+  // older 2025-labelled league that plays the 2026 slate). Resolve to the year
+  // that actually has events so the editor never renders empty.
+  const requestedYear = (league as any).season_year ?? DEFAULT_SEASON_YEAR;
+  const seasonYear = await resolveScheduleYear(supabase, requestedYear);
   const events = await getScheduleEvents(supabase, seasonYear);
 
   // Drop any stale slugs that aren't on the current schedule (e.g., removed
