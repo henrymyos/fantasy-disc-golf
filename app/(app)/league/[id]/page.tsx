@@ -6,11 +6,10 @@ import {
   effectiveSelection,
   formatEventDateRange,
   formatEventLocation,
-  getPlayoffSlugs,
-  PLAYOFF_COUNT,
 } from "@/lib/dgpt-2026-schedule";
 import { getScheduleEvents, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
-import { isSeasonOver, playoffBracketSize } from "@/lib/season-status";
+import { isSeasonOver } from "@/lib/season-status";
+import { getPlayoffOutcome } from "@/lib/playoff-outcome";
 import { SeasonReview } from "@/components/season-review";
 import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
 import { rankTeams } from "@/lib/standings";
@@ -170,26 +169,15 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   const myMembership = (members ?? []).find((m) => m.user_id === user.id);
 
-  // Year-end review: once the season is over, surface the champion plus (when
-  // applicable) the consolation champ and last place.
+  // Year-end review: once the season is over, the playoff bracket crowns the
+  // champion (decided from real weekly scores during the playoff events).
   const seasonOver = isSeasonOver(scheduleEvents, selectedSlugs);
-  type ReviewEntrant = { teamName: string; username: string | null; wins: number; losses: number; points: number };
-  let seasonReview: { champion: ReviewEntrant; consolationChamp: ReviewEntrant | null; lastPlace: ReviewEntrant | null } | null = null;
-  if (seasonOver && !preDraft && standings.length >= 2 && standings.some((t) => t.wins + t.losses > 0)) {
-    const playoffEventCount = getPlayoffSlugs([...selectedSlugs], PLAYOFF_COUNT, scheduleEvents).length;
-    const bracketSize = playoffBracketSize(playoffEventCount, standings.length);
-    const toEntrant = (t: (typeof standings)[number]): ReviewEntrant => ({
-      teamName: t.team_name,
-      username: (t.profiles as any)?.username ?? null,
-      wins: t.wins,
-      losses: t.losses,
-      points: t.points,
-    });
-    seasonReview = {
-      champion: toEntrant(standings[0]),
-      consolationChamp: bracketSize < standings.length ? toEntrant(standings[bracketSize]) : null,
-      lastPlace: standings.length > 1 ? toEntrant(standings[standings.length - 1]) : null,
-    };
+  let seasonReview: Awaited<ReturnType<typeof getPlayoffOutcome>> | null = null;
+  if (seasonOver && !preDraft) {
+    const outcome = await getPlayoffOutcome(supabase, Number(id));
+    if (outcome.champion && outcome.standings.some((s) => s.wins + s.losses > 0)) {
+      seasonReview = outcome;
+    }
   }
 
   const setupSteps = isCommissioner
@@ -421,7 +409,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
       {/* This week's matchups */}
       <div className="lg:col-span-2 space-y-4">
-        {seasonReview && (
+        {seasonReview && seasonReview.champion && (
           <SeasonReview
             seasonYear={(league as any).season_year ?? DEFAULT_SEASON_YEAR}
             champion={seasonReview.champion}

@@ -17,19 +17,3 @@ export function isSeasonOver(
   const today = now.toISOString().slice(0, 10);
   return today > latest;
 }
-
-function nextPowerOfTwo(n: number): number {
-  return Math.pow(2, Math.ceil(Math.log2(Math.max(2, n))));
-}
-
-/**
- * How many teams make the playoff bracket: the next power of two at or above
- * (playoff events + 1), capped at the number of teams. Mirrors the seeding on
- * the playoffs page so the season review agrees with it.
- */
-export function playoffBracketSize(playoffEventCount: number, teamCount: number): number {
-  return Math.min(
-    Math.max(2, nextPowerOfTwo(Math.max(2, playoffEventCount + 1))),
-    teamCount,
-  );
-}
