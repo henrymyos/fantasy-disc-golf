@@ -27,7 +27,7 @@ export default async function PlayoffsPage({ params }: { params: Promise<{ id: s
   const championName = championTeamId != null ? outcome.champion?.teamName : null;
 
   return (
-    <div className="max-w-3xl space-y-5">
+    <div className="max-w-3xl lg:max-w-6xl space-y-5">
       <div>
         <h2 className="text-white font-bold text-xl">Playoff Bracket</h2>
         <p className="text-gray-400 text-sm mt-1">
@@ -55,18 +55,21 @@ export default async function PlayoffsPage({ params }: { params: Promise<{ id: s
             </div>
           )}
 
-          <div className="space-y-4">
+          {/* Stacked cards on mobile; side-by-side round columns on md+ that
+              stretch to fill the viewport height, with matches spread evenly
+              so later rounds sit between their feeders like a real bracket. */}
+          <div className="space-y-4 md:space-y-0 md:flex md:items-stretch md:gap-4 md:min-h-[26rem] lg:min-h-[max(28rem,calc(100dvh-23rem))]">
             {result.rounds.map((round, ri) => (
-              <div key={ri} className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
-                <div className="flex items-center justify-between mb-3">
+              <div key={ri} className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5 md:flex-1 md:flex md:flex-col md:min-w-0">
+                <div className="flex items-center justify-between gap-2 flex-wrap mb-3 md:mb-4 shrink-0">
                   <p className="text-white font-semibold">{roundLabel(ri, totalRounds)}</p>
                   <p className="text-gray-400 text-xs">{round.name}</p>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-3 md:space-y-0 md:flex-1 md:flex md:flex-col md:justify-around md:gap-3">
                   {round.matches.map((m, mi) => (
-                    <div key={mi} className="bg-[#0f1117] border border-white/5 rounded-xl p-3">
+                    <div key={mi} className="bg-[#0f1117] border border-white/5 rounded-xl p-3 md:p-4">
                       <TeamLine slot={m.a} isWinner={m.decided && m.winnerTeamId === m.a?.teamId} loser={m.decided && m.winnerTeamId !== m.a?.teamId} />
-                      <div className="text-center text-gray-500 text-[11px] my-1">vs</div>
+                      <div className="text-center text-gray-500 text-[11px] my-1 md:my-2">vs</div>
                       <TeamLine slot={m.b} isWinner={m.decided && m.winnerTeamId === m.b?.teamId} loser={m.decided && m.winnerTeamId !== m.b?.teamId} />
                       {!m.decided && (
                         <p className="text-gray-500 text-[11px] text-center mt-1.5">
@@ -82,7 +85,7 @@ export default async function PlayoffsPage({ params }: { params: Promise<{ id: s
             ))}
 
             {result.rounds.length < totalRounds && (
-              <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5 text-center">
+              <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5 text-center md:flex-1 md:flex md:items-center md:justify-center">
                 <p className="text-gray-400 text-sm">
                   {totalRounds - result.rounds.length} more round{totalRounds - result.rounds.length !== 1 ? "s" : ""} to come once
                   earlier matchups are decided.
