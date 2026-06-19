@@ -31,25 +31,30 @@ export function LeagueTabNav({ base, isCommissioner, draftComplete }: { base: st
   }, [pathname]);
 
   return (
-    <nav className="flex gap-1 mb-6 border-b border-white/5 pb-0 overflow-x-auto no-scrollbar sticky top-[calc(env(safe-area-inset-top)+57px)] md:top-0 z-20 bg-[var(--background)] -mx-4 px-4 md:-mx-0 md:px-0">
-      {tabs.map((tab) => {
-        const href = `${base}${tab.href}`;
-        const isActive = pathname === href;
-        return (
-          <Link
-            key={tab.href}
-            href={href}
-            ref={isActive ? activeRef : undefined}
-            className={`min-h-[44px] px-4 py-2.5 text-sm font-medium border-b-2 transition whitespace-nowrap -mb-px flex items-center ${
-              isActive
-                ? "text-white border-[#4B3DFF]"
-                : "text-gray-300 hover:text-white border-transparent hover:border-[#4B3DFF]"
-            }`}
-          >
-            {tab.label}
-          </Link>
-        );
-      })}
+    <nav className="mb-6 border-b border-white/5 sticky top-[calc(env(safe-area-inset-top)+57px)] md:top-0 z-20 bg-[var(--background)] -mx-4 px-4 md:-mx-0 md:px-0 before:content-[''] before:absolute before:bottom-full before:left-0 before:right-0 before:h-24 before:bg-[var(--background)] md:before:hidden">
+      {/* Inner element owns the horizontal scroll so the sticky <nav> itself
+          keeps overflow:visible — otherwise the gap-filling ::before above it
+          would get clipped. */}
+      <div className="flex gap-1 overflow-x-auto no-scrollbar">
+        {tabs.map((tab) => {
+          const href = `${base}${tab.href}`;
+          const isActive = pathname === href;
+          return (
+            <Link
+              key={tab.href}
+              href={href}
+              ref={isActive ? activeRef : undefined}
+              className={`min-h-[44px] px-4 py-2.5 text-sm font-medium border-b-2 transition whitespace-nowrap -mb-px flex items-center ${
+                isActive
+                  ? "text-white border-[#4B3DFF]"
+                  : "text-gray-300 hover:text-white border-transparent hover:border-[#4B3DFF]"
+              }`}
+            >
+              {tab.label}
+            </Link>
+          );
+        })}
+      </div>
     </nav>
   );
 }

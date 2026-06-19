@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { sendChatMessage } from "@/actions/chat";
 
@@ -36,6 +37,7 @@ export function LeagueChat({
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [dragY, setDragY] = useState<number | null>(null);
+  const pathname = usePathname();
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -173,6 +175,10 @@ export function LeagueChat({
       ? "League Chat"
       : memberById.get(channel.memberId)?.team_name ?? "Direct Message";
 
+  // The chat dock follows the user across league tabs, but settings (and its
+  // sub-pages) are a focused admin context — keep it out of the way there.
+  if (pathname.includes("/settings")) return null;
+
   return (
     <>
       {/* Collapsed bar — previews the latest message. */}
@@ -189,7 +195,7 @@ export function LeagueChat({
               expand();
             }
           }}
-          className="fixed z-40 left-0 right-0 bottom-[calc(env(safe-area-inset-bottom)+3.5rem)] md:left-auto md:right-6 md:bottom-6 md:w-[360px] flex items-center gap-2.5 px-4 h-14 bg-[#1a1d23] border-t border-white/10 md:border md:rounded-2xl md:shadow-2xl cursor-pointer select-none active:bg-[#1f232b] transition-colors"
+          className="fixed z-30 left-0 right-0 bottom-[calc(env(safe-area-inset-bottom)+3.5rem)] md:left-auto md:right-6 md:bottom-6 md:w-[360px] flex items-center gap-2.5 px-4 h-14 bg-[#1a1d23] border-t border-white/10 md:border md:rounded-2xl md:shadow-2xl cursor-pointer select-none active:bg-[#1f232b] transition-colors after:content-[''] after:absolute after:top-full after:left-0 after:right-0 after:h-24 after:bg-[#1a1d23] md:after:hidden"
         >
           <div className="relative shrink-0 w-8 h-8 rounded-full bg-[#4B3DFF]/20 border border-[#4B3DFF]/30 flex items-center justify-center text-sm">
             💬

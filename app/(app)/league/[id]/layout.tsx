@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { LeagueTabNav } from "@/components/league-tab-nav";
+import { LeagueChat } from "@/components/league-chat";
 
 export default async function LeagueLayout({
   children,
@@ -34,6 +35,14 @@ export default async function LeagueLayout({
     redirect("/dashboard");
   }
 
+  // Roster of teams powers the chat dock's channel list (League + DMs). It
+  // lives in the layout so the chat follows the user across every league tab.
+  const { data: members } = await supabase
+    .from("league_members")
+    .select("id, team_name, user_id")
+    .eq("league_id", id)
+    .order("joined_at");
+
   const { data: draft } = await supabase
     .from("drafts")
     .select("status")
@@ -44,7 +53,7 @@ export default async function LeagueLayout({
   const base = `/league/${id}`;
 
   return (
-    <div>
+    <div className="pb-8 md:pb-0">
       {/* League header */}
       <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
         <div className="flex items-center gap-3">
@@ -72,6 +81,16 @@ export default async function LeagueLayout({
       <LeagueTabNav base={base} isCommissioner={!!membership.is_commissioner} draftComplete={draftComplete} />
 
       {children}
+
+      <LeagueChat
+        leagueId={Number(id)}
+        myMemberId={membership.id}
+        members={(members ?? []).map((m) => ({
+          id: m.id,
+          team_name: m.team_name,
+          user_id: m.user_id ?? null,
+        }))}
+      />
     </div>
   );
 }

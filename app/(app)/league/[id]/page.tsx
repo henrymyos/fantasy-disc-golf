@@ -15,7 +15,6 @@ import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
 import { rankTeams } from "@/lib/standings";
 import { applyProjectionVariance } from "@/lib/projections";
 import { getActiveTournament } from "@/lib/lineup-lock";
-import { LeagueChat } from "@/components/league-chat";
 import { CopyButton } from "@/components/copy-button";
 import { InviteLink } from "@/components/invite-link";
 import { getActivityFeed } from "@/lib/activity-feed";
@@ -62,8 +61,10 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   const scheduleEvents = await getScheduleEvents(supabase, (league as any).season_year ?? DEFAULT_SEASON_YEAR);
   const selectedSlugs = new Set(effectiveSelection((league as any).selected_event_slugs, scheduleEvents));
   const today = new Date().toISOString().slice(0, 10);
+  // Include events that are currently running (started but not yet ended) as
+  // well as future ones, so an in-progress tournament still shows here.
   const upcomingEvents = scheduleEvents
-    .filter((e) => selectedSlugs.has(e.slug) && e.startDate > today)
+    .filter((e) => selectedSlugs.has(e.slug) && e.endDate >= today)
     .sort((a, b) => a.startDate.localeCompare(b.startDate))
     .slice(0, 6);
 
@@ -310,7 +311,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   }
 
   return (
-    <div className="grid lg:grid-cols-3 gap-6 pb-8 md:pb-0">
+    <div className="grid lg:grid-cols-3 gap-6">
       {/* Standings (or team roster before the draft) */}
       <div className="lg:col-span-1 min-w-0 bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
         <h2 className="font-bold text-white mb-4">{preDraft ? "Teams" : "Standings"}</h2>
@@ -483,18 +484,6 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
           </Link>
         )}
 
-        {myMembership && (
-          <LeagueChat
-            leagueId={Number(id)}
-            myMemberId={myMembership.id}
-            members={(members ?? []).map((m: any) => ({
-              id: m.id,
-              team_name: m.team_name,
-              user_id: m.user_id ?? null,
-            }))}
-          />
-        )}
-
         {latestRecap && (
           <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
             <div className="flex items-center justify-between mb-2">
@@ -616,12 +605,13 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
         {/* Upcoming tournaments */}
         {upcomingEvents.length > 0 && (
           <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
-            <h2 className="font-bold text-white mb-4">Upcoming Tournaments</h2>
+            <h2 className="font-bold text-white mb-4">Tournaments</h2>
             <div className="space-y-2">
               {upcomingEvents.map((event) => {
                 const url = event.pdgaEventId
                   ? `https://www.pdga.com/tour/event/${event.pdgaEventId}`
                   : `https://www.pdga.com/tour/search?keys=${encodeURIComponent(event.name)}`;
+                const isLive = event.startDate <= today && event.endDate >= today;
                 return (
                   <a
                     key={event.slug}
@@ -631,7 +621,15 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                     className="flex items-center justify-between gap-4 p-3 rounded-xl bg-[#0f1117] border border-white/5 hover:border-white/15 transition"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="text-white font-medium text-sm truncate">{event.name}</p>
+                      <div className="flex items-center gap-2 min-w-0">
+                        {isLive && (
+                          <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded text-[#36D7B7] bg-[#36D7B7]/15">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#36D7B7] animate-pulse" />
+                            Live
+                          </span>
+                        )}
+                        <p className="text-white font-medium text-sm truncate">{event.name}</p>
+                      </div>
                       <p className="text-gray-400 text-xs mt-0.5 truncate">
                         {formatEventDateRange(event)} · {formatEventLocation(event)}
                       </p>
