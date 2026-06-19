@@ -312,7 +312,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   return (
     <div className="grid lg:grid-cols-3 gap-6">
       {/* Standings (or team roster before the draft) */}
-      <div className="lg:col-span-1 bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
+      <div className="lg:col-span-1 min-w-0 bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
         <h2 className="font-bold text-white mb-4">{preDraft ? "Teams" : "Standings"}</h2>
         <div className="space-y-2">
           {preDraft ? (
@@ -408,7 +408,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
       </div>
 
       {/* This week's matchups */}
-      <div className="lg:col-span-2 space-y-4">
+      <div className="lg:col-span-2 min-w-0 space-y-4">
         {seasonReview && seasonReview.champion && (
           <SeasonReview
             seasonYear={(league as any).season_year ?? DEFAULT_SEASON_YEAR}
