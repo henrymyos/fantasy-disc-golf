@@ -148,23 +148,38 @@ export function LeagueChat({
     if (start && !start.moved) collapse();
   }
 
-  // --- Drag-up / tap on the collapsed bar to expand ---
+  // --- Swipe-up / tap on the collapsed bar to expand ---
+  // `barLift` nudges the bar up as the finger drags so the swipe feels live;
+  // crossing the threshold (or a flick) opens the sheet.
+  const [barLift, setBarLift] = useState(0);
   function onBarPointerDown(e: React.PointerEvent) {
     dragStartRef.current = { y: e.clientY, moved: false };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }
   function onBarPointerMove(e: React.PointerEvent) {
     const start = dragStartRef.current;
     if (!start) return;
-    if (start.y - e.clientY > 24) {
-      start.moved = true;
+    const up = start.y - e.clientY; // upward drag is positive
+    if (Math.abs(up) > 4) start.moved = true;
+    setBarLift(Math.max(0, up));
+    if (up > 48) {
       dragStartRef.current = null;
+      setBarLift(0);
       expand();
     }
   }
   function onBarPointerUp() {
     const start = dragStartRef.current;
     dragStartRef.current = null;
-    if (start && !start.moved) expand();
+    const lift = barLift;
+    setBarLift(0);
+    if (!start) return;
+    // A tap (no real movement) or a partial swipe-up both open it.
+    if (!start.moved || lift > 12) expand();
+  }
+  function onBarPointerCancel() {
+    dragStartRef.current = null;
+    setBarLift(0);
   }
 
   const transform =
@@ -189,13 +204,18 @@ export function LeagueChat({
           onPointerDown={onBarPointerDown}
           onPointerMove={onBarPointerMove}
           onPointerUp={onBarPointerUp}
+          onPointerCancel={onBarPointerCancel}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
               expand();
             }
           }}
-          className="fixed z-30 left-0 right-0 bottom-[calc(env(safe-area-inset-bottom)+3.5rem)] md:left-auto md:right-6 md:bottom-6 md:w-[360px] flex items-center gap-2.5 px-4 h-14 bg-[#1a1d23] border-t border-white/10 md:border md:rounded-2xl md:shadow-2xl cursor-pointer select-none active:bg-[#1f232b] transition-colors after:content-[''] after:absolute after:top-full after:left-0 after:right-0 after:h-24 after:bg-[#1a1d23] md:after:hidden"
+          style={{
+            transform: barLift ? `translateY(${-Math.min(barLift, 80)}px)` : undefined,
+            transition: barLift ? "none" : "transform 200ms ease-out",
+          }}
+          className="fixed z-30 left-0 right-0 bottom-[calc(env(safe-area-inset-bottom)+3.5rem)] md:left-auto md:right-6 md:bottom-6 md:w-[360px] flex items-center gap-2.5 px-4 h-14 bg-[#1a1d23] border-t border-white/10 md:border md:rounded-2xl md:shadow-2xl cursor-pointer select-none touch-none active:bg-[#1f232b] transition-colors after:content-[''] after:absolute after:top-full after:left-0 after:right-0 after:h-24 after:bg-[#1a1d23] md:after:hidden"
         >
           <div className="relative shrink-0 w-8 h-8 rounded-full bg-[#4B3DFF]/20 border border-[#4B3DFF]/30 flex items-center justify-center text-sm">
             💬
