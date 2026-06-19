@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { sendChatMessage } from "@/actions/chat";
+import { sendChatMessage, getLeagueSystemFeed } from "@/actions/chat";
+import type { SystemEvent, FeedAsset } from "@/lib/chat-feed";
 
 type Member = { id: number; team_name: string; user_id: string | null };
 type Message = {
@@ -15,6 +16,10 @@ type Message = {
 };
 
 type Channel = { kind: "league" } | { kind: "dm"; memberId: number };
+
+type TimelineItem =
+  | { key: string; ts: string; type: "msg"; message: Message }
+  | { key: string; ts: string; type: "sys"; event: SystemEvent };
 
 /**
  * Sleeper-style docked chat: a slim bar pinned to the bottom that previews the
@@ -33,6 +38,7 @@ export function LeagueChat({
 }) {
   const [channel, setChannel] = useState<Channel>({ kind: "league" });
   const [messages, setMessages] = useState<Message[]>([]);
+  const [systemEvents, setSystemEvents] = useState<SystemEvent[]>([]);
   const [body, setBody] = useState("");
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -41,8 +47,8 @@ export function LeagueChat({
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const lastIdRef = useRef<number>(0);
-  const seenIdRef = useRef<number>(0);
+  const lastKeyRef = useRef<string>("");
+  const seenTsRef = useRef<string>("");
   // Pointer-drag bookkeeping (shared by the open-sheet and collapsed-bar gestures).
   const dragStartRef = useRef<{ y: number; moved: boolean } | null>(null);
 
@@ -52,60 +58,79 @@ export function LeagueChat({
     [members, myMemberId],
   );
 
-  const fetchMessages = useCallback(async () => {
+  const refresh = useCallback(async () => {
     const supabase = createClient();
-    const { data } = await supabase
-      .from("chat_messages")
-      .select("id, body, created_at, sender_member_id, recipient_member_id")
-      .eq("league_id", leagueId)
-      .order("created_at", { ascending: true })
-      .limit(200);
+    const [{ data }, events] = await Promise.all([
+      supabase
+        .from("chat_messages")
+        .select("id, body, created_at, sender_member_id, recipient_member_id")
+        .eq("league_id", leagueId)
+        .order("created_at", { ascending: true })
+        .limit(200),
+      getLeagueSystemFeed(leagueId).catch(() => [] as SystemEvent[]),
+    ]);
     setMessages((data ?? []) as Message[]);
+    setSystemEvents(events);
   }, [leagueId]);
 
   useEffect(() => {
-    fetchMessages();
-    const id = setInterval(fetchMessages, 4000);
+    refresh();
+    const id = setInterval(refresh, 4000);
     return () => clearInterval(id);
-  }, [fetchMessages]);
+  }, [refresh]);
 
-  // Filter to the current channel.
-  const visible = useMemo(() => {
+  // Merge chat messages with system events (trades / roster moves) for the
+  // league channel, ordered by time; DMs stay message-only.
+  const timeline = useMemo<TimelineItem[]>(() => {
+    const items: TimelineItem[] = [];
     if (channel.kind === "league") {
-      return messages.filter((m) => m.recipient_member_id == null);
+      for (const m of messages) {
+        if (m.recipient_member_id == null) {
+          items.push({ key: `m-${m.id}`, ts: m.created_at, type: "msg", message: m });
+        }
+      }
+      for (const e of systemEvents) {
+        items.push({ key: e.id, ts: e.ts, type: "sys", event: e });
+      }
+    } else {
+      const other = channel.memberId;
+      for (const m of messages) {
+        if (
+          m.recipient_member_id != null &&
+          ((m.sender_member_id === myMemberId && m.recipient_member_id === other) ||
+            (m.sender_member_id === other && m.recipient_member_id === myMemberId))
+        ) {
+          items.push({ key: `m-${m.id}`, ts: m.created_at, type: "msg", message: m });
+        }
+      }
     }
-    const other = channel.memberId;
-    return messages.filter(
-      (m) =>
-        m.recipient_member_id != null &&
-        ((m.sender_member_id === myMemberId && m.recipient_member_id === other) ||
-          (m.sender_member_id === other && m.recipient_member_id === myMemberId)),
-    );
-  }, [messages, channel, myMemberId]);
+    items.sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
+    return items;
+  }, [messages, systemEvents, channel, myMemberId]);
 
-  const latest = visible.length > 0 ? visible[visible.length - 1] : null;
-  const hasUnread = latest != null && latest.id > seenIdRef.current && !open;
+  const latestItem = timeline.length > 0 ? timeline[timeline.length - 1] : null;
+  const hasUnread = latestItem != null && latestItem.ts > seenTsRef.current && !open;
 
-  // Auto-scroll to the bottom when new messages arrive while the sheet is open.
+  // Auto-scroll to the bottom when new activity arrives while the sheet is open.
   useEffect(() => {
-    if (!open || visible.length === 0) return;
-    const newest = visible[visible.length - 1].id;
-    if (newest !== lastIdRef.current) {
-      lastIdRef.current = newest;
+    if (!open || timeline.length === 0) return;
+    const lastKey = timeline[timeline.length - 1].key;
+    if (lastKey !== lastKeyRef.current) {
+      lastKeyRef.current = lastKey;
       const el = scrollRef.current;
       if (el) el.scrollTop = el.scrollHeight;
     }
-  }, [visible, open]);
+  }, [timeline, open]);
 
   // Opening clears the unread marker and snaps the history to the bottom.
   const expand = useCallback(() => {
     setOpen(true);
-    if (latest) seenIdRef.current = latest.id;
+    if (latestItem) seenTsRef.current = latestItem.ts;
     requestAnimationFrame(() => {
       const el = scrollRef.current;
       if (el) el.scrollTop = el.scrollHeight;
     });
-  }, [latest]);
+  }, [latestItem]);
 
   const collapse = useCallback(() => {
     setOpen(false);
@@ -119,9 +144,11 @@ export function LeagueChat({
       const recipient = channel.kind === "dm" ? channel.memberId : null;
       await sendChatMessage(leagueId, text, recipient);
       setBody("");
-      fetchMessages();
+      refresh();
     });
   }
+
+  const preview = previewFor(latestItem, memberById);
 
   // --- Drag-to-dismiss on the open sheet's grab handle ---
   function onSheetPointerDown(e: React.PointerEvent) {
@@ -226,12 +253,12 @@ export function LeagueChat({
             )}
           </div>
           <div className="min-w-0 flex-1">
-            {latest ? (
+            {preview ? (
               <p className="text-sm text-gray-200 truncate">
-                <span className="font-semibold text-white">
-                  {memberById.get(latest.sender_member_id)?.team_name ?? "Team"}:
-                </span>{" "}
-                {latest.body}
+                {preview.sender && (
+                  <span className="font-semibold text-white">{preview.sender}: </span>
+                )}
+                {preview.text}
               </p>
             ) : (
               <p className="text-sm text-gray-400 truncate">Tap to chat with your league</p>
@@ -329,19 +356,23 @@ export function LeagueChat({
 
         {/* Message list */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
-          {visible.length === 0 ? (
+          {timeline.length === 0 ? (
             <p className="text-gray-400 text-sm text-center py-8">
               {channel.kind === "league"
                 ? "No messages yet. Be the first to say something."
                 : "No DMs yet — send a message to start the conversation."}
             </p>
           ) : (
-            visible.map((m) => {
+            timeline.map((item) => {
+              if (item.type === "sys") {
+                return <SystemMessage key={item.key} event={item.event} ts={item.ts} />;
+              }
+              const m = item.message;
               const isMine = m.sender_member_id === myMemberId;
               const sender = memberById.get(m.sender_member_id);
               return (
                 <div
-                  key={m.id}
+                  key={item.key}
                   className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}
                 >
                   <span className="text-[10px] text-gray-400 mb-0.5">
@@ -396,5 +427,113 @@ export function LeagueChat({
         </div>
       </div>
     </>
+  );
+}
+
+/** Collapsed-bar preview text for the most recent timeline item. */
+function previewFor(
+  item: TimelineItem | null,
+  memberById: Map<number, Member>,
+): { sender: string | null; text: string } | null {
+  if (!item) return null;
+  if (item.type === "msg") {
+    return {
+      sender: memberById.get(item.message.sender_member_id)?.team_name ?? "Team",
+      text: item.message.body,
+    };
+  }
+  const e = item.event;
+  return {
+    sender: null,
+    text: e.kind === "trade" ? "A trade has been completed." : `${e.actor} made a roster move.`,
+  };
+}
+
+/** Sleeper-style system message for a trade or roster move. */
+function SystemMessage({ event, ts }: { event: SystemEvent; ts: string }) {
+  const time = new Date(ts).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return (
+    <div className="flex items-start gap-2.5 py-1">
+      <div className="shrink-0 w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-gray-300">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2l8 3v6c0 5-3.4 8.5-8 11-4.6-2.5-8-6-8-11V5l8-3z" opacity="0.9" />
+          <path d="M12 7.5l1.2 2.4 2.6.4-1.9 1.8.45 2.6L12 13.9l-2.35 1.2.45-2.6-1.9-1.8 2.6-.4L12 7.5z" fill="#1a1d23" />
+        </svg>
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] text-gray-400 mb-1">{time}</p>
+        {event.kind === "trade" ? (
+          <>
+            <p className="text-sm text-gray-200 font-medium mb-1">A trade has been completed.</p>
+            <div className="space-y-2.5">
+              {event.teams.map((t, i) => (
+                <div key={i} className="border-l-2 border-white/15 pl-3">
+                  <p className="text-white text-sm font-semibold mb-1">{t.teamName}&rsquo;s Roster</p>
+                  <AssetList gains={t.gains} losses={t.losses} />
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-gray-200 font-medium mb-1">
+              <span className="font-semibold text-white">{event.actor}</span> made a roster move.
+            </p>
+            <div className="border-l-2 border-white/15 pl-3">
+              <AssetList gains={event.gains} losses={event.losses} />
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AssetList({ gains, losses }: { gains: FeedAsset[]; losses: FeedAsset[] }) {
+  return (
+    <div className="space-y-1">
+      {gains.map((a, i) => (
+        <AssetRow key={`g-${i}`} asset={a} sign="+" />
+      ))}
+      {losses.map((a, i) => (
+        <AssetRow key={`l-${i}`} asset={a} sign="-" />
+      ))}
+    </div>
+  );
+}
+
+function AssetRow({ asset, sign }: { asset: FeedAsset; sign: "+" | "-" }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className={`shrink-0 text-base font-black leading-none w-4 text-center ${
+          sign === "+" ? "text-[#36D7B7]" : "text-[#f87171]"
+        }`}
+      >
+        {sign === "+" ? "+" : "–"}
+      </span>
+      {asset.type === "player" ? (
+        <div className="flex items-center gap-2 min-w-0">
+          {asset.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={asset.avatarUrl}
+              alt=""
+              className="shrink-0 w-7 h-7 rounded-full object-cover bg-white/10"
+            />
+          ) : (
+            <div className="shrink-0 w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-[11px] font-bold text-gray-300">
+              {asset.name[0]?.toUpperCase()}
+            </div>
+          )}
+          <div className="min-w-0 leading-tight">
+            <p className="text-white text-sm font-semibold truncate">{asset.name}</p>
+            {asset.division && <p className="text-gray-400 text-[11px]">{asset.division}</p>}
+          </div>
+        </div>
+      ) : (
+        <p className="text-white text-sm font-semibold truncate">{asset.label}</p>
+      )}
+    </div>
   );
 }

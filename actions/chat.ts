@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { buildLeagueSystemFeed, type SystemEvent } from "@/lib/chat-feed";
 
 /** Post a chat message in this league. recipientMemberId === null is a
  *  league-wide broadcast; otherwise it's a 1:1 DM. */
@@ -47,4 +48,13 @@ export async function sendChatMessage(
   });
 
   revalidatePath(`/league/${leagueId}`);
+}
+
+/** Trade + roster-move events for the league chat's system messages. Only
+ *  league members can read them (RLS on the underlying tables). */
+export async function getLeagueSystemFeed(leagueId: number): Promise<SystemEvent[]> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  return buildLeagueSystemFeed(supabase, leagueId);
 }
