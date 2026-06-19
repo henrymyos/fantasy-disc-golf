@@ -310,7 +310,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   }
 
   return (
-    <div className="grid lg:grid-cols-3 gap-6">
+    <div className="grid lg:grid-cols-3 gap-6 pb-8 md:pb-0">
       {/* Standings (or team roster before the draft) */}
       <div className="lg:col-span-1 min-w-0 bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
         <h2 className="font-bold text-white mb-4">{preDraft ? "Teams" : "Standings"}</h2>
@@ -484,18 +484,15 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
         )}
 
         {myMembership && (
-          <div>
-            <h2 className="font-bold text-white mb-2 px-1 text-sm uppercase tracking-wider">Chat</h2>
-            <LeagueChat
-              leagueId={Number(id)}
-              myMemberId={myMembership.id}
-              members={(members ?? []).map((m: any) => ({
-                id: m.id,
-                team_name: m.team_name,
-                user_id: m.user_id ?? null,
-              }))}
-            />
-          </div>
+          <LeagueChat
+            leagueId={Number(id)}
+            myMemberId={myMembership.id}
+            members={(members ?? []).map((m: any) => ({
+              id: m.id,
+              team_name: m.team_name,
+              user_id: m.user_id ?? null,
+            }))}
+          />
         )}
 
         {latestRecap && (
