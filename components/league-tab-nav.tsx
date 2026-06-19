@@ -31,7 +31,7 @@ export function LeagueTabNav({ base, isCommissioner, draftComplete }: { base: st
   }, [pathname]);
 
   return (
-    <nav className="mb-6 border-b border-white/5 sticky top-[calc(env(safe-area-inset-top)+44px)] md:top-0 z-20 bg-[var(--background)] -mx-4 px-4 md:-mx-0 md:px-0 before:content-[''] before:absolute before:bottom-full before:left-0 before:right-0 before:h-24 before:bg-[var(--background)] md:before:hidden">
+    <nav className="mb-6 border-b border-white/5 sticky top-[calc(env(safe-area-inset-top)+42px)] md:top-0 z-20 bg-[var(--background)] -mx-4 px-4 md:-mx-0 md:px-0 before:content-[''] before:absolute before:bottom-full before:left-0 before:right-0 before:h-1.5 before:bg-[var(--background)] md:before:hidden">
       {/* Inner element owns the horizontal scroll so the sticky <nav> itself
           keeps overflow:visible — otherwise the gap-filling ::before above it
           would get clipped. */}

@@ -61,10 +61,12 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   const scheduleEvents = await getScheduleEvents(supabase, (league as any).season_year ?? DEFAULT_SEASON_YEAR);
   const selectedSlugs = new Set(effectiveSelection((league as any).selected_event_slugs, scheduleEvents));
   const today = new Date().toISOString().slice(0, 10);
-  // Include events that are currently running (started but not yet ended) as
-  // well as future ones, so an in-progress tournament still shows here.
+  // The "Upcoming Tournaments" widget is an informational view of the DGPT
+  // tour, not the league's scoring schedule — so it shows every event that is
+  // currently running (started but not yet ended) or still ahead, regardless
+  // of which events this league selected to count.
   const upcomingEvents = scheduleEvents
-    .filter((e) => selectedSlugs.has(e.slug) && e.endDate >= today)
+    .filter((e) => e.endDate >= today)
     .sort((a, b) => a.startDate.localeCompare(b.startDate))
     .slice(0, 6);
 
@@ -605,7 +607,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
         {/* Upcoming tournaments */}
         {upcomingEvents.length > 0 && (
           <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
-            <h2 className="font-bold text-white mb-4">Tournaments</h2>
+            <h2 className="font-bold text-white mb-4">Upcoming Tournaments</h2>
             <div className="space-y-2">
               {upcomingEvents.map((event) => {
                 const url = event.pdgaEventId
