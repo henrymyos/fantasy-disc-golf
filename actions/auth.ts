@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createHash } from "crypto";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { z } from "zod";
 
 /**
@@ -133,7 +134,7 @@ export async function signup(_state: AuthState, formData: FormData): Promise<Aut
 
   const supabase = await createClient();
 
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: { data: { username } },
@@ -141,6 +142,21 @@ export async function signup(_state: AuthState, formData: FormData): Promise<Aut
 
   if (error) {
     return { message: error.message };
+  }
+
+  // Create the profile row the rest of the app depends on (leagues, members,
+  // etc. all reference profiles.id). The DB trigger is a no-op, so this is the
+  // single place a profile gets created. Use the admin client because with
+  // email confirmation enabled there is no authenticated session yet, so RLS
+  // would block a self-insert.
+  if (data.user) {
+    const admin = createAdminClient();
+    const { error: profileError } = await admin
+      .from("profiles")
+      .upsert({ id: data.user.id, username }, { onConflict: "id" });
+    if (profileError) {
+      return { message: profileError.message };
+    }
   }
 
   revalidatePath("/", "layout");
