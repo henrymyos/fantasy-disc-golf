@@ -18,12 +18,16 @@ export function ProfileMenu({
   logoutAction,
   variant,
   unreadCount = 0,
+  avatarUrl = null,
+  avatarColor = null,
 }: {
   username: string;
   email: string | null;
   logoutAction: () => Promise<void>;
   variant: Variant;
   unreadCount?: number;
+  avatarUrl?: string | null;
+  avatarColor?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   // Read the active theme from the same store the toggles use. Lazy init (not
@@ -36,6 +40,7 @@ export function ProfileMenu({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
   const initial = username?.[0]?.toUpperCase() ?? "?";
+  const bgColor = avatarColor ?? "#4B3DFF";
 
   useEffect(() => {
     if (!open) return;
@@ -67,9 +72,21 @@ export function ProfileMenu({
 
   const avatar = (
     <div className="relative shrink-0">
-      <div className="w-7 h-7 rounded-full bg-[#4B3DFF] flex items-center justify-center text-white text-xs font-bold">
-        {initial}
-      </div>
+      {avatarUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={avatarUrl}
+          alt=""
+          className="w-7 h-7 rounded-full object-cover bg-white/10"
+        />
+      ) : (
+        <div
+          className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold"
+          style={{ backgroundColor: bgColor }}
+        >
+          {initial}
+        </div>
+      )}
       {unreadCount > 0 && variant === "sidebar" && (
         <span
           className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#36D7B7] ring-2 ring-[#13151c]"
@@ -129,9 +146,21 @@ export function ProfileMenu({
         >
           {/* User header */}
           <div className="flex items-center gap-3 px-2.5 py-2">
-            <div className="w-9 h-9 rounded-full bg-[#4B3DFF] flex items-center justify-center text-white text-sm font-bold shrink-0">
-              {initial}
-            </div>
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={avatarUrl}
+                alt=""
+                className="w-9 h-9 rounded-full object-cover shrink-0 bg-white/10"
+              />
+            ) : (
+              <div
+                className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+                style={{ backgroundColor: bgColor }}
+              >
+                {initial}
+              </div>
+            )}
             <div className="min-w-0">
               <p className="text-white text-sm font-semibold truncate">{username}</p>
               {email && <p className="text-gray-400 text-xs truncate">{email}</p>}
@@ -172,6 +201,20 @@ export function ProfileMenu({
           </div>
 
           <div className="my-1 border-t border-white/5" />
+
+          {/* Profile */}
+          <Link
+            href="/profile"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-white/5 transition"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+            Profile
+          </Link>
 
           {/* Notifications feed */}
           <Link

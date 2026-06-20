@@ -16,11 +16,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("username")
+    .select("username, avatar_url, avatar_color")
     .eq("id", user.id)
     .single();
 
   const username = profile?.username ?? "User";
+  const avatarUrl = (profile as any)?.avatar_url ?? null;
+  const avatarColor = (profile as any)?.avatar_color ?? null;
 
   const { count: unreadCount } = await supabase
     .from("notifications")
@@ -33,7 +35,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen bg-[#0f1117]">
       <ServiceWorkerRegister />
       {/* Mobile top bar (hidden md+) */}
-      <MobileTopBar username={username} email={user.email ?? null} unreadCount={unreadCount ?? 0} logoutAction={logout} />
+      <MobileTopBar username={username} email={user.email ?? null} unreadCount={unreadCount ?? 0} logoutAction={logout} avatarUrl={avatarUrl} avatarColor={avatarColor} />
 
       {/* Sidebar (hidden below md) */}
       <aside className="hidden md:flex md:w-14 lg:w-56 bg-[#13151c] border-r border-white/5 flex-col py-6 px-2 lg:px-4 fixed top-0 h-full z-20">
@@ -57,6 +59,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             logoutAction={logout}
             variant="sidebar"
             unreadCount={unreadCount ?? 0}
+            avatarUrl={avatarUrl}
+            avatarColor={avatarColor}
           />
         </div>
       </aside>

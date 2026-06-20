@@ -64,15 +64,6 @@ export default async function NotificationSettingsPage() {
           );
         })}
       </div>
-
-      <div className="bg-[#1a1d23] rounded-2xl p-4 border border-white/5">
-        <p className="text-gray-400 text-xs leading-relaxed">
-          This is a website, not a native app. Notifications show up in the
-          in-app feed when you open the site. Email and push delivery aren&apos;t
-          wired up — to add email, plug a provider into{" "}
-          <code className="text-gray-300">lib/notifications.ts:dispatchEmail</code>.
-        </p>
-      </div>
     </div>
   );
 }
