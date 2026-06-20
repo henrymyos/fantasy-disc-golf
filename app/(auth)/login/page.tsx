@@ -1,17 +1,22 @@
 "use client";
 
-import { useActionState } from "react";
+import { Suspense, useActionState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { login, type AuthState } from "@/actions/auth";
 
-export default function LoginPage() {
+function LoginForm() {
   const [state, action, pending] = useActionState<AuthState, FormData>(login, null);
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next") ?? "";
+  const signupHref = next ? `/signup?next=${encodeURIComponent(next)}` : "/signup";
 
   return (
     <div className="bg-[#1a1d23] rounded-2xl p-8 shadow-2xl border border-white/5">
       <h2 className="text-xl font-bold text-white mb-6">Sign In</h2>
 
       <form action={action} className="space-y-4">
+        {next && <input type="hidden" name="next" value={next} />}
         <div>
           <label className="block text-sm text-gray-400 mb-1" htmlFor="email">Email</label>
           <input
@@ -62,10 +67,18 @@ export default function LoginPage() {
 
       <p className="text-center text-gray-400 text-sm mt-6">
         No account?{" "}
-        <Link href="/signup" className="text-[#36D7B7] hover:text-[#4B3DFF] transition">
+        <Link href={signupHref} className="text-[#36D7B7] hover:text-[#4B3DFF] transition">
           Create one
         </Link>
       </p>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="bg-[#1a1d23] rounded-2xl p-8 border border-white/5 text-gray-400 text-sm">Loading…</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }

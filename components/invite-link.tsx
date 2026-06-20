@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { CopyButton } from "@/components/copy-button";
 
 /**
- * Shows a friendly, shareable join link (e.g. https://site/league/join?code=AB12CD34)
+ * Shows a friendly, shareable join link (e.g. https://site/join/AB12CD34)
  * alongside a copy button and a native share sheet on supporting devices. The
  * origin is read on the client so it's correct in every environment without
  * threading request headers through the server tree.
@@ -26,7 +26,7 @@ export function InviteLink({
     setCanShare(typeof navigator !== "undefined" && !!navigator.share);
   }, []);
 
-  const link = origin ? `${origin}/league/join?code=${code}` : `/league/join?code=${code}`;
+  const link = origin ? `${origin}/join/${code}` : `/join/${code}`;
   const display = link.replace(/^https?:\/\//, "");
 
   async function share() {

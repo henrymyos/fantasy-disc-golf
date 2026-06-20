@@ -33,6 +33,15 @@ async function isPasswordCompromised(password: string): Promise<boolean> {
   }
 }
 
+/** Returns a safe in-app redirect target from a `next` form field, or
+ *  /dashboard. Only same-site absolute paths are allowed (no protocol-relative
+ *  "//evil.com" or external URLs), so the param can't be used for open redirects. */
+function safeNext(raw: FormDataEntryValue | null): string {
+  const v = typeof raw === "string" ? raw : "";
+  if (v.startsWith("/") && !v.startsWith("//") && !v.startsWith("/\\")) return v;
+  return "/dashboard";
+}
+
 /** Absolute origin of the current request, for building auth redirect URLs. */
 async function siteOrigin(): Promise<string> {
   if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
@@ -160,7 +169,7 @@ export async function signup(_state: AuthState, formData: FormData): Promise<Aut
   }
 
   revalidatePath("/", "layout");
-  redirect("/dashboard");
+  redirect(safeNext(formData.get("next")));
 }
 
 export async function login(_state: AuthState, formData: FormData): Promise<AuthState> {
@@ -183,7 +192,7 @@ export async function login(_state: AuthState, formData: FormData): Promise<Auth
   }
 
   revalidatePath("/", "layout");
-  redirect("/dashboard");
+  redirect(safeNext(formData.get("next")));
 }
 
 export async function logout() {
