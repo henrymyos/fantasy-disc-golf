@@ -1,8 +1,26 @@
 "use client";
 
 import Link from "next/link";
+import { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
+
+/**
+ * Fixed-size spinner that appears while its parent <Link> is navigating, so a
+ * tapped tab visibly shows it's loading (and the user doesn't tap again). Must
+ * live inside the <Link>; reserves its space so it doesn't shift the label.
+ */
+function TabSpinner() {
+  const { pending } = useLinkStatus();
+  return (
+    <span
+      aria-hidden
+      className={`inline-block w-3.5 h-3.5 shrink-0 rounded-full border-2 border-current border-t-transparent transition-opacity ${
+        pending ? "opacity-70 animate-spin" : "opacity-0"
+      }`}
+    />
+  );
+}
 
 const NAV_TABS = [
   { label: "League", href: "" },
@@ -44,13 +62,14 @@ export function LeagueTabNav({ base, isCommissioner, draftComplete }: { base: st
               key={tab.href}
               href={href}
               ref={isActive ? activeRef : undefined}
-              className={`min-h-[44px] px-4 py-2.5 text-sm font-medium border-b-2 transition whitespace-nowrap -mb-px flex items-center ${
+              className={`min-h-[44px] px-4 py-2.5 text-sm font-medium border-b-2 transition whitespace-nowrap -mb-px flex items-center gap-1.5 ${
                 isActive
                   ? "text-white border-[#4B3DFF]"
                   : "text-gray-300 hover:text-white border-transparent hover:border-[#4B3DFF]"
               }`}
             >
               {tab.label}
+              <TabSpinner />
             </Link>
           );
         })}
