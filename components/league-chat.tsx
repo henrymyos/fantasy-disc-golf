@@ -47,6 +47,9 @@ export function LeagueChat({
   // without a full page reload. Seeded from the server-rendered prop.
   const [liveMembers, setLiveMembers] = useState<Member[]>(members);
   const pathname = usePathname();
+  // The chat is hidden on settings routes (rendered as null below). Track it
+  // here so the body-scroll lock never engages while nothing is shown.
+  const hideOnSettings = pathname.includes("/settings");
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -119,6 +122,35 @@ export function LeagueChat({
 
   const latestItem = timeline.length > 0 ? timeline[timeline.length - 1] : null;
   const hasUnread = latestItem != null && latestItem.ts > seenTsRef.current && !open;
+
+  // Lock the page behind the open sheet so touch-scrolling stays inside the
+  // chat instead of scrolling the background. position:fixed is the reliable
+  // way to do this on iOS Safari; the scroll position is restored on close.
+  useEffect(() => {
+    if (!open || hideOnSettings) return;
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const prev = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+    };
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    return () => {
+      body.style.position = prev.position;
+      body.style.top = prev.top;
+      body.style.left = prev.left;
+      body.style.right = prev.right;
+      body.style.width = prev.width;
+      window.scrollTo(0, scrollY);
+    };
+  }, [open, hideOnSettings]);
 
   // Auto-scroll to the bottom when new activity arrives while the sheet is open.
   useEffect(() => {
@@ -228,7 +260,7 @@ export function LeagueChat({
 
   // The chat dock follows the user across league tabs, but settings (and its
   // sub-pages) are a focused admin context — keep it out of the way there.
-  if (pathname.includes("/settings")) return null;
+  if (hideOnSettings) return null;
 
   return (
     <>
@@ -364,7 +396,7 @@ export function LeagueChat({
         </div>
 
         {/* Message list */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 space-y-2">
           {timeline.length === 0 ? (
             <p className="text-gray-400 text-sm text-center py-8">
               {channel.kind === "league"
