@@ -22,7 +22,7 @@ export default async function ProfilePage() {
         <BackLink
           fallbackHref="/dashboard"
           label="Back"
-          className="text-gray-400 hover:text-white text-sm transition inline-block mb-2"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-300 hover:text-white bg-[#1a1d23] border border-white/10 hover:border-white/30 px-3 py-1.5 rounded-lg transition mb-3"
         />
         <h2 className="text-white font-bold text-xl">Profile</h2>
         <p className="text-gray-400 text-sm mt-1">
