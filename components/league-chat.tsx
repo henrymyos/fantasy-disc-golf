@@ -43,6 +43,9 @@ export function LeagueChat({
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [dragY, setDragY] = useState<number | null>(null);
+  // Members are polled so team-name changes (and new joiners) show in the chat
+  // without a full page reload. Seeded from the server-rendered prop.
+  const [liveMembers, setLiveMembers] = useState<Member[]>(members);
   const pathname = usePathname();
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -52,15 +55,15 @@ export function LeagueChat({
   // Pointer-drag bookkeeping (shared by the open-sheet and collapsed-bar gestures).
   const dragStartRef = useRef<{ y: number; moved: boolean } | null>(null);
 
-  const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
+  const memberById = useMemo(() => new Map(liveMembers.map((m) => [m.id, m])), [liveMembers]);
   const otherMembers = useMemo(
-    () => members.filter((m) => m.id !== myMemberId),
-    [members, myMemberId],
+    () => liveMembers.filter((m) => m.id !== myMemberId),
+    [liveMembers, myMemberId],
   );
 
   const refresh = useCallback(async () => {
     const supabase = createClient();
-    const [{ data }, events] = await Promise.all([
+    const [{ data }, events, { data: memberData }] = await Promise.all([
       supabase
         .from("chat_messages")
         .select("id, body, created_at, sender_member_id, recipient_member_id")
@@ -68,9 +71,15 @@ export function LeagueChat({
         .order("created_at", { ascending: true })
         .limit(200),
       getLeagueSystemFeed(leagueId).catch(() => [] as SystemEvent[]),
+      supabase
+        .from("league_members")
+        .select("id, team_name, user_id")
+        .eq("league_id", leagueId)
+        .order("joined_at"),
     ]);
     setMessages((data ?? []) as Message[]);
     setSystemEvents(events);
+    if (memberData && memberData.length > 0) setLiveMembers(memberData as Member[]);
   }, [leagueId]);
 
   useEffect(() => {
@@ -528,7 +537,10 @@ function AssetRow({ asset, sign }: { asset: FeedAsset; sign: "+" | "-" }) {
           )}
           <div className="min-w-0 leading-tight">
             <p className="text-white text-sm font-semibold truncate">{asset.name}</p>
-            {asset.division && <p className="text-gray-400 text-[11px]">{asset.division}</p>}
+            {asset.nickname && (
+              <p className="text-gray-400 text-[11px] truncate">({asset.nickname})</p>
+            )}
+            {asset.division && <p className="text-gray-500 text-[11px]">{asset.division}</p>}
           </div>
         </div>
       ) : (
