@@ -51,13 +51,13 @@ export function TournamentRangePicker({
   const isFiltered = from !== "" || to !== "";
 
   return (
-    <div className="flex flex-wrap items-end gap-3">
-      <label className="flex flex-col gap-1">
+    <div className="flex items-end gap-2">
+      <label className="flex-1 min-w-0 flex flex-col gap-1">
         <span className="text-gray-400 text-[10px] uppercase tracking-wider">From</span>
         <select
           value={from}
           onChange={(e) => setFromAndApply(e.target.value === "" ? "" : Number(e.target.value))}
-          className="bg-[#1a1d23] border border-white/10 hover:border-white/30 rounded-lg px-3 py-2 text-white text-sm cursor-pointer focus:outline-none"
+          className="w-full min-w-0 bg-[#1a1d23] border border-white/10 hover:border-white/30 rounded-lg px-3 py-2 text-white text-sm cursor-pointer focus:outline-none"
         >
           <option value="">Season start</option>
           {tournaments.map((t) => (
@@ -68,12 +68,12 @@ export function TournamentRangePicker({
         </select>
       </label>
 
-      <label className="flex flex-col gap-1">
+      <label className="flex-1 min-w-0 flex flex-col gap-1">
         <span className="text-gray-400 text-[10px] uppercase tracking-wider">To</span>
         <select
           value={to}
           onChange={(e) => setToAndApply(e.target.value === "" ? "" : Number(e.target.value))}
-          className="bg-[#1a1d23] border border-white/10 hover:border-white/30 rounded-lg px-3 py-2 text-white text-sm cursor-pointer focus:outline-none"
+          className="w-full min-w-0 bg-[#1a1d23] border border-white/10 hover:border-white/30 rounded-lg px-3 py-2 text-white text-sm cursor-pointer focus:outline-none"
         >
           <option value="">Latest</option>
           {tournaments.map((t) => (
@@ -88,7 +88,7 @@ export function TournamentRangePicker({
         <button
           type="button"
           onClick={clear}
-          className="text-xs text-gray-300 hover:text-white border border-white/10 hover:border-white/30 px-3 py-2 rounded-lg transition"
+          className="shrink-0 text-xs text-gray-300 hover:text-white border border-white/10 hover:border-white/30 px-3 py-2 rounded-lg transition"
         >
           Reset
         </button>

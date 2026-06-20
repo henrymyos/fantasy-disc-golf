@@ -394,7 +394,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
   if (step === "teams") {
     const selectionCount = selectedTeamIds.size;
     return (
-      <div className="max-w-3xl space-y-6 pb-24">
+      <div className="max-w-3xl space-y-6 pb-[calc(env(safe-area-inset-bottom)+9rem)] md:pb-24">
         {pendingTrades.length > 0 && (
           <div className="space-y-3">
             <h2 className="text-white font-bold">Pending Trades</h2>
@@ -497,7 +497,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
         </div>
 
         {selectionCount > 0 && (
-          <div className="fixed bottom-16 md:bottom-0 left-0 md:left-14 lg:left-56 right-0 z-40 bg-[#0f1117]/95 backdrop-blur-sm border-t border-white/5 px-4 lg:px-6 py-4">
+          <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+4rem)] md:bottom-0 left-0 md:left-14 lg:left-56 right-0 z-40 bg-[#0f1117]/95 backdrop-blur-sm border-t border-white/5 px-4 lg:px-6 py-4">
             <div className="max-w-3xl flex items-center justify-between">
               <div>
                 <p className="text-white font-semibold text-sm">
@@ -527,7 +527,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
     const canReview = filteredMovements.length > 0 || filteredPickMovements.length > 0 || filteredCurrentPicks.length > 0;
 
     return (
-      <div className="max-w-5xl pb-24">
+      <div className="max-w-5xl pb-[calc(env(safe-area-inset-bottom)+9rem)] md:pb-24">
         <div className="flex items-center gap-3 mb-5">
           <button
             onClick={() => {
@@ -646,7 +646,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
           })}
         </div>
 
-        <div className="fixed bottom-16 md:bottom-0 left-0 md:left-14 lg:left-56 right-0 z-40 bg-[#0f1117]/95 backdrop-blur-sm border-t border-white/5 px-4 lg:px-6 py-4">
+        <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+4rem)] md:bottom-0 left-0 md:left-14 lg:left-56 right-0 z-40 bg-[#0f1117]/95 backdrop-blur-sm border-t border-white/5 px-4 lg:px-6 py-4">
           <div className="max-w-5xl flex items-center justify-between">
             <div>
               <p className="text-white font-semibold text-sm">Trade Proposal</p>
