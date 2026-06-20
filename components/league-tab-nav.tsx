@@ -6,16 +6,17 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
 /**
- * Fixed-size spinner that appears while its parent <Link> is navigating, so a
- * tapped tab visibly shows it's loading (and the user doesn't tap again). Must
- * live inside the <Link>; reserves its space so it doesn't shift the label.
+ * Spinner that appears while its parent <Link> is navigating, so a tapped tab
+ * visibly shows it's loading (and the user doesn't tap again). Absolutely
+ * positioned so it adds no width — the tabs stay narrow enough to fit. Must
+ * live inside a `relative` <Link>.
  */
 function TabSpinner() {
   const { pending } = useLinkStatus();
   return (
     <span
       aria-hidden
-      className={`inline-block w-3.5 h-3.5 shrink-0 rounded-full border-2 border-current border-t-transparent transition-opacity ${
+      className={`absolute right-1 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-current border-t-transparent transition-opacity ${
         pending ? "opacity-70 animate-spin" : "opacity-0"
       }`}
     />
@@ -53,7 +54,7 @@ export function LeagueTabNav({ base, isCommissioner, draftComplete }: { base: st
       {/* Inner element owns the horizontal scroll so the sticky <nav> itself
           keeps overflow:visible — otherwise the gap-filling ::before above it
           would get clipped. */}
-      <div className="flex gap-1 overflow-x-auto no-scrollbar">
+      <div className="flex w-full gap-0.5 overflow-x-auto no-scrollbar">
         {tabs.map((tab) => {
           const href = `${base}${tab.href}`;
           const isActive = pathname === href;
@@ -62,7 +63,7 @@ export function LeagueTabNav({ base, isCommissioner, draftComplete }: { base: st
               key={tab.href}
               href={href}
               ref={isActive ? activeRef : undefined}
-              className={`min-h-[44px] px-4 py-2.5 text-sm font-medium border-b-2 transition whitespace-nowrap -mb-px flex items-center gap-1.5 ${
+              className={`relative flex-1 md:flex-none min-h-[44px] px-2.5 md:px-4 py-2.5 text-sm font-medium border-b-2 transition whitespace-nowrap -mb-px flex items-center justify-center md:justify-start ${
                 isActive
                   ? "text-white border-[#4B3DFF]"
                   : "text-gray-300 hover:text-white border-transparent hover:border-[#4B3DFF]"
