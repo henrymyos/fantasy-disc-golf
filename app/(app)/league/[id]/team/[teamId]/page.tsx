@@ -52,6 +52,18 @@ export default async function TeamPage({
 
   const roster = rosterRows ?? [];
 
+  // Team-specific player nicknames, shown under each name.
+  const { data: nickRows } = await supabase
+    .from("player_nicknames")
+    .select("player_id, nickname")
+    .eq("team_id", teamId);
+  const nickByPlayer = new Map<number, string>(
+    (nickRows ?? []).map((n: any) => [n.player_id as number, n.nickname as string]),
+  );
+  for (const r of roster) {
+    (r as any).nickname = nickByPlayer.get((r as any).player_id) ?? null;
+  }
+
   function buildSlotArray(starters: any[], numSlots: number): (any | null)[] {
     const result: (any | null)[] = new Array(numSlots).fill(null);
     const unordered: any[] = [];
@@ -191,12 +203,17 @@ function LineupRow({
         {division}
       </span>
       {occupant?.players ? (
-        <Link
-          href={`/league/${leagueId}/player/${occupant.player_id}`}
-          className="flex-1 text-white text-sm font-medium truncate hover:underline"
-        >
-          {occupant.players.name}
-        </Link>
+        <div className="flex-1 min-w-0">
+          <Link
+            href={`/league/${leagueId}/player/${occupant.player_id}`}
+            className="block text-white text-sm font-medium truncate hover:underline"
+          >
+            {occupant.players.name}
+          </Link>
+          {occupant.nickname && (
+            <p className="text-gray-400 text-xs truncate">({occupant.nickname})</p>
+          )}
+        </div>
       ) : (
         <p className="flex-1 text-gray-400 text-sm italic">Empty</p>
       )}
@@ -216,12 +233,17 @@ function BenchRow({ leagueId, spot }: { leagueId: number; spot: any }) {
       >
         {div}
       </span>
-      <Link
-        href={`/league/${leagueId}/player/${spot.player_id}`}
-        className="flex-1 text-white text-sm font-medium truncate hover:underline"
-      >
-        {player?.name}
-      </Link>
+      <div className="flex-1 min-w-0">
+        <Link
+          href={`/league/${leagueId}/player/${spot.player_id}`}
+          className="block text-white text-sm font-medium truncate hover:underline"
+        >
+          {player?.name}
+        </Link>
+        {spot.nickname && (
+          <p className="text-gray-400 text-xs truncate">({spot.nickname})</p>
+        )}
+      </div>
     </div>
   );
 }

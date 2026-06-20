@@ -52,6 +52,18 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
 
   const roster = (myRoster ?? []) as any[];
 
+  // Attach this team's player nicknames, shown under each name.
+  const { data: nickRows } = await supabase
+    .from("player_nicknames")
+    .select("player_id, nickname")
+    .eq("team_id", myMember.id);
+  const nickByPlayer = new Map<number, string>(
+    (nickRows ?? []).map((n: any) => [n.player_id as number, n.nickname as string]),
+  );
+  for (const r of roster) {
+    r.nickname = nickByPlayer.get(r.player_id) ?? null;
+  }
+
   const activeTournament = await getActiveTournament(supabase);
   const lineupLocked = activeTournament !== null;
 

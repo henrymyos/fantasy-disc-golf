@@ -97,6 +97,12 @@ export default async function LeagueSettingsPage({
         )}
 
         <Tile
+          href={`${base}/team`}
+          title="Team"
+          subtitle="Your team name and player nicknames"
+        />
+
+        <Tile
           href={`${base}/league`}
           title="League Settings"
           subtitle={isCommissioner ? "Name, roster, scoring mode" : "View league details"}

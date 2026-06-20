@@ -8,6 +8,7 @@ type PlayerRow = {
   rosterId: number;
   playerId: number;
   name: string;
+  nickname: string | null;
   division: "MPO" | "FPO";
   slotLabel: string;
   actual: number | null;
@@ -145,6 +146,15 @@ export default async function MatchupDetailPage({
     .order("id", { ascending: true });
   const allRoster = (roster ?? []) as any[];
 
+  // Per-team player nicknames (shown under each name on this matchup).
+  const { data: nickRows } = await supabase
+    .from("player_nicknames")
+    .select("team_id, player_id, nickname")
+    .in("team_id", [matchup.team1_id, matchup.team2_id]);
+  const nickByTeamPlayer = new Map<string, string>(
+    (nickRows ?? []).map((n: any) => [`${n.team_id}:${n.player_id}`, n.nickname as string]),
+  );
+
   const playerIds = allRoster.map((r) => r.player_id);
   const { data: results } = playerIds.length > 0
     ? await supabase
@@ -211,6 +221,7 @@ export default async function MatchupDetailPage({
       rosterId: s.id,
       playerId: s.player_id,
       name: s.players?.name ?? "Unknown",
+      nickname: nickByTeamPlayer.get(`${s.team_id}:${s.player_id}`) ?? null,
       division: (s.players?.division as "MPO" | "FPO") ?? "MPO",
       slotLabel,
       actual,
@@ -499,6 +510,9 @@ function NameCell({
           </span>
         )}
       </div>
+      {row.nickname && (
+        <p className="text-[11px] text-gray-400 leading-tight truncate">({row.nickname})</p>
+      )}
       {row.breakdown && (
         <p className="text-[10px] text-gray-500 leading-tight truncate mt-0.5" title={row.breakdown}>
           {row.breakdown}

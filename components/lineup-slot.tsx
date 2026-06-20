@@ -8,6 +8,7 @@ type RosterSpot = {
   id: number;
   player_id: number;
   players: { name: string; division: string } | null;
+  nickname?: string | null;
 };
 
 // spot is null when the slot is empty
@@ -100,13 +101,18 @@ export function LineupSlot({
         </button>
 
         {occupant?.players ? (
-          <Link
-            href={`/league/${leagueId}/player/${occupant.player_id}`}
-            className="flex-1 text-white text-sm font-medium truncate hover:underline"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {occupant.players.name}
-          </Link>
+          <div className="flex-1 min-w-0">
+            <Link
+              href={`/league/${leagueId}/player/${occupant.player_id}`}
+              className="block text-white text-sm font-medium truncate hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {occupant.players.name}
+            </Link>
+            {occupant.nickname && (
+              <p className="text-gray-400 text-xs truncate">({occupant.nickname})</p>
+            )}
+          </div>
         ) : (
           <p className="flex-1 text-gray-400 text-sm italic">Empty</p>
         )}
@@ -392,6 +398,9 @@ export function BenchSlot({
           >
             {player?.name}
           </Link>
+          {benchSpot.nickname && (
+            <p className="text-gray-400 text-xs truncate">({benchSpot.nickname})</p>
+          )}
         </div>
         <WeekPointsBadge wp={weekPoints} />
         {!slotsFull && !locked && (
