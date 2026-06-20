@@ -235,29 +235,31 @@ export function FreeAgencyList({
         ) : (
           <div className="space-y-1">
             {filteredAgents.map((player) => {
-              let primary: string | null = null;
-              if (sort === "projected") {
-                primary = player.nextWeekPoints != null
-                  ? `~${player.nextWeekPoints.toFixed(1)}`
-                  : "—";
-              } else if (sort === "rank") {
-                primary = tab === "all"
-                  ? (player.overallRank != null ? `#${player.overallRank}` : null)
-                  : (player.worldRanking != null ? `#${player.worldRanking}` : null);
-              } else if (seasonStarted) {
-                primary = player.totalPoints.toFixed(1);
-              } else {
-                primary = tab === "all"
-                  ? (player.overallRank != null ? `#${player.overallRank}` : null)
-                  : (player.worldRanking != null ? `#${player.worldRanking}` : null);
-              }
+              const primary = sort === "projected"
+                ? (player.nextWeekPoints != null ? `~${player.nextWeekPoints.toFixed(1)}` : "—")
+                : sort === "rank"
+                ? (tab === "all"
+                    ? (player.overallRank != null ? `#${player.overallRank}` : "—")
+                    : (player.worldRanking != null ? `#${player.worldRanking}` : "—"))
+                : seasonStarted
+                ? player.totalPoints.toFixed(1)
+                : (tab === "all"
+                    ? (player.overallRank != null ? `#${player.overallRank}` : "—")
+                    : (player.worldRanking != null ? `#${player.worldRanking}` : "—"));
+              const rightSlot = (
+                <div className="flex flex-col items-end shrink-0 w-16 text-right">
+                  <span className="text-white font-bold text-sm tabular-nums leading-tight">
+                    {primary}
+                  </span>
+                </div>
+              );
               return (
                 <PlayerRow
                   key={player.id}
                   player={player}
                   leagueId={leagueId}
-                  rank={primary}
-                  rightSlot={null}
+                  rank={null}
+                  rightSlot={rightSlot}
                   addControl={actionButton(player)}
                 />
               );
