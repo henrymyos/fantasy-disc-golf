@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { AddWithDropModal } from "@/components/add-with-drop-modal";
 import { cancelWaiverClaim } from "@/actions/rosters";
 
@@ -115,44 +115,26 @@ export function FreeAgencyList({
       />
     );
   }
-  const router = useRouter();
-  const pathname = usePathname();
+  // View / division / sort only drive client-side filtering of already-loaded
+  // data — the server page doesn't read them — so keep them in local state for
+  // instant updates instead of a slow router.push that re-renders the whole
+  // server page. Initial values still honor a deep link.
   const searchParams = useSearchParams();
-  const view: ViewTab = searchParams.get("view") === "leaders" ? "leaders" : "available";
-  const divParam = searchParams.get("div");
-  const tab: DivisionTab = divParam === "mpo" || divParam === "fpo" ? divParam : "all";
-  const sortParam = searchParams.get("sort");
-  const sort: SortKey =
-    sortParam === "projected" || sortParam === "rank" || sortParam === "points"
-      ? sortParam
-      : (seasonStarted ? "points" : "rank");
-
-  function pushParams(next: { view?: ViewTab; tab?: DivisionTab; sort?: SortKey }) {
-    const sp = new URLSearchParams(searchParams.toString());
-    if (next.view !== undefined) {
-      if (next.view === "available") sp.delete("view");
-      else sp.set("view", next.view);
-    }
-    if (next.tab !== undefined) {
-      if (next.tab === "all") sp.delete("div");
-      else sp.set("div", next.tab);
-    }
-    if (next.sort !== undefined) sp.set("sort", next.sort);
-    const qs = sp.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }
-  function setView(next: ViewTab) {
-    if (next === view) return;
-    pushParams({ view: next });
-  }
-  function setTab(next: DivisionTab) {
-    if (next === tab) return;
-    pushParams({ tab: next });
-  }
-  function setSort(next: SortKey) {
-    if (next === sort) return;
-    pushParams({ sort: next });
-  }
+  const [view, setView] = useState<ViewTab>(() =>
+    searchParams.get("view") === "leaders" ? "leaders" : "available",
+  );
+  const [tab, setTab] = useState<DivisionTab>(() => {
+    const d = searchParams.get("div");
+    return d === "mpo" || d === "fpo" ? d : "all";
+  });
+  const [sort, setSort] = useState<SortKey>(() => {
+    const s = searchParams.get("sort");
+    return s === "projected" || s === "rank" || s === "points"
+      ? s
+      : seasonStarted
+        ? "points"
+        : "rank";
+  });
 
   const divisionFilter = (p: { division: string }) =>
     tab === "all" || (tab === "mpo" ? p.division === "MPO" : p.division === "FPO");
