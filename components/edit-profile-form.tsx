@@ -39,18 +39,25 @@ export function EditProfileForm({
 
   const initial = username?.trim()?.[0]?.toUpperCase() ?? "?";
 
+  const MAX_BYTES = 5 * 1024 * 1024;
+  const ALLOWED = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+
   function save() {
     setError(null);
     setSaved(false);
     startSave(async () => {
-      const fd = new FormData();
-      fd.set("username", username);
-      fd.set("avatarColor", color);
-      const res = await updateProfile(fd);
-      if (res?.error) setError(res.error);
-      else {
-        setSaved(true);
-        router.refresh();
+      try {
+        const fd = new FormData();
+        fd.set("username", username);
+        fd.set("avatarColor", color);
+        const res = await updateProfile(fd);
+        if (res?.error) setError(res.error);
+        else {
+          setSaved(true);
+          router.refresh();
+        }
+      } catch {
+        setError("Something went wrong. Please try again.");
       }
     });
   }
@@ -61,20 +68,38 @@ export function EditProfileForm({
     if (!file) return;
     setError(null);
     setSaved(false);
+    // Validate before uploading so an oversized file fails gracefully here
+    // instead of being rejected mid-request.
+    if (!ALLOWED.includes(file.type)) {
+      setError("Use a PNG, JPG, WEBP, or GIF image.");
+      return;
+    }
+    if (file.size > MAX_BYTES) {
+      setError("Image must be under 5 MB. Try a smaller photo.");
+      return;
+    }
     startPhoto(async () => {
-      const fd = new FormData();
-      fd.set("file", file);
-      const res = await uploadAvatar(fd);
-      if (res?.error) setError(res.error);
-      else router.refresh();
+      try {
+        const fd = new FormData();
+        fd.set("file", file);
+        const res = await uploadAvatar(fd);
+        if (res?.error) setError(res.error);
+        else router.refresh();
+      } catch {
+        setError("Upload failed. Please try a smaller image.");
+      }
     });
   }
 
   function removePhoto() {
     setError(null);
     startPhoto(async () => {
-      await removeAvatar();
-      router.refresh();
+      try {
+        await removeAvatar();
+        router.refresh();
+      } catch {
+        setError("Something went wrong. Please try again.");
+      }
     });
   }
 
