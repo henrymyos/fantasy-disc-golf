@@ -350,7 +350,7 @@ export function LeagueChat({
         ref={panelRef}
         className={
           isDesktop
-            ? "fixed z-30 top-0 right-0 bottom-0 w-[340px] bg-[#1a1d23] border-l border-white/10 flex flex-col"
+            ? "fixed z-30 top-4 right-4 bottom-4 w-[360px] rounded-2xl overflow-hidden bg-[#1a1d23] border border-white/10 shadow-2xl flex flex-col"
             : "fixed z-[50] left-0 right-0 bottom-0 h-[82dvh] rounded-t-2xl md:left-auto md:right-6 md:bottom-6 md:w-[380px] md:h-[72vh] md:rounded-2xl bg-[#1a1d23] border border-white/10 shadow-2xl flex flex-col"
         }
         style={
@@ -364,12 +364,9 @@ export function LeagueChat({
         }
       >
         {isDesktop ? (
-          /* Desktop header — no drag/collapse, the sidebar stays open. */
-          <div className="shrink-0 flex items-center gap-2.5 px-4 py-3 border-b border-white/5">
-            <span className="w-8 h-8 rounded-full bg-[#4B3DFF]/20 border border-[#4B3DFF]/30 flex items-center justify-center text-sm shrink-0">
-              💬
-            </span>
-            <h2 className="font-bold text-white text-sm truncate">{channelLabel}</h2>
+          /* Desktop header — Sleeper-style teal bar; the sidebar stays open. */
+          <div className="shrink-0 flex items-center gap-2 px-4 py-3 bg-[#36D7B7] text-[#0f1117]">
+            <h2 className="font-bold text-base truncate">{channelLabel}</h2>
           </div>
         ) : (
           /* Grab handle + header (drag down / tap to collapse) */
@@ -471,33 +468,39 @@ export function LeagueChat({
           )}
         </div>
 
-        {/* Composer */}
-        <div className="border-t border-white/5 p-2 flex items-center gap-2 pb-[max(env(safe-area-inset-bottom),0.5rem)]">
-          <input
-            type="text"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
+        {/* Composer — Sleeper-style rounded pill with a send icon. */}
+        <div className="border-t border-white/5 p-3 pb-[max(env(safe-area-inset-bottom),0.75rem)]">
+          <div className="flex items-center gap-1.5 bg-[#0f1117] border border-white/10 rounded-full pl-3 pr-1.5 py-1 focus-within:border-[#4B3DFF] transition-colors">
+            <input
+              type="text"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+              placeholder={
+                channel.kind === "league"
+                  ? "Enter message"
+                  : `Message ${memberById.get(channel.memberId)?.team_name ?? ""}…`
               }
-            }}
-            placeholder={
-              channel.kind === "league"
-                ? "Message the league..."
-                : `DM ${memberById.get(channel.memberId)?.team_name ?? ""}…`
-            }
-            className="flex-1 min-w-0 bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-[#4B3DFF]"
-          />
-          <button
-            type="button"
-            onClick={send}
-            disabled={pending || !body.trim()}
-            className="bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white text-sm font-semibold px-4 py-2 rounded-lg transition disabled:opacity-40 shrink-0"
-          >
-            {pending ? "..." : "Send"}
-          </button>
+              className="flex-1 min-w-0 bg-transparent py-1.5 text-white text-sm placeholder-gray-500 focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={send}
+              disabled={pending || !body.trim()}
+              aria-label="Send message"
+              className="shrink-0 w-8 h-8 rounded-full bg-[#4B3DFF] hover:bg-[#3a2ee0] text-white flex items-center justify-center transition disabled:opacity-40 disabled:hover:bg-[#4B3DFF]"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M22 2 11 13" />
+                <path d="M22 2 15 22l-4-9-9-4 20-7z" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </>

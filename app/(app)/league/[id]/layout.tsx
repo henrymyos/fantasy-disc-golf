@@ -53,8 +53,8 @@ export default async function LeagueLayout({
   const base = `/league/${id}`;
 
   return (
-    // xl:pr reserves room for the always-open chat sidebar (see LeagueChat).
-    <div className="pb-8 md:pb-0 xl:pr-[360px]">
+    // xl:pr reserves room for the always-open chat card (see LeagueChat).
+    <div className="pb-8 md:pb-0 xl:pr-[392px]">
       {/* League header */}
       <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
         <div className="flex items-center gap-3">
