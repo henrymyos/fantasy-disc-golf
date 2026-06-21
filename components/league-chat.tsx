@@ -6,7 +6,13 @@ import { createClient } from "@/lib/supabase/client";
 import { sendChatMessage, getLeagueSystemFeed } from "@/actions/chat";
 import type { SystemEvent, FeedAsset } from "@/lib/chat-feed";
 
-type Member = { id: number; team_name: string; user_id: string | null };
+type Member = {
+  id: number;
+  team_name: string;
+  user_id: string | null;
+  avatarUrl?: string | null;
+  avatarColor?: string | null;
+};
 type Message = {
   id: number;
   body: string;
@@ -79,13 +85,23 @@ export function LeagueChat({
       getLeagueSystemFeed(leagueId).catch(() => [] as SystemEvent[]),
       supabase
         .from("league_members")
-        .select("id, team_name, user_id")
+        .select("id, team_name, user_id, profiles(avatar_url, avatar_color)")
         .eq("league_id", leagueId)
         .order("joined_at"),
     ]);
     setMessages((data ?? []) as Message[]);
     setSystemEvents(events);
-    if (memberData && memberData.length > 0) setLiveMembers(memberData as Member[]);
+    if (memberData && memberData.length > 0) {
+      setLiveMembers(
+        (memberData as any[]).map((m) => ({
+          id: m.id,
+          team_name: m.team_name,
+          user_id: m.user_id ?? null,
+          avatarUrl: m.profiles?.avatar_url ?? null,
+          avatarColor: m.profiles?.avatar_color ?? null,
+        })),
+      );
+    }
   }, [leagueId]);
 
   useEffect(() => {
@@ -363,13 +379,9 @@ export function LeagueChat({
               }
         }
       >
-        {isDesktop ? (
-          /* Desktop header — Sleeper-style teal bar; the sidebar stays open. */
-          <div className="shrink-0 flex items-center gap-2 px-4 py-3 bg-[#36D7B7] text-[#0f1117]">
-            <h2 className="font-bold text-base truncate">{channelLabel}</h2>
-          </div>
-        ) : (
-          /* Grab handle + header (drag down / tap to collapse) */
+        {/* Mobile only: grab handle + header (drag down / tap to collapse).
+            Desktop has no header per the Sleeper-style look. */}
+        {!isDesktop && (
           <div
             onPointerDown={onSheetPointerDown}
             onPointerMove={onSheetPointerMove}
@@ -394,7 +406,7 @@ export function LeagueChat({
         )}
 
         {/* Channel selector */}
-        <div className="flex items-center gap-1 px-3 pb-2 border-b border-white/5 overflow-x-auto no-scrollbar shrink-0">
+        <div className="flex items-center gap-1 px-3 pt-3 pb-2 border-b border-white/5 overflow-x-auto no-scrollbar shrink-0">
           <button
             type="button"
             onClick={() => setChannel({ kind: "league" })}
@@ -426,7 +438,7 @@ export function LeagueChat({
         </div>
 
         {/* Message list */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 space-y-2">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 space-y-0.5">
           {timeline.length === 0 ? (
             <p className="text-gray-400 text-sm text-center py-8">
               {channel.kind === "league"
@@ -434,33 +446,42 @@ export function LeagueChat({
                 : "No DMs yet — send a message to start the conversation."}
             </p>
           ) : (
-            timeline.map((item) => {
+            timeline.map((item, idx) => {
               if (item.type === "sys") {
                 return <SystemMessage key={item.key} event={item.event} ts={item.ts} />;
               }
               const m = item.message;
-              const isMine = m.sender_member_id === myMemberId;
               const sender = memberById.get(m.sender_member_id);
+              const name = sender?.team_name ?? "Team";
+              const time = new Date(m.created_at).toLocaleTimeString("en-US", {
+                hour: "numeric",
+                minute: "2-digit",
+              });
+              // Group consecutive messages from the same sender: drop the
+              // avatar/name header and just show the text, indented.
+              const prev = timeline[idx - 1];
+              const grouped = prev?.type === "msg" && prev.message.sender_member_id === m.sender_member_id;
+              if (grouped) {
+                return (
+                  <div key={item.key} className="flex gap-2.5">
+                    <div className="w-8 shrink-0" />
+                    <p className="min-w-0 flex-1 text-gray-200 text-sm leading-snug break-words whitespace-pre-wrap">
+                      {m.body}
+                    </p>
+                  </div>
+                );
+              }
               return (
-                <div
-                  key={item.key}
-                  className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}
-                >
-                  <span className="text-[10px] text-gray-400 mb-0.5">
-                    {sender?.team_name ?? "Team"} ·{" "}
-                    {new Date(m.created_at).toLocaleTimeString("en-US", {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                  <div
-                    className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm leading-snug break-words ${
-                      isMine
-                        ? "bg-[#4B3DFF]/80 text-white rounded-br-md"
-                        : "bg-[#0f1117] text-gray-200 border border-white/5 rounded-bl-md"
-                    }`}
-                  >
-                    {m.body}
+                <div key={item.key} className="flex items-start gap-2.5 pt-2">
+                  <MemberAvatar member={sender} name={name} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-semibold text-white text-sm truncate">{name}</span>
+                      <span className="text-gray-500 text-[11px] shrink-0">{time}</span>
+                    </div>
+                    <p className="text-gray-200 text-sm leading-snug break-words whitespace-pre-wrap">
+                      {m.body}
+                    </p>
                   </div>
                 </div>
               );
@@ -504,6 +525,28 @@ export function LeagueChat({
         </div>
       </div>
     </>
+  );
+}
+
+/** A chat author's avatar — their profile photo, or a colored initial. */
+function MemberAvatar({ member, name }: { member?: Member; name: string }) {
+  if (member?.avatarUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={member.avatarUrl}
+        alt=""
+        className="w-8 h-8 rounded-full object-cover shrink-0 bg-white/10"
+      />
+    );
+  }
+  return (
+    <div
+      className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-white text-xs font-bold"
+      style={{ backgroundColor: member?.avatarColor ?? "#4B3DFF" }}
+    >
+      {name[0]?.toUpperCase()}
+    </div>
   );
 }
 

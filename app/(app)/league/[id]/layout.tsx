@@ -39,7 +39,7 @@ export default async function LeagueLayout({
   // lives in the layout so the chat follows the user across every league tab.
   const { data: members } = await supabase
     .from("league_members")
-    .select("id, team_name, user_id")
+    .select("id, team_name, user_id, profiles(avatar_url, avatar_color)")
     .eq("league_id", id)
     .order("joined_at");
 
@@ -90,6 +90,8 @@ export default async function LeagueLayout({
           id: m.id,
           team_name: m.team_name,
           user_id: m.user_id ?? null,
+          avatarUrl: (m as any).profiles?.avatar_url ?? null,
+          avatarColor: (m as any).profiles?.avatar_color ?? null,
         }))}
       />
     </div>
