@@ -46,6 +46,9 @@ export function LeagueChat({
   // Members are polled so team-name changes (and new joiners) show in the chat
   // without a full page reload. Seeded from the server-rendered prop.
   const [liveMembers, setLiveMembers] = useState<Member[]>(members);
+  // On wide screens the chat lives as an always-open right sidebar; below that
+  // it's the bottom dock. Starts false to match SSR, set on mount.
+  const [isDesktop, setIsDesktop] = useState(false);
   const pathname = usePathname();
   // The chat is hidden on settings routes (rendered as null below). Track it
   // here so the body-scroll lock never engages while nothing is shown.
@@ -123,11 +126,21 @@ export function LeagueChat({
   const latestItem = timeline.length > 0 ? timeline[timeline.length - 1] : null;
   const hasUnread = latestItem != null && latestItem.ts > seenTsRef.current && !open;
 
+  // Track the desktop breakpoint (matches the xl:pr added to the league layout).
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1280px)");
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
   // Lock the page behind the open sheet so touch-scrolling stays inside the
   // chat instead of scrolling the background. position:fixed is the reliable
   // way to do this on iOS Safari; the scroll position is restored on close.
+  // Desktop's docked sidebar never locks the page.
   useEffect(() => {
-    if (!open || hideOnSettings) return;
+    if (!open || hideOnSettings || isDesktop) return;
     const scrollY = window.scrollY;
     const body = document.body;
     const prev = {
@@ -150,18 +163,19 @@ export function LeagueChat({
       body.style.width = prev.width;
       window.scrollTo(0, scrollY);
     };
-  }, [open, hideOnSettings]);
+  }, [open, hideOnSettings, isDesktop]);
 
-  // Auto-scroll to the bottom when new activity arrives while the sheet is open.
+  // Auto-scroll to the bottom when new activity arrives (sheet open, or always
+  // on the desktop sidebar).
   useEffect(() => {
-    if (!open || timeline.length === 0) return;
+    if ((!open && !isDesktop) || timeline.length === 0) return;
     const lastKey = timeline[timeline.length - 1].key;
     if (lastKey !== lastKeyRef.current) {
       lastKeyRef.current = lastKey;
       const el = scrollRef.current;
       if (el) el.scrollTop = el.scrollHeight;
     }
-  }, [timeline, open]);
+  }, [timeline, open, isDesktop]);
 
   // Opening clears the unread marker and snaps the history to the bottom.
   const expand = useCallback(() => {
@@ -264,8 +278,8 @@ export function LeagueChat({
 
   return (
     <>
-      {/* Collapsed bar — previews the latest message. */}
-      {!open && (
+      {/* Collapsed bar — previews the latest message (not on the desktop sidebar). */}
+      {!open && !isDesktop && (
         <div
           role="button"
           tabIndex={0}
@@ -321,8 +335,8 @@ export function LeagueChat({
         </div>
       )}
 
-      {/* Backdrop */}
-      {open && (
+      {/* Backdrop (mobile/tablet sheet only) */}
+      {open && !isDesktop && (
         <div
           className="fixed inset-0 z-[45] bg-black/50 md:bg-black/30"
           onClick={collapse}
@@ -330,38 +344,57 @@ export function LeagueChat({
         />
       )}
 
-      {/* Expandable sheet */}
+      {/* Panel: a bottom sheet on mobile/tablet, a fixed full-height right
+          sidebar on desktop (always open). */}
       <div
         ref={panelRef}
-        className="fixed z-[50] left-0 right-0 bottom-0 h-[82dvh] rounded-t-2xl md:left-auto md:right-6 md:bottom-6 md:w-[380px] md:h-[72vh] md:rounded-2xl bg-[#1a1d23] border border-white/10 shadow-2xl flex flex-col"
-        style={{
-          transform,
-          transition: dragY != null ? "none" : "transform 300ms cubic-bezier(0.32, 0.72, 0, 1)",
-          pointerEvents: open ? "auto" : "none",
-        }}
+        className={
+          isDesktop
+            ? "fixed z-30 top-0 right-0 bottom-0 w-[340px] bg-[#1a1d23] border-l border-white/10 flex flex-col"
+            : "fixed z-[50] left-0 right-0 bottom-0 h-[82dvh] rounded-t-2xl md:left-auto md:right-6 md:bottom-6 md:w-[380px] md:h-[72vh] md:rounded-2xl bg-[#1a1d23] border border-white/10 shadow-2xl flex flex-col"
+        }
+        style={
+          isDesktop
+            ? undefined
+            : {
+                transform,
+                transition: dragY != null ? "none" : "transform 300ms cubic-bezier(0.32, 0.72, 0, 1)",
+                pointerEvents: open ? "auto" : "none",
+              }
+        }
       >
-        {/* Grab handle + header (drag down / tap to collapse) */}
-        <div
-          onPointerDown={onSheetPointerDown}
-          onPointerMove={onSheetPointerMove}
-          onPointerUp={onSheetPointerUp}
-          className="shrink-0 pt-2 cursor-grab active:cursor-grabbing touch-none select-none"
-        >
-          <div className="mx-auto w-10 h-1.5 rounded-full bg-white/15" />
-          <div className="flex items-center justify-between px-4 pt-2 pb-2.5">
-            <h2 className="font-bold text-white text-sm">{channelLabel}</h2>
-            <button
-              type="button"
-              onClick={collapse}
-              aria-label="Collapse chat"
-              className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 9l6 6 6-6" />
-              </svg>
-            </button>
+        {isDesktop ? (
+          /* Desktop header — no drag/collapse, the sidebar stays open. */
+          <div className="shrink-0 flex items-center gap-2.5 px-4 py-3 border-b border-white/5">
+            <span className="w-8 h-8 rounded-full bg-[#4B3DFF]/20 border border-[#4B3DFF]/30 flex items-center justify-center text-sm shrink-0">
+              💬
+            </span>
+            <h2 className="font-bold text-white text-sm truncate">{channelLabel}</h2>
           </div>
-        </div>
+        ) : (
+          /* Grab handle + header (drag down / tap to collapse) */
+          <div
+            onPointerDown={onSheetPointerDown}
+            onPointerMove={onSheetPointerMove}
+            onPointerUp={onSheetPointerUp}
+            className="shrink-0 pt-2 cursor-grab active:cursor-grabbing touch-none select-none"
+          >
+            <div className="mx-auto w-10 h-1.5 rounded-full bg-white/15" />
+            <div className="flex items-center justify-between px-4 pt-2 pb-2.5">
+              <h2 className="font-bold text-white text-sm">{channelLabel}</h2>
+              <button
+                type="button"
+                onClick={collapse}
+                aria-label="Collapse chat"
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Channel selector */}
         <div className="flex items-center gap-1 px-3 pb-2 border-b border-white/5 overflow-x-auto no-scrollbar shrink-0">
