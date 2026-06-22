@@ -18,7 +18,7 @@ export default async function LeagueLayout({
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, name, commissioner_id")
+    .select("id, name, commissioner_id, logo_url")
     .eq("id", id)
     .single();
 
@@ -57,14 +57,26 @@ export default async function LeagueLayout({
     <div className="pb-8 md:pb-0 xl:pr-[392px]">
       {/* League header */}
       <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
-        <div className="flex items-center gap-3">
-          <Link
-            href={base}
-            className="text-white font-bold text-xl hover:text-[#4B3DFF] transition"
-          >
+        <Link
+          href={base}
+          className="flex items-center gap-2.5 min-w-0 group"
+        >
+          {(league as any).logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={(league as any).logo_url}
+              alt=""
+              className="w-8 h-8 rounded-lg object-cover shrink-0 bg-white/10"
+            />
+          ) : (
+            <span className="w-8 h-8 rounded-lg bg-[#4B3DFF]/20 border border-[#4B3DFF]/30 flex items-center justify-center text-[#4B3DFF] font-black text-sm shrink-0">
+              {league.name?.[0]?.toUpperCase() ?? "?"}
+            </span>
+          )}
+          <span className="text-white font-bold text-xl truncate group-hover:text-[#4B3DFF] transition">
             {league.name}
-          </Link>
-        </div>
+          </span>
+        </Link>
         <div className="flex items-center gap-3 text-xs text-gray-400 flex-wrap">
           <Link
             href={`${base}/settings`}

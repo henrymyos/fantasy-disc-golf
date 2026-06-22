@@ -18,7 +18,7 @@ export default async function DashboardPage() {
 
   const { data: memberships } = await supabase
     .from("league_members")
-    .select("league_id, team_name, is_commissioner, leagues(id, name, current_week, draft_status, invite_code, max_teams)")
+    .select("league_id, team_name, is_commissioner, leagues(id, name, logo_url, current_week, draft_status, invite_code, max_teams)")
     .eq("user_id", user.id)
     .order("joined_at", { ascending: false });
 
@@ -226,9 +226,18 @@ export default async function DashboardPage() {
               href={`/league/${league.id}`}
               className="flex items-center gap-4 bg-[#1a1d23] hover:bg-[#1e2028] border border-white/5 hover:border-[#4B3DFF]/40 rounded-2xl p-4 transition group"
             >
-              <div className="w-11 h-11 rounded-xl bg-[#4B3DFF]/20 border border-[#4B3DFF]/30 flex items-center justify-center text-[#4B3DFF] font-black text-lg shrink-0">
-                {league.name?.[0]?.toUpperCase() ?? "?"}
-              </div>
+              {(league as any).logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={(league as any).logo_url}
+                  alt=""
+                  className="w-11 h-11 rounded-xl object-cover shrink-0 bg-white/10"
+                />
+              ) : (
+                <div className="w-11 h-11 rounded-xl bg-[#4B3DFF]/20 border border-[#4B3DFF]/30 flex items-center justify-center text-[#4B3DFF] font-black text-lg shrink-0">
+                  {league.name?.[0]?.toUpperCase() ?? "?"}
+                </div>
+              )}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <h3 className="text-white font-semibold truncate group-hover:text-[#4B3DFF] transition">

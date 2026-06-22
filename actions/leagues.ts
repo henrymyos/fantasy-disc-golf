@@ -303,3 +303,79 @@ export async function deleteLeague(leagueId: string): Promise<void> {
   revalidatePath("/dashboard");
   redirect("/dashboard");
 }
+
+const LOGO_MAX_BYTES = 5 * 1024 * 1024;
+const LOGO_ALLOWED: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+
+/** Confirm the signed-in user is the commissioner of the given league. */
+async function requireCommissioner(leagueId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const admin = createAdminClient();
+  const { data: league } = await admin
+    .from("leagues")
+    .select("commissioner_id")
+    .eq("id", leagueId)
+    .single();
+  if (!league || league.commissioner_id !== user.id) {
+    throw new Error("Not authorized");
+  }
+  return admin;
+}
+
+/** Upload a league logo and point the league at its public URL (commissioner only). */
+export async function uploadLeagueLogo(
+  leagueId: string,
+  formData: FormData
+): Promise<{ error?: string; ok?: boolean }> {
+  const admin = await requireCommissioner(leagueId);
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { error: "No file selected." };
+  if (file.size > LOGO_MAX_BYTES) return { error: "Image must be under 5 MB." };
+  const ext = LOGO_ALLOWED[file.type];
+  if (!ext) return { error: "Use a PNG, JPG, WEBP, or GIF image." };
+
+  // Store under a per-league folder in the shared avatars bucket; the timestamp
+  // busts the CDN cache so the new logo shows immediately.
+  const path = `leagues/${leagueId}/${Date.now()}.${ext}`;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+
+  const { error: uploadError } = await admin.storage
+    .from("avatars")
+    .upload(path, bytes, { contentType: file.type, upsert: true });
+  if (uploadError) return { error: uploadError.message };
+
+  const { data: pub } = admin.storage.from("avatars").getPublicUrl(path);
+
+  const { error } = await admin
+    .from("leagues")
+    .update({ logo_url: pub.publicUrl })
+    .eq("id", leagueId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/** Clear the league logo, reverting to the lettered tile (commissioner only). */
+export async function removeLeagueLogo(
+  leagueId: string
+): Promise<{ error?: string; ok?: boolean }> {
+  const admin = await requireCommissioner(leagueId);
+  const { error } = await admin
+    .from("leagues")
+    .update({ logo_url: null })
+    .eq("id", leagueId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/", "layout");
+  return { ok: true };
+}

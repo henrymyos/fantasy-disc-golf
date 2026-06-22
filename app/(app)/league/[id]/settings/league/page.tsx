@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { LeagueSettingsForm } from "@/components/league-settings-form";
+import { LeagueLogoForm } from "@/components/league-logo-form";
 
 export default async function LeagueSettingsSubpage({
   params,
@@ -15,7 +16,7 @@ export default async function LeagueSettingsSubpage({
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, name, commissioner_id, max_teams, roster_size, mpo_starters, fpo_starters, waiver_order_mode, scoring_mode, keepers_per_team")
+    .select("id, name, commissioner_id, logo_url, max_teams, roster_size, mpo_starters, fpo_starters, waiver_order_mode, scoring_mode, keepers_per_team")
     .eq("id", id)
     .single();
   if (!league) notFound();
@@ -41,6 +42,16 @@ export default async function LeagueSettingsSubpage({
         </Link>
         <h2 className="text-white font-bold text-xl">League Settings</h2>
       </div>
+
+      {isCommissioner && (
+        <div className="bg-[#1a1d23] rounded-2xl p-6 border border-white/5">
+          <LeagueLogoForm
+            leagueId={id}
+            leagueName={league.name}
+            logoUrl={(league as any).logo_url ?? null}
+          />
+        </div>
+      )}
 
       <div className="bg-[#1a1d23] rounded-2xl p-6 border border-white/5">
         {isCommissioner ? (
