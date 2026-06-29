@@ -206,7 +206,7 @@ export async function addFreeAgent(leagueId: number, playerId: number, dropPlaye
     .select("id")
     .eq("league_id", leagueId)
     .eq("player_id", playerId)
-    .single();
+    .maybeSingle();
 
   if (existing) return;
 
@@ -216,8 +216,34 @@ export async function addFreeAgent(leagueId: number, playerId: number, dropPlaye
     .select("id", { count: "exact", head: true })
     .eq("league_id", leagueId)
     .eq("team_id", member.id);
+  const atCap = (count ?? 0) >= league.roster_size;
 
-  if ((count ?? 0) >= league.roster_size && !dropPlayerId) return;
+  // At the cap you must drop someone, and that someone must actually be on your
+  // roster — otherwise a stale drop (the player is already gone) would let the
+  // add push the roster over the cap.
+  if (atCap) {
+    if (!dropPlayerId) return;
+    const { data: dropSpot } = await admin
+      .from("rosters")
+      .select("id")
+      .eq("league_id", leagueId)
+      .eq("team_id", member.id)
+      .eq("player_id", dropPlayerId)
+      .maybeSingle();
+    if (!dropSpot) return;
+  }
+
+  // Add first: if another team grabbed this player a beat earlier the
+  // unique(league_id, player_id) insert fails here and the roster is left
+  // untouched — instead of dropping a player and then throwing on the insert
+  // (losing a player for nothing) and 500ing the caller.
+  const { error: addErr } = await admin.from("rosters").insert({
+    league_id: leagueId,
+    team_id: member.id,
+    player_id: playerId,
+    acquired_week: league.current_week,
+  });
+  if (addErr) return;
 
   if (dropPlayerId) {
     await admin
@@ -227,13 +253,6 @@ export async function addFreeAgent(leagueId: number, playerId: number, dropPlaye
       .eq("team_id", member.id)
       .eq("player_id", dropPlayerId);
   }
-
-  await admin.from("rosters").insert({
-    league_id: leagueId,
-    team_id: member.id,
-    player_id: playerId,
-    acquired_week: league.current_week,
-  });
 
   await admin.from("roster_transactions").insert({
     league_id: leagueId,
@@ -262,6 +281,19 @@ export async function dropPlayer(leagueId: number, playerId: number): Promise<vo
     .single();
 
   if (!member) return;
+
+  // Block dropping a current STARTER while lineups are locked (a tournament is
+  // underway). Fantasy points aren't floored at zero, so otherwise a manager
+  // could dump a player mid-round to erase their negative contribution. Bench
+  // players can still be dropped.
+  const { data: spot } = await admin
+    .from("rosters")
+    .select("is_starter")
+    .eq("league_id", leagueId)
+    .eq("team_id", member.id)
+    .eq("player_id", playerId)
+    .maybeSingle();
+  if ((spot as any)?.is_starter && (await isLineupLocked(supabase))) return;
 
   await admin
     .from("rosters")
@@ -425,6 +457,26 @@ export async function placeWaiverClaim(
     .eq("user_id", user.id)
     .single();
   if (!member) return;
+
+  // Claims only make sense once the draft is complete.
+  const { data: claimDraft } = await admin
+    .from("drafts")
+    .select("status")
+    .eq("league_id", leagueId)
+    .single();
+  if (claimDraft?.status !== "complete") return;
+
+  // If a drop is attached, it must actually be on this team's roster.
+  if (dropPlayerId != null) {
+    const { data: dropSpot } = await admin
+      .from("rosters")
+      .select("id")
+      .eq("league_id", leagueId)
+      .eq("team_id", member.id)
+      .eq("player_id", dropPlayerId)
+      .maybeSingle();
+    if (!dropSpot) return;
+  }
 
   // Reject duplicate pending claims for the same (team, player).
   const { data: existingClaim } = await admin

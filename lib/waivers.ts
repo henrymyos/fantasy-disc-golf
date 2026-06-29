@@ -167,6 +167,41 @@ export async function runWaiverProcessing(leagueId: number): Promise<void> {
         continue;
       }
 
+      // If a drop is attached and we need the room, make sure it's actually on
+      // the roster; a stale drop must fail the claim, not add over the cap.
+      if (claim.drop_player_id) {
+        const { data: dropSpot } = await admin
+          .from("rosters")
+          .select("id")
+          .eq("league_id", leagueId)
+          .eq("team_id", teamId)
+          .eq("player_id", claim.drop_player_id)
+          .maybeSingle();
+        if (needsDrop && !dropSpot) {
+          await admin
+            .from("waiver_claims")
+            .update({ status: "failed", processed_at: new Date().toISOString() })
+            .eq("id", claim.id);
+          continue;
+        }
+      }
+
+      // Add first so a failed insert (player grabbed between checks) doesn't
+      // drop a player for nothing.
+      const { error: addErr } = await admin.from("rosters").insert({
+        league_id: leagueId,
+        team_id: teamId,
+        player_id: claim.player_id,
+        acquired_week: (league as any).current_week,
+      });
+      if (addErr) {
+        await admin
+          .from("waiver_claims")
+          .update({ status: "failed", processed_at: new Date().toISOString() })
+          .eq("id", claim.id);
+        continue;
+      }
+
       if (claim.drop_player_id) {
         await admin
           .from("rosters")
@@ -175,13 +210,6 @@ export async function runWaiverProcessing(leagueId: number): Promise<void> {
           .eq("team_id", teamId)
           .eq("player_id", claim.drop_player_id);
       }
-
-      await admin.from("rosters").insert({
-        league_id: leagueId,
-        team_id: teamId,
-        player_id: claim.player_id,
-        acquired_week: (league as any).current_week,
-      });
 
       await admin.from("roster_transactions").insert({
         league_id: leagueId,
