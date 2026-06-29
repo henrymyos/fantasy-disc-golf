@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { sendChatMessage, getLeagueSystemFeed } from "@/actions/chat";
+import { sendChatMessage, getLeagueSystemFeed, getVisibleChatMessages } from "@/actions/chat";
 import type { SystemEvent, FeedAsset } from "@/lib/chat-feed";
 
 type Member = {
@@ -75,13 +75,11 @@ export function LeagueChat({
 
   const refresh = useCallback(async () => {
     const supabase = createClient();
-    const [{ data }, events, { data: memberData }] = await Promise.all([
-      supabase
-        .from("chat_messages")
-        .select("id, body, created_at, sender_member_id, recipient_member_id")
-        .eq("league_id", leagueId)
-        .order("created_at", { ascending: true })
-        .limit(200),
+    const [msgs, events, { data: memberData }] = await Promise.all([
+      // Fetched through a server action that filters to league broadcasts +
+      // this member's own DMs, so other members' private DMs never reach the
+      // browser (they used to be queried client-side and filtered in JS).
+      getVisibleChatMessages(leagueId).catch(() => [] as Message[]),
       getLeagueSystemFeed(leagueId).catch(() => [] as SystemEvent[]),
       supabase
         .from("league_members")
@@ -89,7 +87,7 @@ export function LeagueChat({
         .eq("league_id", leagueId)
         .order("joined_at"),
     ]);
-    setMessages((data ?? []) as Message[]);
+    setMessages(msgs as Message[]);
     setSystemEvents(events);
     if (memberData && memberData.length > 0) {
       setLiveMembers(

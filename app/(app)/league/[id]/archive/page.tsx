@@ -56,7 +56,12 @@ export default async function ArchivePage({
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-white font-bold text-xl">Season Archive</h2>
           {isCommissioner && (
-            <form action={archiveSeason.bind(null, Number(id))}>
+            <form
+              action={async () => {
+                "use server";
+                await archiveSeason(Number(id));
+              }}
+            >
               <button
                 type="submit"
                 className="text-xs bg-[#4B3DFF]/15 hover:bg-[#4B3DFF]/25 border border-[#4B3DFF]/30 text-[#4B3DFF] hover:text-white font-semibold px-4 py-2 rounded-lg transition"
