@@ -123,6 +123,7 @@ export async function joinLeague(
     return { message: "League not found. Check your invite code." };
   }
 
+  // Cheap pre-check to reject an already-full league before doing any work.
   const { count } = await admin
     .from("league_members")
     .select("*", { count: "exact", head: true })
@@ -141,14 +142,33 @@ export async function joinLeague(
 
   if (existing) redirect(`/league/${league.id}`);
 
-  const { error: joinError } = await admin.from("league_members").insert({
-    league_id: league.id,
-    user_id: user.id,
-    team_name: teamName,
-    is_commissioner: false,
-  });
+  const { data: inserted, error: joinError } = await admin
+    .from("league_members")
+    .insert({
+      league_id: league.id,
+      user_id: user.id,
+      team_name: teamName,
+      is_commissioner: false,
+    })
+    .select("id")
+    .single();
 
   if (joinError) return { message: joinError.message };
+
+  // The pre-check above is not atomic, so two people joining at the same time
+  // could each pass it and overfill the league. Re-count now that our row
+  // exists: if the league is over its cap, the join that pushed it over backs
+  // its own row out and reports the league full. The membership count can never
+  // settle above max_teams this way.
+  const { count: afterCount } = await admin
+    .from("league_members")
+    .select("*", { count: "exact", head: true })
+    .eq("league_id", league.id);
+
+  if ((afterCount ?? 0) > league.max_teams) {
+    if (inserted) await admin.from("league_members").delete().eq("id", inserted.id);
+    return { message: "This league is full." };
+  }
 
   revalidatePath("/dashboard");
   redirect(`/league/${league.id}`);
@@ -204,6 +224,50 @@ export async function updateLeague(
 
   if (!league || league.commissioner_id !== user.id) {
     return { message: "Not authorized" };
+  }
+
+  // Don't let max_teams drop below the teams that already exist, or some
+  // members would be stranded over the cap.
+  const { count: memberCount } = await admin
+    .from("league_members")
+    .select("*", { count: "exact", head: true })
+    .eq("league_id", leagueId);
+
+  if (maxTeams < (memberCount ?? 0)) {
+    return {
+      errors: {
+        maxTeams: [`Max teams can't be below the ${memberCount} team(s) already in this league.`],
+      },
+    };
+  }
+
+  // Don't let roster_size drop below the largest roster currently held by any
+  // team, which would orphan already-rostered players. The rosters table has no
+  // per-team count column, so tally team_id occurrences in app code.
+  const { data: rosterRows } = await admin
+    .from("rosters")
+    .select("team_id")
+    .eq("league_id", leagueId);
+
+  let largestRoster = 0;
+  if (rosterRows && rosterRows.length) {
+    const counts = new Map<number, number>();
+    for (const row of rosterRows) {
+      const teamId = (row as { team_id: number | null }).team_id;
+      if (teamId == null) continue;
+      counts.set(teamId, (counts.get(teamId) ?? 0) + 1);
+    }
+    for (const c of counts.values()) {
+      if (c > largestRoster) largestRoster = c;
+    }
+  }
+
+  if (rosterSize < largestRoster) {
+    return {
+      errors: {
+        rosterSize: [`Roster size can't be below ${largestRoster}; a team already has that many players.`],
+      },
+    };
   }
 
   const { error } = await admin
@@ -298,7 +362,11 @@ export async function deleteLeague(leagueId: string): Promise<void> {
     throw new Error("Not authorized");
   }
 
-  await admin.from("leagues").delete().eq("id", leagueId);
+  const { error } = await admin.from("leagues").delete().eq("id", leagueId);
+  if (error) {
+    // Surface the failure instead of silently redirecting as if it succeeded.
+    throw new Error(error.message);
+  }
 
   revalidatePath("/dashboard");
   redirect("/dashboard");

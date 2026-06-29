@@ -142,11 +142,19 @@ export async function signup(_state: AuthState, formData: FormData): Promise<Aut
   }
 
   const supabase = await createClient();
+  const nextPath = safeNext(formData.get("next"));
+  const origin = await siteOrigin();
 
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { username } },
+    options: {
+      data: { username },
+      // If email confirmation is enabled, the confirmation link must carry the
+      // invite `next` through the callback, otherwise a brand-new invitee loses
+      // their destination and falls back to /dashboard instead of the join form.
+      emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
+    },
   });
 
   if (error) {
@@ -164,12 +172,32 @@ export async function signup(_state: AuthState, formData: FormData): Promise<Aut
       .from("profiles")
       .upsert({ id: data.user.id, username }, { onConflict: "id" });
     if (profileError) {
+      // The id conflict is handled by onConflict, so a unique violation here is
+      // the username constraint: the name is already taken by another account.
+      // Surface a friendly, field-level message rather than the raw DB error.
+      // We deliberately do not delete the just-created auth user.
+      if (profileError.code === "23505") {
+        return { errors: { username: ["That username is taken. Please choose another."] } };
+      }
       return { message: profileError.message };
     }
   }
 
   revalidatePath("/", "layout");
-  redirect(safeNext(formData.get("next")));
+
+  // With email confirmation enabled, signUp returns no session — the user must
+  // confirm by email before they can sign in, so redirecting into the app would
+  // just bounce off the proxy. Only redirect when a real session exists (the
+  // current happy path when confirmation is disabled); otherwise tell them to
+  // check their email. The invite `next` is preserved via emailRedirectTo above.
+  if (data.session) {
+    redirect(nextPath);
+  }
+
+  return {
+    success: true,
+    message: "Account created. Check your email to confirm your address, then sign in.",
+  };
 }
 
 export async function login(_state: AuthState, formData: FormData): Promise<AuthState> {
@@ -189,6 +217,25 @@ export async function login(_state: AuthState, formData: FormData): Promise<Auth
 
   if (error) {
     return { message: "Invalid email or password" };
+  }
+
+  // Self-heal a missing profile. This app shares one auth pool with sibling
+  // apps, so a user can authenticate here without ever having a profile row in
+  // this app's tables (profiles are created in the signup action, not a DB
+  // trigger). Mirror that creation on login so downstream FKs always resolve.
+  // `ignoreDuplicates` means an existing profile (and its chosen username) is
+  // left untouched, and we never block login on this best-effort backfill.
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    const admin = createAdminClient();
+    const metaUsername = (user.user_metadata as { username?: unknown } | null)?.username;
+    const username =
+      (typeof metaUsername === "string" && metaUsername.trim()) ||
+      user.email?.split("@")[0] ||
+      `user_${user.id.slice(0, 8)}`;
+    await admin
+      .from("profiles")
+      .upsert({ id: user.id, username }, { onConflict: "id", ignoreDuplicates: true });
   }
 
   revalidatePath("/", "layout");

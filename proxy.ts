@@ -48,8 +48,14 @@ export async function proxy(request: NextRequest) {
     pathname === "/";
 
   if (!user && !isPublicRoute) {
+    // Remember where they were headed so login can send them back afterward.
+    // Capture the original path + query before overwriting them, and reset the
+    // search so only `next` rides along (searchParams.set encodes the value).
+    const intended = `${pathname}${request.nextUrl.search}`;
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    url.search = "";
+    url.searchParams.set("next", intended);
     return NextResponse.redirect(url);
   }
 
