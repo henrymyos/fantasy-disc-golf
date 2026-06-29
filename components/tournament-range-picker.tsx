@@ -98,8 +98,12 @@ export function TournamentRangePicker({
 }
 
 function formatLabel(t: TournamentOpt): string {
+  // startDate is a bare "YYYY-MM-DD". `new Date("YYYY-MM-DD")` parses as UTC
+  // midnight, which toLocaleDateString then renders in the viewer's local zone
+  // — showing the previous day for anyone west of UTC. Append a time so it
+  // parses as local midnight and the calendar date stays put.
   const date = t.startDate
-    ? new Date(t.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    ? new Date(t.startDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })
     : "";
   return date ? `${date} — ${t.name}` : t.name;
 }

@@ -4,6 +4,8 @@
 // Tied players each receive the full points for their finishing position.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+// Relative (not "@/") so the standalone tsx import scripts resolve it too.
+import { DGPT_2026_SCHEDULE } from "./dgpt-2026-schedule";
 
 const MPO_PLACEMENT_POINTS: Record<number, number> = {
   1: 82,  2: 70,  3: 60,  4: 53,  5: 47,  6: 42,  7: 38,  8: 35,  9: 32,  10: 29,
@@ -37,15 +39,82 @@ const BONUS_POINTS = { hotRound: 10, bogeyFree: 5, ace: 20, birdie: 0.2, bogey: 
 // `eagle` is the count of holes played 2+ under par.
 type RoundBonus = { hot: number; bogey: number; ace: number; under: number; over: number; eagle: number };
 
+// Venue location (country + US state) keyed by PDGA event id, sourced from the
+// hardcoded schedule. Used to pick a sane UTC offset for tee times below.
+const LOCATION_BY_PDGA_ID = new Map<number, { country: string; state: string | null }>(
+  DGPT_2026_SCHEDULE.filter((e) => e.pdgaEventId != null).map((e) => [
+    e.pdgaEventId as number,
+    { country: e.country, state: e.state },
+  ]),
+);
+
+// Standard-time (winter) UTC offset in hours per US state — the tour only
+// visits these four zones in 2026. DST is added separately below.
+const US_STATE_STD_OFFSET: Record<string, number> = {
+  // Eastern (UTC-5 standard)
+  FL: -5, NC: -5, VA: -5, MI: -5, KY: -5, VT: -5, MA: -5, SC: -5, OH: -5, GA: -5, PA: -5, NY: -5,
+  // Central (UTC-6 standard)
+  LA: -6, AR: -6, MO: -6, TX: -6, IL: -6, IA: -6, MN: -6, WI: -6, KS: -6, OK: -6, TN: -6,
+  // Mountain (UTC-7 standard)
+  CO: -7, NM: -7, UT: -7, MT: -7, WY: -7,
+  // Pacific (UTC-8 standard)
+  CA: -8, OR: -8, WA: -8, NV: -8,
+};
+
+// Standard-time UTC offset in hours for the non-US countries the tour visits.
+const COUNTRY_STD_OFFSET: Record<string, number> = {
+  Sweden: 1,   // CET
+  Finland: 2,  // EET
+  Estonia: 2,  // EET
+  Norway: 1,   // CET
+  Germany: 1,  // CET
+  Japan: 9,    // JST — no DST
+};
+
+// Countries that do NOT observe DST (so we never add the summer hour).
+const NO_DST_COUNTRIES = new Set(["Japan"]);
+
+/**
+ * Best-effort UTC offset (e.g. "-04:00") for an event's tee times, given its
+ * venue and start date. PDGA reports tee times as local wall-clock strings with
+ * no timezone, so we map country/US-state to a standard-time offset and add an
+ * hour when the date falls inside that region's daylight-saving window. This
+ * isn't full IANA tz handling, but it's correct to the hour for every venue on
+ * the schedule (e.g. Estonia EEST +3, Sweden CEST +2, a Feb US event in EST -5).
+ * Unknown venues fall back to US Eastern Daylight (-04:00), the legacy default.
+ */
+function teeTimeUtcOffset(country: string | null, state: string | null, startDate: string): string {
+  let std: number | null = null;
+  let dst = false;
+
+  if (country == null || country === "USA") {
+    std = state != null ? (US_STATE_STD_OFFSET[state] ?? null) : null;
+    // US DST 2026: Mar 8 – Nov 1 (2nd Sun Mar → 1st Sun Nov).
+    if (std != null) dst = startDate >= "2026-03-08" && startDate < "2026-11-01";
+  } else {
+    std = COUNTRY_STD_OFFSET[country] ?? null;
+    // EU summer time 2026: Mar 29 – Oct 25 (last Sun Mar → last Sun Oct).
+    if (std != null && !NO_DST_COUNTRIES.has(country)) {
+      dst = startDate >= "2026-03-29" && startDate < "2026-10-25";
+    }
+  }
+
+  if (std == null) return "-04:00"; // unknown venue → legacy US Eastern default
+
+  const total = std + (dst ? 1 : 0);
+  const sign = total >= 0 ? "+" : "-";
+  const hh = String(Math.abs(total)).padStart(2, "0");
+  return `${sign}${hh}:00`;
+}
+
 /**
  * Pulls the earliest scheduled tee time for round 1 from PDGA Live (across
  * both divisions). Combined with the tournament's start_date this gives us a
  * concrete lock-at timestamp so lineups freeze the moment players tee off.
  *
- * PDGA returns tee times as local "HH:MM:SS" strings without a timezone.
- * We assume US Eastern (UTC-4 during DST) as a default offset; non-US events
- * will be off by a few hours, but the resulting lock is still close enough
- * to "first tee" to be useful. Commissioners can override via the UI later.
+ * PDGA returns tee times as local "HH:MM:SS" strings without a timezone, so we
+ * derive the venue's UTC offset from the event's country/state (see
+ * teeTimeUtcOffset) rather than assuming US Eastern for every event.
  */
 async function fetchFirstTeeTime(pdgaId: number, startDate: string | null): Promise<string | null> {
   if (!startDate) return null;
@@ -64,8 +133,10 @@ async function fetchFirstTeeTime(pdgaId: number, startDate: string | null): Prom
   if (teeTimes.length === 0) return null;
   teeTimes.sort();
   const earliest = teeTimes[0];
-  // Treat as US Eastern (UTC-4). Convert to UTC ISO.
-  const localIso = `${startDate}T${earliest}-04:00`;
+  // Convert the local tee time to UTC using the venue's derived offset.
+  const loc = LOCATION_BY_PDGA_ID.get(pdgaId);
+  const offset = teeTimeUtcOffset(loc?.country ?? null, loc?.state ?? null, startDate);
+  const localIso = `${startDate}T${earliest}${offset}`;
   const ms = Date.parse(localIso);
   if (!Number.isFinite(ms)) return null;
   return new Date(ms).toISOString();
@@ -105,11 +176,11 @@ async function fetchRoundJson(pdgaId: number, division: "MPO" | "FPO", round: nu
  */
 async function computeBonusesForEvent(pdgaId: number): Promise<{
   bonus: Map<string, RoundBonus>;
-  registered: Array<{ pdgaNum: number | null; name: string }>;
+  registered: Array<{ pdgaNum: number | null; name: string; division: "MPO" | "FPO" }>;
 }> {
   const bonus = new Map<string, RoundBonus>();
   const registeredKeys = new Set<string>();
-  const registered: Array<{ pdgaNum: number | null; name: string }> = [];
+  const registered: Array<{ pdgaNum: number | null; name: string; division: "MPO" | "FPO" }> = [];
 
   for (const division of ["MPO", "FPO"] as const) {
     // Fetch rounds sequentially with a small gap instead of a 12-wide burst —
@@ -132,10 +203,12 @@ async function computeBonusesForEvent(pdgaId: number): Promise<{
           ? s.Name.trim()
           : [s.FirstName, s.LastName].filter(Boolean).join(" ").trim();
         if (!pdgaNum && !name) continue;
-        const key = pdgaNum != null ? `p:${pdgaNum}` : `n:${normalizeName(name)}`;
+        // Key the dedup by division too so a name-only fallback can still be
+        // resolved within the right division downstream.
+        const key = pdgaNum != null ? `p:${pdgaNum}` : `n:${division}:${normalizeName(name)}`;
         if (registeredKeys.has(key)) continue;
         registeredKeys.add(key);
-        registered.push({ pdgaNum, name });
+        registered.push({ pdgaNum, name, division });
       }
 
       const holesInRound = data.layouts?.[0]?.Holes ?? 18;
@@ -276,10 +349,13 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
     .from("players")
     .select("id, name, division, pdga_number");
   const byPdga = new Map<string, any>();
+  // Key name lookups by "division:name" so two players who share a name but
+  // play different divisions don't collide (and a result can't be mis-attributed
+  // across divisions). pdga_number is still the primary, division-agnostic key.
   const byName = new Map<string, any>();
   for (const p of players ?? []) {
     if (p.pdga_number) byPdga.set(String(p.pdga_number), p);
-    byName.set(normalizeName(p.name), p);
+    byName.set(`${p.division ?? "MPO"}:${normalizeName(p.name)}`, p);
   }
 
   const rowsToInsert: any[] = [];
@@ -327,7 +403,7 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
       for (const r of registered) {
         const p =
           (r.pdgaNum != null ? byPdga.get(String(r.pdgaNum)) : undefined)
-          ?? (r.name ? byName.get(normalizeName(r.name)) : undefined);
+          ?? (r.name ? byName.get(`${r.division}:${normalizeName(r.name)}`) : undefined);
         if (p) registeredIdSet.add(p.id);
       }
       if (registeredIdSet.size > 0) {
@@ -345,7 +421,9 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
 
     for (const { rows, division } of sections) {
       for (const r of rows) {
-        const player = byPdga.get(String(r.pdgaNumber)) ?? byName.get(normalizeName(r.name));
+        // Resolve name-only matches within this result's division so same-named
+        // players in the other division aren't picked up by mistake.
+        const player = byPdga.get(String(r.pdgaNumber)) ?? byName.get(`${division}:${normalizeName(r.name)}`);
         if (!player) {
           unmatched.push({ event: event.name, ...r, division });
           continue;
@@ -394,14 +472,16 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
     const existingBirdie = (existing ?? []).reduce((s, r: any) => s + Number(r.under_par_strokes ?? 0), 0);
     if (existingBirdie > 0 && newBirdie < existingBirdie) continue; // keep the fuller data
 
-    const { error: delErr } = await supabase
-      .from("tournament_results")
-      .delete()
-      .eq("tournament_id", tid);
-    if (delErr) throw delErr;
-
+    // Upsert on the (tournament_id, player_id) unique constraint instead of a
+    // delete-then-insert. The old approach blew away every row for the event
+    // before re-inserting, so a concurrent read during finalize could see
+    // partial or zero scores. Upserting overwrites each player's row in place,
+    // so the swap is never a destructive gap. (Results only ever grow between
+    // scrapes, so no stale rows are left behind.)
     for (let i = 0; i < evRows.length; i += 500) {
-      const { error } = await supabase.from("tournament_results").insert(evRows.slice(i, i + 500));
+      const { error } = await supabase
+        .from("tournament_results")
+        .upsert(evRows.slice(i, i + 500), { onConflict: "tournament_id,player_id" });
       if (error) throw error;
     }
   }

@@ -306,7 +306,10 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
           <div>
             <p className="text-yellow-300 font-semibold text-sm">Lineup locked — {activeTournament.name} is in progress</p>
             <p className="text-yellow-300/70 text-xs mt-0.5">
-              Lineup changes reopen after {new Date(activeTournament.end_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}.
+              {/* end_date is a bare "YYYY-MM-DD"; append a time so it renders as
+                  the same calendar date regardless of server timezone (a plain
+                  `new Date("YYYY-MM-DD")` would parse as UTC midnight). */}
+              Lineup changes reopen after {new Date(activeTournament.end_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}.
             </p>
           </div>
         </div>

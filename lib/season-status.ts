@@ -14,6 +14,17 @@ export function isSeasonOver(
   const ends = events.filter((e) => selected.has(e.slug)).map((e) => e.endDate);
   if (ends.length === 0) return false;
   const latest = ends.reduce((a, b) => (b > a ? b : a));
-  const today = now.toISOString().slice(0, 10);
-  return today > latest;
+
+  // `endDate` is a calendar date with no timezone, so a naive UTC-date compare
+  // (today > latest) would flip to "over" at UTC midnight — i.e. mid-afternoon
+  // out west, while a final round could still be in progress. We don't store
+  // venue tz here, so we conservatively anchor to the end of the latest day in
+  // US Pacific (UTC-7 during the season's DST window) — the westernmost zone
+  // the tour visits. Venues farther east finish earlier, so this never reports
+  // the season over too early; the trade-off is it can report over a few hours
+  // late, which is the safe direction. (A precise end timestamp would need a
+  // schema/migration change we're avoiding.)
+  const overThreshold = Date.parse(latest + "T23:59:59-07:00");
+  if (!Number.isFinite(overThreshold)) return false;
+  return now.getTime() > overThreshold;
 }

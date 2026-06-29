@@ -353,7 +353,10 @@ export default async function PlayerPage({
                     )}
                     {event.start_date && (
                       <p className="text-gray-400 text-xs mt-0.5">
-                        {new Date(event.start_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        {/* Bare "YYYY-MM-DD" parses as UTC midnight; append a time
+                            so it renders as the same calendar date regardless of
+                            the server timezone. */}
+                        {new Date(event.start_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                       </p>
                     )}
                   </div>

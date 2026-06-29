@@ -246,8 +246,11 @@ export default async function ComparePage({
                           <td className="px-3 py-2.5 text-white text-sm sticky left-0 bg-[#1a1d23] z-10 w-[150px] min-w-[150px] max-w-[150px]">
                             <p className="font-medium truncate">{t.name}</p>
                             <p className="text-gray-400 text-xs">
+                              {/* Bare "YYYY-MM-DD" parses as UTC midnight; append a
+                                  time so it renders as the same calendar date
+                                  regardless of the server/host timezone. */}
                               {t.startDate &&
-                                new Date(t.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                new Date(t.startDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                             </p>
                           </td>
                           {players.map((p) => {
