@@ -61,16 +61,26 @@ export function simulatePlayoffs(
       const bScore = scoreFor(b.teamId, round.week);
       let winnerTeamId: number | null = null;
       let decided = false;
-      if (round.complete && aScore != null && bScore != null) {
+      let aShown = aScore;
+      let bShown = bScore;
+      if (round.complete) {
+        // The event is over, so a missing weekly total means the team simply
+        // scored 0 (e.g. every starter was OUT) — not "result pending". Treat
+        // null as 0 here; requiring both scores to be non-null would stall the
+        // bracket forever on a legitimate zero.
         decided = true;
+        const aS = aScore ?? 0;
+        const bS = bScore ?? 0;
+        aShown = aS;
+        bShown = bS;
         // Tie goes to the higher seed (a, since `sorted` is seed-ascending).
-        const winner = aScore >= bScore ? a : b;
+        const winner = aS >= bS ? a : b;
         winnerTeamId = winner.teamId;
         winners.push(winner);
       } else {
         unresolved = true;
       }
-      matches.push({ a: { ...a, score: aScore }, b: { ...b, score: bScore }, winnerTeamId, decided });
+      matches.push({ a: { ...a, score: aShown }, b: { ...b, score: bShown }, winnerTeamId, decided });
       i++;
       j--;
     }

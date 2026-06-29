@@ -120,13 +120,13 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
     | "all_play"
     | "median");
 
-  const winsMap: Record<number, { wins: number; losses: number; points: number }> = {};
-  (members ?? []).forEach((m) => { winsMap[m.id] = { wins: 0, losses: 0, points: 0 }; });
+  const winsMap: Record<number, { wins: number; losses: number; ties: number; points: number }> = {};
+  (members ?? []).forEach((m) => { winsMap[m.id] = { wins: 0, losses: 0, ties: 0, points: 0 }; });
 
   // Total points always come from finalized matchups (or the alt total below).
   (allMatchups ?? []).forEach((m) => {
-    if (!winsMap[m.team1_id]) winsMap[m.team1_id] = { wins: 0, losses: 0, points: 0 };
-    if (!winsMap[m.team2_id]) winsMap[m.team2_id] = { wins: 0, losses: 0, points: 0 };
+    if (!winsMap[m.team1_id]) winsMap[m.team1_id] = { wins: 0, losses: 0, ties: 0, points: 0 };
+    if (!winsMap[m.team2_id]) winsMap[m.team2_id] = { wins: 0, losses: 0, ties: 0, points: 0 };
     winsMap[m.team1_id].points += m.team1_score;
     winsMap[m.team2_id].points += m.team2_score;
     if (scoringMode === "head_to_head") {
@@ -136,6 +136,9 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
       } else if (m.team2_score > m.team1_score) {
         winsMap[m.team2_id].wins++;
         winsMap[m.team1_id].losses++;
+      } else {
+        winsMap[m.team1_id].ties++;
+        winsMap[m.team2_id].ties++;
       }
     }
   });
@@ -146,9 +149,10 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
     const weeklyTotals = await getTeamWeeklyTotals(supabase, Number(id));
     const alt = computeAltRecords(weeklyTotals, scoringMode);
     for (const [teamId, rec] of alt) {
-      if (!winsMap[teamId]) winsMap[teamId] = { wins: 0, losses: 0, points: 0 };
+      if (!winsMap[teamId]) winsMap[teamId] = { wins: 0, losses: 0, ties: 0, points: 0 };
       winsMap[teamId].wins = rec.wins;
       winsMap[teamId].losses = rec.losses;
+      winsMap[teamId].ties = rec.ties;
       // If matchups haven't accumulated points (e.g. no H2H run), fall back
       // to summed weekly totals so the points column isn't all zeros.
       if (winsMap[teamId].points === 0) {
@@ -166,7 +170,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   const standings = ranked
     .map((e) => {
       const m = membersById.get(e.teamId);
-      return m ? { ...m, wins: e.wins, losses: e.losses, points: e.points, strengthOfSchedule: e.strengthOfSchedule } : null;
+      return m ? { ...m, wins: e.wins, losses: e.losses, ties: e.ties, points: e.points, strengthOfSchedule: e.strengthOfSchedule } : null;
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
 

@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { fantasyPointsFromResult, resolveScoringRules } from "@/lib/scoring-rules";
 import { generateWeeklyRecap } from "@/lib/weekly-recap";
 import { enqueueNotification } from "@/lib/notifications";
+import { cappedStarterIds, type StarterRow } from "@/lib/lineup-slots";
+import { DEFAULT_SEASON_YEAR } from "@/lib/schedule";
 
 /** Round-robin pairing for a given week (used when next week's matchups don't
  *  already exist). */
@@ -39,12 +41,20 @@ export async function finalizeWeekScoresCore(
   const recap = opts.recap ?? true;
   const { data: league } = await admin
     .from("leagues")
-    .select("scoring_rules")
+    .select("scoring_rules, season_year, mpo_starters, fpo_starters")
     .eq("id", leagueId)
     .single();
   const rules = resolveScoringRules((league as any)?.scoring_rules);
+  const seasonYear = (league as any)?.season_year ?? DEFAULT_SEASON_YEAR;
+  const mpoSlots = (league as any)?.mpo_starters ?? 4;
+  const fpoSlots = (league as any)?.fpo_starters ?? 2;
 
-  const { data: tournaments } = await admin.from("tournaments").select("id").eq("week", week);
+  // Scope to this league's season so reused week numbers don't blend results.
+  const { data: tournaments } = await admin
+    .from("tournaments")
+    .select("id")
+    .eq("week", week)
+    .eq("season_year", seasonYear);
   const tournamentIds = (tournaments ?? []).map((t) => t.id);
   if (tournamentIds.length === 0) return;
 
@@ -70,14 +80,25 @@ export async function finalizeWeekScoresCore(
 
   const { data: starters } = await admin
     .from("rosters")
-    .select("team_id, player_id")
+    .select("team_id, player_id, lineup_order, players(division)")
     .eq("league_id", leagueId)
     .eq("is_starter", true);
 
-  const teamScores: Record<number, number> = {};
+  // Cap each team to its configured division slots (lowest lineup_order first)
+  // so the official score matches the lineup the UI shows, not every starter row.
+  const rowsByTeam = new Map<number, StarterRow[]>();
   (starters ?? []).forEach((s: any) => {
-    teamScores[s.team_id] = (teamScores[s.team_id] ?? 0) + (playerPoints[s.player_id] ?? 0);
+    const list = rowsByTeam.get(s.team_id) ?? [];
+    list.push({ player_id: s.player_id, division: s.players?.division ?? "MPO", lineup_order: s.lineup_order ?? null });
+    rowsByTeam.set(s.team_id, list);
   });
+
+  const teamScores: Record<number, number> = {};
+  for (const [teamId, rows] of rowsByTeam) {
+    let sum = 0;
+    for (const pid of cappedStarterIds(rows, mpoSlots, fpoSlots)) sum += playerPoints[pid] ?? 0;
+    teamScores[teamId] = sum;
+  }
 
   const { data: matchups } = await admin
     .from("matchups")

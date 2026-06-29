@@ -11,6 +11,7 @@ export type StandingEntry = {
   username: string | null;
   wins: number;
   losses: number;
+  ties: number;
   points: number;
   sos: number;
 };
@@ -65,16 +66,17 @@ export async function getPlayoffOutcome(
     .eq("league_id", leagueId)
     .eq("is_final", true);
 
-  const winsMap: Record<number, { wins: number; losses: number; points: number }> = {};
-  (members ?? []).forEach((m: any) => { winsMap[m.id] = { wins: 0, losses: 0, points: 0 }; });
+  const winsMap: Record<number, { wins: number; losses: number; ties: number; points: number }> = {};
+  (members ?? []).forEach((m: any) => { winsMap[m.id] = { wins: 0, losses: 0, ties: 0, points: 0 }; });
   (finals ?? []).forEach((m: any) => {
-    if (!winsMap[m.team1_id]) winsMap[m.team1_id] = { wins: 0, losses: 0, points: 0 };
-    if (!winsMap[m.team2_id]) winsMap[m.team2_id] = { wins: 0, losses: 0, points: 0 };
+    if (!winsMap[m.team1_id]) winsMap[m.team1_id] = { wins: 0, losses: 0, ties: 0, points: 0 };
+    if (!winsMap[m.team2_id]) winsMap[m.team2_id] = { wins: 0, losses: 0, ties: 0, points: 0 };
     winsMap[m.team1_id].points += Number(m.team1_score);
     winsMap[m.team2_id].points += Number(m.team2_score);
     if (scoringMode === "head_to_head") {
       if (m.team1_score > m.team2_score) { winsMap[m.team1_id].wins++; winsMap[m.team2_id].losses++; }
       else if (m.team2_score > m.team1_score) { winsMap[m.team2_id].wins++; winsMap[m.team1_id].losses++; }
+      else { winsMap[m.team1_id].ties++; winsMap[m.team2_id].ties++; }
     }
   });
 
@@ -82,9 +84,10 @@ export async function getPlayoffOutcome(
   if (scoringMode !== "head_to_head") {
     const alt = computeAltRecords(weeklyTotals, scoringMode);
     for (const [tid, rec] of alt) {
-      if (!winsMap[tid]) winsMap[tid] = { wins: 0, losses: 0, points: 0 };
+      if (!winsMap[tid]) winsMap[tid] = { wins: 0, losses: 0, ties: 0, points: 0 };
       winsMap[tid].wins = rec.wins;
       winsMap[tid].losses = rec.losses;
+      winsMap[tid].ties = rec.ties;
       if (winsMap[tid].points === 0) {
         let sum = 0;
         for (const v of (weeklyTotals.get(tid)?.values() ?? [])) sum += v;
@@ -105,6 +108,7 @@ export async function getPlayoffOutcome(
         username: ((m as any).profiles as any)?.username ?? null,
         wins: e.wins,
         losses: e.losses,
+        ties: e.ties,
         points: e.points,
         sos: e.strengthOfSchedule,
       };
@@ -122,7 +126,8 @@ export async function getPlayoffOutcome(
   // Map each playoff event to a tournament week + whether results are in.
   const { data: tournaments } = await supabase
     .from("tournaments")
-    .select("id, week, pdga_event_id, name");
+    .select("id, week, pdga_event_id, name")
+    .eq("season_year", (league as any)?.season_year ?? DEFAULT_SEASON_YEAR);
   const { data: resultRows } = await supabase
     .from("tournament_results")
     .select("tournament_id");
