@@ -146,7 +146,8 @@ create table if not exists waiver_claims (
   drop_player_id int references players(id),
   priority int,
   status text default 'pending' check (status in ('pending','processed','failed')),
-  submitted_at timestamptz default now()
+  submitted_at timestamptz default now(),
+  processed_at timestamptz
 );
 
 -- =============================================

@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import {
-  resetWaiverPriority,
-  runWaiverProcessing,
-} from "@/actions/rosters";
+import { resetWaiverPriority, runWaiverProcessing } from "@/lib/waivers";
 import { runLineupUnsetCheck } from "@/lib/lineup-unset-check";
 import { autoFinalizeDueWeeks } from "@/lib/auto-finalize";
 
