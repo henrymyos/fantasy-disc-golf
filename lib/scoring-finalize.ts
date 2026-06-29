@@ -3,7 +3,10 @@ import { fantasyPointsFromResult, resolveScoringRules } from "@/lib/scoring-rule
 import { generateWeeklyRecap } from "@/lib/weekly-recap";
 import { enqueueNotification } from "@/lib/notifications";
 import { cappedStarterIds, type StarterRow } from "@/lib/lineup-slots";
-import { DEFAULT_SEASON_YEAR } from "@/lib/schedule";
+import { DEFAULT_SEASON_YEAR, getScheduleEvents } from "@/lib/schedule";
+import { buildSeasonSchedule } from "@/lib/matchup-scheduler";
+import { effectiveSelection } from "@/lib/dgpt-2026-schedule";
+import { regularSeasonWeekCount } from "@/lib/season-weeks";
 
 /** Round-robin pairing for a given week (used when next week's matchups don't
  *  already exist). */
@@ -164,7 +167,7 @@ export async function finalizeWeekScoresCore(
 export async function advanceWeekCore(admin: SupabaseClient, leagueId: number): Promise<void> {
   const { data: league } = await admin
     .from("leagues")
-    .select("current_week")
+    .select("current_week, selected_event_slugs, season_year")
     .eq("id", leagueId)
     .single();
   if (!league) return;
@@ -172,28 +175,46 @@ export async function advanceWeekCore(admin: SupabaseClient, leagueId: number): 
 
   const { data: members } = await admin
     .from("league_members")
-    .select("id")
+    .select("id, division_name")
     .eq("league_id", leagueId)
     .order("joined_at");
   if (!members || members.length < 2) return;
 
-  const { count: existing } = await admin
-    .from("matchups")
-    .select("id", { count: "exact", head: true })
-    .eq("league_id", leagueId)
-    .eq("week", nextWeek);
-  if ((existing ?? 0) === 0) {
-    const pairs = generateMatchups(members.map((m: any) => m.id), nextWeek);
-    await admin.from("matchups").insert(
-      pairs.map(([t1, t2]) => ({
-        league_id: leagueId,
-        week: nextWeek,
-        team1_id: t1,
-        team2_id: t2,
-        team1_score: 0,
-        team2_score: 0,
-      })),
-    );
+  // Only create matchups during the REGULAR season. Past it (the playoff-event
+  // weeks), results drive the bracket, not standings — generating and then
+  // finalizing round-robin matchups there double-counts those events into the
+  // records and corrupts seeding.
+  const events = await getScheduleEvents(admin, (league as any).season_year ?? DEFAULT_SEASON_YEAR);
+  const selectedSlugs = effectiveSelection((league as any).selected_event_slugs, events);
+  const regularWeeks = regularSeasonWeekCount(selectedSlugs, events);
+
+  if (nextWeek <= regularWeeks) {
+    const { count: existing } = await admin
+      .from("matchups")
+      .select("id", { count: "exact", head: true })
+      .eq("league_id", leagueId)
+      .eq("week", nextWeek);
+    if ((existing ?? 0) === 0) {
+      // Division-aware pairing for this week, matching regenerateLeagueMatchups.
+      const schedule = buildSeasonSchedule(
+        members.map((m: any) => ({ id: m.id, divisionName: m.division_name })),
+        nextWeek,
+      );
+      const wk = schedule.find((s) => s.week === nextWeek);
+      if (wk && wk.pairs.length > 0) {
+        await admin.from("matchups").insert(
+          wk.pairs.map(([t1, t2]) => ({
+            league_id: leagueId,
+            week: nextWeek,
+            team1_id: t1,
+            team2_id: t2,
+            team1_score: 0,
+            team2_score: 0,
+            is_final: false,
+          })),
+        );
+      }
+    }
   }
 
   await admin.from("leagues").update({ current_week: nextWeek }).eq("id", leagueId);

@@ -5,16 +5,9 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildSeasonSchedule } from "@/lib/matchup-scheduler";
-import { effectiveSelection, getPlayoffSlugs, PLAYOFF_COUNT, type DgptEvent } from "@/lib/dgpt-2026-schedule";
+import { effectiveSelection } from "@/lib/dgpt-2026-schedule";
 import { getScheduleEvents, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
-
-function regularSeasonWeekCount(selectedSlugs: string[], events: DgptEvent[]): number {
-  // Total selected events minus the playoff slate at the end. Fall back to 14
-  // weeks if the selection looks empty so users always get a schedule.
-  if (!selectedSlugs || selectedSlugs.length === 0) return 14;
-  const playoffs = new Set(getPlayoffSlugs(selectedSlugs, PLAYOFF_COUNT, events));
-  return Math.max(1, selectedSlugs.length - playoffs.size);
-}
+import { regularSeasonWeekCount } from "@/lib/season-weeks";
 
 /** Core scheduler called both from server actions and on draft completion.
  *  Wipes any future (non-final) matchups and rebuilds them via round-robin
