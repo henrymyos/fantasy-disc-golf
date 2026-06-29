@@ -195,7 +195,15 @@ export async function resumeDraft(leagueId: number): Promise<void> {
   const { data: league } = await admin.from("leagues").select("commissioner_id").eq("id", leagueId).single();
   if (!league || league.commissioner_id !== user.id) return;
 
-  await admin.from("drafts").update({ status: "in_progress" }).eq("league_id", leagueId);
+  // Restart the per-pick clock from now. Without this, the on-clock team's
+  // timer keeps counting from before the pause, so any pause longer than
+  // seconds_per_pick makes the pick read as already expired the moment the
+  // board loads and the on-clock team is instantly auto-picked. (undoPick does
+  // the same reset.)
+  await admin
+    .from("drafts")
+    .update({ status: "in_progress", current_pick_started_at: new Date().toISOString() })
+    .eq("league_id", leagueId);
   revalidatePath(`/league/${leagueId}/draft`);
 }
 
