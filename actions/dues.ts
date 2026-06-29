@@ -33,6 +33,17 @@ export async function saveDuesConfig(
     .map((s) => ({ place: Number(s.place), pct: Number(s.pct) }))
     .sort((a, b) => a.place - b.place);
 
+  // Validate the payout table before persisting: places must be unique and the
+  // percentages must sum to ~100 (small tolerance for fractional splits like
+  // 33.33 × 3). On bad config, no-op the whole save rather than storing an
+  // invalid payout split — consistent with the early returns above.
+  if (clean.length > 0) {
+    const uniquePlaces = new Set(clean.map((s) => s.place));
+    if (uniquePlaces.size !== clean.length) return;
+    const totalPct = clean.reduce((acc, s) => acc + s.pct, 0);
+    if (Math.abs(totalPct - 100) > 0.5) return;
+  }
+
   await admin
     .from("leagues")
     .update({ dues_amount: duesAmount, payout_splits: clean })
