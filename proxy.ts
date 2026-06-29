@@ -41,6 +41,10 @@ export async function proxy(request: NextRequest) {
     isAuthEntry ||
     pathname.startsWith("/reset-password") ||
     pathname.startsWith("/auth") ||
+    // Public invite landing (/join/[code]) must be reachable while logged out so
+    // a brand-new invitee can see the league and sign up. Note this is distinct
+    // from the in-app /league/join form, which stays auth-gated.
+    pathname.startsWith("/join") ||
     pathname === "/";
 
   if (!user && !isPublicRoute) {

@@ -23,7 +23,13 @@ export async function POST(request: Request) {
     const meta = session.metadata ?? {};
     const leagueId = Number(meta.leagueId);
     const memberId = Number(meta.memberId);
-    const paid = session.payment_status === "paid" || session.status === "complete";
+    // Gate strictly on payment_status. For a checkout.session.completed event
+    // session.status is ALWAYS "complete" (even for unpaid/async/expired
+    // sessions), so OR-ing it in would mark dues paid without payment. Treat a
+    // genuinely free ($0) session as paid too.
+    const paid =
+      session.payment_status === "paid" ||
+      session.payment_status === "no_payment_required";
 
     if (paid && Number.isFinite(leagueId) && Number.isFinite(memberId)) {
       const admin = createAdminClient();
