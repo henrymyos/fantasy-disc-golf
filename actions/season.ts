@@ -5,6 +5,9 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { archiveSeason } from "@/actions/archives";
+import { getScheduleEvents } from "@/lib/schedule";
+import { isSeasonOver } from "@/lib/season-status";
+import { effectiveSelection } from "@/lib/dgpt-2026-schedule";
 
 export type RolloverResult = { ok: boolean; message: string; nextYear?: number };
 
@@ -24,7 +27,7 @@ export async function startNextSeason(leagueId: number): Promise<RolloverResult>
   const admin = createAdminClient();
   const { data: league } = await admin
     .from("leagues")
-    .select("id, commissioner_id, season_year, roster_size, keepers_per_team, name")
+    .select("id, commissioner_id, season_year, roster_size, keepers_per_team, name, selected_event_slugs")
     .eq("id", leagueId)
     .single();
   if (!league || (league as any).commissioner_id !== user.id) {
@@ -36,8 +39,43 @@ export async function startNextSeason(leagueId: number): Promise<RolloverResult>
   const keepersPerTeam = (league as any).keepers_per_team ?? 0;
   const rosterSize = (league as any).roster_size ?? 10;
 
-  // 1. Snapshot the season that's ending (idempotent upsert on year).
-  await archiveSeason(leagueId);
+  // Precondition: only roll over once the current season is actually finished.
+  const events = await getScheduleEvents(admin, currentYear);
+  const seasonOver = isSeasonOver(
+    events,
+    effectiveSelection((league as any).selected_event_slugs, events),
+  );
+  if (!seasonOver) {
+    return {
+      ok: false,
+      message: "The current season isn't over yet — finish all selected events before starting next season.",
+    };
+  }
+
+  // 1. Snapshot the season that's ending. Abort if it didn't persist so we
+  //    never wipe a season we failed to archive.
+  const archived = await archiveSeason(leagueId);
+  if (!archived) {
+    return {
+      ok: false,
+      message: "Couldn't archive the current season — nothing was changed. Please try again.",
+    };
+  }
+
+  // Claim the rollover via compare-and-swap on season_year — the idempotency
+  // guard. A stale tab, back-button, or rapid double-submit runs with the same
+  // currentYear, but only the first flips the year and gets a row back; the rest
+  // abort here, before any destructive deletes. Done after archiving so the
+  // snapshot stays tagged with currentYear.
+  const { data: claimed } = await admin
+    .from("leagues")
+    .update({ season_year: nextYear })
+    .eq("id", leagueId)
+    .eq("season_year", currentYear)
+    .select("id");
+  if (!claimed || claimed.length === 0) {
+    return { ok: false, message: "This season has already been rolled over." };
+  }
 
   // 2. Kept players for the upcoming season.
   const keptByTeam = new Map<number, number[]>();
@@ -118,11 +156,11 @@ export async function startNextSeason(leagueId: number): Promise<RolloverResult>
     })
     .eq("league_id", leagueId);
 
-  // 8. Roll the league forward.
+  // 8. Roll the league forward. (season_year was already bumped by the claim
+  //    above; this resets the rest of the per-season state.)
   await admin
     .from("leagues")
     .update({
-      season_year: nextYear,
       current_week: 1,
       draft_status: null,
       waivers_locked: false,

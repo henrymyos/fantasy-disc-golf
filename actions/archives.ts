@@ -11,7 +11,7 @@ import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
  * rosters + completed-draft picks) into season_archives. Idempotent on
  * (league_id, season_year) so re-running overwrites the snapshot.
  */
-export async function archiveSeason(leagueId: number): Promise<void> {
+export async function archiveSeason(leagueId: number): Promise<boolean> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -22,7 +22,7 @@ export async function archiveSeason(leagueId: number): Promise<void> {
     .select("commissioner_id, season_year, scoring_mode, name")
     .eq("id", leagueId)
     .single();
-  if (!league || (league as any).commissioner_id !== user.id) return;
+  if (!league || (league as any).commissioner_id !== user.id) return false;
 
   const { data: members } = await admin
     .from("league_members")
@@ -140,7 +140,7 @@ export async function archiveSeason(leagueId: number): Promise<void> {
     snapshotAt: new Date().toISOString(),
   };
 
-  await admin.from("season_archives").upsert(
+  const { error } = await admin.from("season_archives").upsert(
     {
       league_id: leagueId,
       season_year: (league as any).season_year ?? new Date().getFullYear(),
@@ -148,7 +148,9 @@ export async function archiveSeason(leagueId: number): Promise<void> {
     },
     { onConflict: "league_id,season_year" },
   );
+  if (error) return false;
 
   revalidatePath(`/league/${leagueId}/archive`);
   revalidatePath(`/league/${leagueId}/settings`);
+  return true;
 }
