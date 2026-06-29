@@ -1,6 +1,6 @@
 // Shared league-setup checklist logic. Drives both the onboarding card on the
 // league home and the commissioner dashboard so a first-time commissioner has
-// one guided path: invite → schedule → divisions/matchups → scoring → draft.
+// one guided path: invite → draft → schedule → divisions/matchups → scoring.
 
 export type SetupSignals = {
   memberCount: number;
@@ -36,6 +36,17 @@ export function computeSetupSteps(base: string, s: SetupSignals): SetupStep[] {
       done: s.memberCount >= 2,
     },
     {
+      key: "draft",
+      label: "Run your draft",
+      detail: draftComplete
+        ? "Draft complete"
+        : draftScheduled
+          ? "Draft scheduled"
+          : "Set order & start",
+      href: `${base}/draft`,
+      done: draftComplete,
+    },
+    {
       key: "schedule",
       label: "Choose your season schedule",
       detail: s.scheduleConfigured ? "Schedule selected" : "Pick which events count",
@@ -55,17 +66,6 @@ export function computeSetupSteps(base: string, s: SetupSignals): SetupStep[] {
       detail: s.scoringConfigured ? "Custom rules saved" : "Using default scoring",
       href: `${base}/settings/scoring`,
       done: s.scoringConfigured,
-    },
-    {
-      key: "draft",
-      label: "Run your draft",
-      detail: draftComplete
-        ? "Draft complete"
-        : draftScheduled
-          ? "Draft scheduled"
-          : "Set order & start",
-      href: `${base}/draft`,
-      done: draftComplete,
     },
   ];
 }
