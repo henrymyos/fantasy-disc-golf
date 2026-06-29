@@ -73,13 +73,21 @@ export function LeagueChat({
     [liveMembers, myMemberId],
   );
 
-  const refresh = useCallback(async () => {
+  // Just the chat messages — fetched through a server action that filters to
+  // league broadcasts + this member's own DMs, so other members' private DMs
+  // never reach the browser (they used to be queried client-side and filtered
+  // in JS). Re-run on every realtime INSERT so the DM filtering stays
+  // server-side rather than trusting the realtime payload.
+  const refreshMessages = useCallback(async () => {
+    const msgs = await getVisibleChatMessages(leagueId).catch(() => [] as Message[]);
+    setMessages(msgs as Message[]);
+  }, [leagueId]);
+
+  // The rarely-changing bits: the system feed (trades / roster moves) and the
+  // member list (team-name edits, new joiners). Polled on a slow interval.
+  const refreshFeed = useCallback(async () => {
     const supabase = createClient();
-    const [msgs, events, { data: memberData }] = await Promise.all([
-      // Fetched through a server action that filters to league broadcasts +
-      // this member's own DMs, so other members' private DMs never reach the
-      // browser (they used to be queried client-side and filtered in JS).
-      getVisibleChatMessages(leagueId).catch(() => [] as Message[]),
+    const [events, { data: memberData }] = await Promise.all([
       getLeagueSystemFeed(leagueId).catch(() => [] as SystemEvent[]),
       supabase
         .from("league_members")
@@ -87,7 +95,6 @@ export function LeagueChat({
         .eq("league_id", leagueId)
         .order("joined_at"),
     ]);
-    setMessages(msgs as Message[]);
     setSystemEvents(events);
     if (memberData && memberData.length > 0) {
       setLiveMembers(
@@ -103,10 +110,36 @@ export function LeagueChat({
   }, [leagueId]);
 
   useEffect(() => {
-    refresh();
-    const id = setInterval(refresh, 4000);
-    return () => clearInterval(id);
-  }, [refresh]);
+    refreshMessages();
+    refreshFeed();
+
+    // New chat messages arrive over Supabase Realtime: any INSERT on this
+    // league's chat_messages re-runs the server-filtered message fetch (we
+    // never read other members' DMs straight off the realtime payload).
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`league_chat_${leagueId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "chat_messages", filter: `league_id=eq.${leagueId}` },
+        () => {
+          refreshMessages();
+        },
+      )
+      .subscribe();
+
+    // Fallback poll for messages in case Realtime isn't enabled for the table
+    // (the subscription would then just receive nothing), plus a slower poll
+    // for the system feed + member list which change rarely.
+    const msgPoll = setInterval(refreshMessages, 15000);
+    const feedPoll = setInterval(refreshFeed, 25000);
+
+    return () => {
+      clearInterval(msgPoll);
+      clearInterval(feedPoll);
+      supabase.removeChannel(channel);
+    };
+  }, [refreshMessages, refreshFeed, leagueId]);
 
   // Merge chat messages with system events (trades / roster moves) for the
   // league channel, ordered by time; DMs stay message-only.
@@ -213,7 +246,7 @@ export function LeagueChat({
       const recipient = channel.kind === "dm" ? channel.memberId : null;
       await sendChatMessage(leagueId, text, recipient);
       setBody("");
-      refresh();
+      refreshMessages();
     });
   }
 

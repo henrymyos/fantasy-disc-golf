@@ -91,10 +91,22 @@ export async function getVisibleChatMessages(leagueId: number): Promise<ChatMess
 }
 
 /** Trade + roster-move events for the league chat's system messages. Only
- *  league members can read them (RLS on the underlying tables). */
+ *  league members can read them. The membership check below is the gate (it
+ *  mirrors getVisibleChatMessages / sendChatMessage); RLS on the underlying
+ *  tables is just a backstop. */
 export async function getLeagueSystemFeed(leagueId: number): Promise<SystemEvent[]> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
+
+  const admin = createAdminClient();
+  const { data: member } = await admin
+    .from("league_members")
+    .select("id")
+    .eq("league_id", leagueId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!member) return [];
+
   return buildLeagueSystemFeed(supabase, leagueId);
 }
