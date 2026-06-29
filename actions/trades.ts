@@ -72,6 +72,31 @@ export async function proposeTrade(
   }
   if (filtered.length === 0 && filteredPicks.length === 0 && filteredCurrentPicks.length === 0) return;
 
+  // Authorization: a client supplies these movements verbatim, so verify them
+  // server-side before persisting anything.
+  //  - the proposer must actually be one of the involved teams;
+  //  - every from/to team across players + picks must be in the participant
+  //    set (the proposer plus the receiving teams);
+  //  - each moved player must currently be owned by its stated from-team.
+  // Any failure aborts without inserting the trade.
+  const participantSet = new Set<number>([proposer.id, ...receiverTeamIds]);
+  const legTeamIds: number[] = [];
+  for (const m of filtered) legTeamIds.push(m.fromTeamId, m.toTeamId);
+  for (const p of filteredPicks) legTeamIds.push(p.fromTeamId, p.toTeamId);
+  for (const p of filteredCurrentPicks) legTeamIds.push(p.fromTeamId, p.toTeamId);
+  if (!legTeamIds.includes(proposer.id)) return;
+  if (legTeamIds.some((id) => !participantSet.has(id))) return;
+  for (const m of filtered) {
+    const { data: owns } = await admin
+      .from("rosters")
+      .select("id")
+      .eq("league_id", leagueId)
+      .eq("player_id", m.playerId)
+      .eq("team_id", m.fromTeamId)
+      .maybeSingle();
+    if (!owns) return;
+  }
+
   const { data: trade, error } = await admin
     .from("trades")
     .insert({
@@ -164,7 +189,7 @@ export async function respondToTrade(tradeId: number, accept: boolean): Promise<
 
   const { data: trade } = await admin
     .from("trades")
-    .select("id, league_id, proposer_id, status")
+    .select("id, league_id, proposer_id, status, proposed_at")
     .eq("id", tradeId)
     .single();
 
@@ -188,6 +213,50 @@ export async function respondToTrade(tradeId: number, accept: boolean): Promise<
 
   if (!myParticipant || myParticipant.status !== "pending") return;
 
+  // Best-effort: tell the other involved teams (at minimum the proposer) how a
+  // trade resolved, using the same notification mechanism proposeTrade uses.
+  // Never let a notification failure abort the action.
+  const tradeLeagueId = trade.league_id;
+  const tradeProposerId = trade.proposer_id;
+  const myMemberId = member.id;
+  async function notifyTradeOutcome(outcome: "accepted" | "rejected") {
+    try {
+      const { data: parts } = await admin
+        .from("trade_participants")
+        .select("team_id")
+        .eq("trade_id", tradeId);
+      const involved = new Set<number>();
+      if (tradeProposerId != null) involved.add(tradeProposerId);
+      for (const p of parts ?? []) {
+        if ((p as any).team_id != null) involved.add((p as any).team_id);
+      }
+      // The team acting now already knows the outcome.
+      involved.delete(myMemberId);
+      if (involved.size === 0) return;
+      const { data: people } = await admin
+        .from("league_members")
+        .select("user_id")
+        .in("id", Array.from(involved));
+      const body =
+        outcome === "accepted"
+          ? "A trade you were part of was accepted."
+          : "A trade you were part of was rejected.";
+      for (const person of people ?? []) {
+        const uid = (person as any).user_id;
+        if (!uid) continue;
+        await enqueueNotification(admin, {
+          userId: uid,
+          leagueId: tradeLeagueId,
+          kind: "trade_proposed",
+          body,
+          link: `/league/${tradeLeagueId}/trades`,
+        });
+      }
+    } catch (e) {
+      console.warn("trade outcome notify failed", e);
+    }
+  }
+
   if (!accept) {
     await admin
       .from("trade_participants")
@@ -200,6 +269,21 @@ export async function respondToTrade(tradeId: number, accept: boolean): Promise<
       .update({ status: "rejected", resolved_at: new Date().toISOString() })
       .eq("id", tradeId);
 
+    await notifyTradeOutcome("rejected");
+    revalidatePath(`/league/${trade.league_id}/trades`);
+    return;
+  }
+
+  // Code-side trade expiry (no schema change): a trade older than 7 days can no
+  // longer execute. The trades table has no `created_at`; `proposed_at` is the
+  // creation timestamp, so age is measured from it. Reject instead of executing.
+  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+  if (trade.proposed_at && Date.now() - new Date(trade.proposed_at).getTime() > SEVEN_DAYS_MS) {
+    await admin
+      .from("trades")
+      .update({ status: "rejected", resolved_at: new Date().toISOString() })
+      .eq("id", tradeId);
+    await notifyTradeOutcome("rejected");
     revalidatePath(`/league/${trade.league_id}/trades`);
     return;
   }
@@ -245,8 +329,49 @@ export async function respondToTrade(tradeId: number, accept: boolean): Promise<
         .from("trades")
         .update({ status: "rejected", resolved_at: new Date().toISOString() })
         .eq("id", tradeId);
+      await notifyTradeOutcome("rejected");
       revalidatePath(`/league/${trade.league_id}/trades`);
       return;
+    }
+  }
+
+  // Roster-size legality: no involved team may end up over leagues.roster_size.
+  // Only player legs change roster counts (picks don't), and the ownership
+  // re-check above guarantees each leaving player is currently on its from-team,
+  // so post = current - leaving + arriving is exact. If any team would overflow,
+  // reject the whole trade and move nothing.
+  const playerLegs = tradePlayers ?? [];
+  if (playerLegs.length > 0) {
+    const { data: leagueRow } = await admin
+      .from("leagues")
+      .select("roster_size")
+      .eq("id", trade.league_id)
+      .single();
+    const rosterSize = (leagueRow as any)?.roster_size ?? 10;
+
+    const involvedTeams = new Set<number>();
+    for (const tp of playerLegs) {
+      involvedTeams.add(tp.from_team_id);
+      involvedTeams.add(tp.to_team_id);
+    }
+    for (const teamId of involvedTeams) {
+      const { count } = await admin
+        .from("rosters")
+        .select("id", { count: "exact", head: true })
+        .eq("league_id", trade.league_id)
+        .eq("team_id", teamId);
+      const current = count ?? 0;
+      const leaving = playerLegs.filter((tp) => tp.from_team_id === teamId).length;
+      const arriving = playerLegs.filter((tp) => tp.to_team_id === teamId).length;
+      if (current - leaving + arriving > rosterSize) {
+        await admin
+          .from("trades")
+          .update({ status: "rejected", resolved_at: new Date().toISOString() })
+          .eq("id", tradeId);
+        await notifyTradeOutcome("rejected");
+        revalidatePath(`/league/${trade.league_id}/trades`);
+        return;
+      }
     }
   }
 
@@ -318,6 +443,7 @@ export async function respondToTrade(tradeId: number, accept: boolean): Promise<
     .update({ status: "accepted", resolved_at: new Date().toISOString() })
     .eq("id", tradeId);
 
+  await notifyTradeOutcome("accepted");
   revalidatePath(`/league/${trade.league_id}/trades`);
   revalidatePath(`/league/${trade.league_id}/lineups`);
 }
@@ -329,7 +455,7 @@ export async function cancelTrade(tradeId: number): Promise<void> {
 
   const admin = createAdminClient();
 
-  const { data: trade } = await admin.from("trades").select("league_id, proposer_id").eq("id", tradeId).single();
+  const { data: trade } = await admin.from("trades").select("league_id, proposer_id, status").eq("id", tradeId).single();
   if (!trade) return;
 
   const { data: member } = await admin
@@ -340,6 +466,10 @@ export async function cancelTrade(tradeId: number): Promise<void> {
     .single();
 
   if (!member || member.id !== trade.proposer_id) return;
+
+  // Only a still-pending trade can be cancelled — never flip one that's already
+  // been accepted/executed, rejected, or cancelled.
+  if (trade.status !== "pending") return;
 
   await admin.from("trades").update({ status: "cancelled", resolved_at: new Date().toISOString() }).eq("id", tradeId);
   revalidatePath(`/league/${trade.league_id}/trades`);
