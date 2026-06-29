@@ -29,55 +29,97 @@ export async function runLineupUnsetCheck(
   const { data: leagues } = await admin
     .from("leagues")
     .select("id, mpo_starters, fpo_starters");
+  if (!leagues || leagues.length === 0) {
+    return { leaguesChecked: 0, notificationsSent: 0 };
+  }
+  const leagueIds = leagues.map((l) => (l as any).id as number);
+
+  // Batch the per-member work into a handful of grouped queries instead of two
+  // round-trips per member. At ~100 leagues × ~12 members the old shape issued
+  // thousands of sequential queries and timed out the 60s cron; this issues a
+  // constant number regardless of league/member count.
+  const since = new Date(now.getTime() - 12 * 60 * 60 * 1000).toISOString();
+
+  const [{ data: members }, { data: starterRows }, { data: recentNotifs }] =
+    await Promise.all([
+      admin
+        .from("league_members")
+        .select("id, user_id, team_name, league_id")
+        .in("league_id", leagueIds),
+      // Pull starter rows with division so we can check per-division fill (a team
+      // can have all MPO slots filled but an empty FPO slot — counting the raw
+      // total would wrongly treat that lineup as set).
+      admin
+        .from("rosters")
+        .select("league_id, team_id, players(division)")
+        .in("league_id", leagueIds)
+        .eq("is_starter", true),
+      admin
+        .from("notifications")
+        .select("user_id, league_id")
+        .in("league_id", leagueIds)
+        .eq("kind", "lineup_unset")
+        .gte("created_at", since),
+    ]);
+
+  // (leagueId:teamId) -> filled starter counts per division.
+  const startersByTeam = new Map<string, { mpo: number; fpo: number }>();
+  for (const r of starterRows ?? []) {
+    const key = `${(r as any).league_id}:${(r as any).team_id}`;
+    const counts = startersByTeam.get(key) ?? { mpo: 0, fpo: 0 };
+    if (((r as any).players?.division ?? "MPO") === "FPO") counts.fpo++;
+    else counts.mpo++;
+    startersByTeam.set(key, counts);
+  }
+
+  // (leagueId:userId) already warned inside the dedup window. Mutated as we send
+  // so a user with two teams in one league still gets at most one notification
+  // per run, matching the original per-(user, league) dedup.
+  const notified = new Set<string>();
+  for (const n of recentNotifs ?? []) {
+    notified.add(`${(n as any).league_id}:${(n as any).user_id}`);
+  }
+
+  const membersByLeague = new Map<number, any[]>();
+  for (const m of members ?? []) {
+    const lid = (m as any).league_id as number;
+    const list = membersByLeague.get(lid) ?? [];
+    list.push(m);
+    membersByLeague.set(lid, list);
+  }
+
   let notificationsSent = 0;
   let leaguesChecked = 0;
-  for (const league of leagues ?? []) {
+  for (const league of leagues) {
     const leagueId = (league as any).id as number;
     leaguesChecked++;
     const mpoSlots = ((league as any).mpo_starters as number) ?? 4;
     const fpoSlots = ((league as any).fpo_starters as number) ?? 2;
-    const targetCount = mpoSlots + fpoSlots;
 
-    const { data: members } = await admin
-      .from("league_members")
-      .select("id, user_id, team_name")
-      .eq("league_id", leagueId);
-
-    for (const m of members ?? []) {
+    for (const m of membersByLeague.get(leagueId) ?? []) {
       const userId = (m as any).user_id as string | null;
       if (!userId) continue;
       const teamId = (m as any).id as number;
 
-      const { count: starterCount } = await admin
-        .from("rosters")
-        .select("id", { count: "exact", head: true })
-        .eq("league_id", leagueId)
-        .eq("team_id", teamId)
-        .eq("is_starter", true);
-      const filled = starterCount ?? 0;
-      if (filled >= targetCount) continue;
+      const counts = startersByTeam.get(`${leagueId}:${teamId}`) ?? { mpo: 0, fpo: 0 };
+      const open = Math.max(0, mpoSlots - counts.mpo) + Math.max(0, fpoSlots - counts.fpo);
+      if (open === 0) continue;
 
       // Dedupe: skip if we already notified this user about THIS league
       // recently.
-      const since = new Date(now.getTime() - 12 * 60 * 60 * 1000).toISOString();
-      const { count: recent } = await admin
-        .from("notifications")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", userId)
-        .eq("league_id", leagueId)
-        .eq("kind", "lineup_unset")
-        .gte("created_at", since);
-      if ((recent ?? 0) > 0) continue;
+      const dedupKey = `${leagueId}:${userId}`;
+      if (notified.has(dedupKey)) continue;
 
       await enqueueNotification(admin, {
         userId,
         leagueId,
         kind: "lineup_unset",
-        body: `${tournamentName} tees off soon and you have ${
-          targetCount - filled
-        } open starter slot${targetCount - filled !== 1 ? "s" : ""}.`,
+        body: `${tournamentName} tees off soon and you have ${open} open starter slot${
+          open !== 1 ? "s" : ""
+        }.`,
         link: `/league/${leagueId}/lineups`,
       });
+      notified.add(dedupKey);
       notificationsSent++;
     }
   }

@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resetWaiverPriority, runWaiverProcessing } from "@/lib/waivers";
 import { runLineupUnsetCheck } from "@/lib/lineup-unset-check";
-import { autoFinalizeDueWeeks } from "@/lib/auto-finalize";
+import { autoFinalizeDueWeeks, wednesdayAfter } from "@/lib/auto-finalize";
 
 // Daily Vercel cron. Two responsibilities:
 //   1. When a tournament starts today, lock waivers for every league and reset
 //      each league's waiver priority to reverse-of-standings.
-//   2. On Wednesdays, after a tournament has finished, process any locked
-//      waivers (the action handles unlocking).
+//   2. After a tournament has finished AND its review window has passed, process
+//      any locked waivers (the action handles unlocking). Decoupled from the
+//      weekday — see the block below.
 //
 // Gated by CRON_SECRET — same bearer flow as /api/sync-pdga.
 
@@ -43,22 +44,53 @@ export async function GET(request: Request) {
     }
   }
 
-  // 2) Wednesday → process locked waivers (skip leagues where a tournament is still in progress)
+  // 2) Process locked waivers once the triggering event has ended and its review
+  //    window has passed — independent of the weekday.
+  //
+  //    The old gate required getUTCDay()===3 AND no tournament overlapping today.
+  //    An event ENDING on a Wednesday counts as overlapping that day
+  //    (start_date <= today <= end_date), so its own review Wednesday was skipped
+  //    and waivers stayed locked until the *next* Wednesday — a full extra week.
+  //    Requiring Wednesday also meant a single missed/blocked Wednesday cost
+  //    another 7 days.
+  //
+  //    New gate (still conservative):
+  //      • Never process while an event is GENUINELY in progress — started
+  //        on/before today and ending strictly AFTER today. An event whose
+  //        end_date is today has played its final round, so it no longer blocks
+  //        (this is the Wednesday-ending fix).
+  //      • Otherwise process once the Wednesday-after review window of the most
+  //        recently concluded event has passed. This is the same review window
+  //        auto-finalize uses, so waivers unlock in lockstep with week scoring —
+  //        important because finalization reads live starter rosters.
   const processed: number[] = [];
-  if (isWednesday) {
-    const { data: activeTournaments } = await admin
+  const { data: lockedLeagues } = await admin
+    .from("leagues")
+    .select("id")
+    .eq("waivers_locked", true);
+
+  if (lockedLeagues && lockedLeagues.length > 0) {
+    const { data: running } = await admin
       .from("tournaments")
       .select("id")
       .lte("start_date", today)
-      .gte("end_date", today);
-    const tournamentInProgress = (activeTournaments?.length ?? 0) > 0;
+      .gt("end_date", today); // strictly after today: a same-day end no longer blocks
+    const eventInProgress = (running?.length ?? 0) > 0;
 
-    if (!tournamentInProgress) {
-      const { data: lockedLeagues } = await admin
-        .from("leagues")
-        .select("id")
-        .eq("waivers_locked", true);
-      for (const league of lockedLeagues ?? []) {
+    const { data: concluded } = await admin
+      .from("tournaments")
+      .select("end_date")
+      .not("end_date", "is", null)
+      .lte("end_date", today)
+      .order("end_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const latestEnd = (concluded as any)?.end_date as string | undefined;
+    const reviewWindowPassed =
+      !!latestEnd && Date.now() >= wednesdayAfter(latestEnd).getTime();
+
+    if (!eventInProgress && reviewWindowPassed) {
+      for (const league of lockedLeagues) {
         await runWaiverProcessing((league as any).id);
         processed.push((league as any).id);
       }
