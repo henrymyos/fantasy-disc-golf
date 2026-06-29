@@ -226,6 +226,30 @@ export async function respondToTrade(tradeId: number, accept: boolean): Promise<
     .select("player_id, from_team_id, to_team_id")
     .eq("trade_id", tradeId);
 
+  // Re-validate every player leg before moving ANY of them. A leg can go stale
+  // between proposal and final acceptance — the player was dropped, or traded
+  // away in another deal that resolved first. The roster move is scoped to
+  // from_team_id, so a stale leg silently matches no rows (a no-op) while the
+  // opposite leg still runs: one side would give up players and receive
+  // nothing. If any leg is invalid, reject the whole trade and move nothing.
+  for (const tp of tradePlayers ?? []) {
+    const { data: owns } = await admin
+      .from("rosters")
+      .select("id")
+      .eq("league_id", trade.league_id)
+      .eq("player_id", tp.player_id)
+      .eq("team_id", tp.from_team_id)
+      .maybeSingle();
+    if (!owns) {
+      await admin
+        .from("trades")
+        .update({ status: "rejected", resolved_at: new Date().toISOString() })
+        .eq("id", tradeId);
+      revalidatePath(`/league/${trade.league_id}/trades`);
+      return;
+    }
+  }
+
   for (const tp of tradePlayers ?? []) {
     await admin.from("rosters").update({ team_id: tp.to_team_id })
       .eq("league_id", trade.league_id)
