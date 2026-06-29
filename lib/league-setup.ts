@@ -1,6 +1,6 @@
 // Shared league-setup checklist logic. Drives both the onboarding card on the
 // league home and the commissioner dashboard so a first-time commissioner has
-// one guided path: invite → draft → schedule → divisions/matchups → scoring.
+// one guided path: invite → schedule → scoring → draft → divisions/matchups.
 
 export type SetupSignals = {
   memberCount: number;
@@ -36,6 +36,20 @@ export function computeSetupSteps(base: string, s: SetupSignals): SetupStep[] {
       done: s.memberCount >= 2,
     },
     {
+      key: "schedule",
+      label: "Choose your season schedule",
+      detail: s.scheduleConfigured ? "Schedule selected" : "Pick which events count",
+      href: `${base}/settings/season`,
+      done: s.scheduleConfigured,
+    },
+    {
+      key: "scoring",
+      label: "Review scoring rules",
+      detail: s.scoringConfigured ? "Custom rules saved" : "Using default scoring",
+      href: `${base}/settings/scoring`,
+      done: s.scoringConfigured,
+    },
+    {
       key: "draft",
       label: "Run your draft",
       detail: draftComplete
@@ -47,25 +61,11 @@ export function computeSetupSteps(base: string, s: SetupSignals): SetupStep[] {
       done: draftComplete,
     },
     {
-      key: "schedule",
-      label: "Choose your season schedule",
-      detail: s.scheduleConfigured ? "Schedule selected" : "Pick which events count",
-      href: `${base}/settings/season`,
-      done: s.scheduleConfigured,
-    },
-    {
       key: "divisions",
       label: "Set divisions & generate matchups",
       detail: s.matchupsGenerated ? "Matchups generated" : "No matchups yet",
       href: `${base}/settings/divisions`,
       done: s.matchupsGenerated,
-    },
-    {
-      key: "scoring",
-      label: "Review scoring rules",
-      detail: s.scoringConfigured ? "Custom rules saved" : "Using default scoring",
-      href: `${base}/settings/scoring`,
-      done: s.scoringConfigured,
     },
   ];
 }
