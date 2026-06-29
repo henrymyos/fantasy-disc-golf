@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { DraftBoard } from "@/components/draft-board";
 import { DraftScheduleForm } from "@/components/draft-schedule-form";
+import { LocalTime } from "@/components/local-time";
 import { randomizeDraftOrder } from "@/actions/drafts";
 import { setSecondsPerPick } from "@/actions/draft-config";
 import { DraftTypeForm } from "@/components/draft-type-form";
@@ -177,13 +178,17 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
           <div>
             <p className="text-white font-semibold text-sm">Draft scheduled</p>
             <p className="text-gray-400 text-xs mt-0.5">
-              {new Date(scheduledAt).toLocaleString("en-US", {
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-                hour: "numeric",
-                minute: "2-digit",
-              })}
+              <LocalTime
+                iso={scheduledAt}
+                options={{
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                  timeZoneName: "short",
+                }}
+              />
               {" · "}
               <span className="text-gray-400">commissioner starts manually</span>
             </p>
