@@ -45,6 +45,7 @@ export function AuctionPanel({
   const [members, setMembers] = useState<Member[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [draftedIds, setDraftedIds] = useState<Set<number>>(new Set());
+  const [ownedByTeam, setOwnedByTeam] = useState<Map<number, number>>(new Map());
   const [now, setNow] = useState(() => Date.now());
   const [search, setSearch] = useState("");
   const [openingBid, setOpeningBid] = useState(1);
@@ -69,11 +70,14 @@ export function AuctionPanel({
       .order("draft_position");
     const { data: rostered } = await supabase
       .from("rosters")
-      .select("player_id")
+      .select("player_id, team_id")
       .eq("league_id", leagueId);
     setDraft(d as any);
     setMembers((m ?? []) as any);
     setDraftedIds(new Set((rostered ?? []).map((r: any) => r.player_id)));
+    const owned = new Map<number, number>();
+    for (const r of rostered ?? []) owned.set((r as any).team_id, (owned.get((r as any).team_id) ?? 0) + 1);
+    setOwnedByTeam(owned);
   }
 
   useEffect(() => {
@@ -152,9 +156,13 @@ export function AuctionPanel({
   }
 
   function submitBid() {
-    if (!bidAmount || bidAmount <= (draft?.auction_current_bid ?? 0)) return;
+    // The input shows `bidAmount || myMinBid`, so an unedited click leaves
+    // bidAmount at 0 — resolve the effective amount the same way so clicking the
+    // prefilled minimum bid actually submits instead of silently no-opping.
+    const amount = bidAmount || myMinBid;
+    if (amount <= (draft?.auction_current_bid ?? 0)) return;
     startTransition(async () => {
-      await placeBid(leagueId, bidAmount);
+      await placeBid(leagueId, amount);
       refresh();
       router.refresh();
     });
@@ -162,7 +170,12 @@ export function AuctionPanel({
 
   if (!draft || draft.type !== "auction" || draft.status !== "in_progress") return null;
 
-  const myMaxBid = me?.auction_budget_remaining ?? 0;
+  // Mirror the server's maxBidFor: $1 must stay in reserve for each future
+  // roster spot beyond the one being bid on, so the client cap matches what the
+  // server will accept (otherwise valid-looking bids get silently rejected).
+  const myOwned = me ? (ownedByTeam.get(me.id) ?? 0) : 0;
+  const myRemainingSpots = Math.max(0, draft.total_rounds - myOwned);
+  const myMaxBid = Math.max(0, (me?.auction_budget_remaining ?? 0) - Math.max(0, myRemainingSpots - 1));
   const myMinBid = (draft.auction_current_bid ?? 0) + 1;
 
   return (

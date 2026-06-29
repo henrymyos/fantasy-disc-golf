@@ -184,17 +184,46 @@ export async function finalizeAuctionPick(leagueId: number): Promise<void> {
   const playerId = draft.auction_current_player_id;
   const winningBid = draft.auction_current_bid ?? 0;
 
-  // Award the player.
+  const positionedCount = members.filter((m: any) => m.draft_position != null).length;
+
+  // Award the player — assign an open starter slot in their division (like the
+  // snake claim_draft_pick path) so auction winners aren't stuck on the bench
+  // scoring nothing until the manager manually builds a lineup.
+  const { data: player } = await admin.from("players").select("division").eq("id", playerId).single();
+  const division = ((player as any)?.division ?? "MPO") as "MPO" | "FPO";
+  const { data: leagueSlots } = await admin
+    .from("leagues")
+    .select("mpo_starters, fpo_starters")
+    .eq("id", leagueId)
+    .single();
+  const slotLimit = division === "MPO"
+    ? ((leagueSlots as any)?.mpo_starters ?? 4)
+    : ((leagueSlots as any)?.fpo_starters ?? 2);
+  const { data: divStarters } = await admin
+    .from("rosters")
+    .select("lineup_order, players!inner(division)")
+    .eq("league_id", leagueId)
+    .eq("team_id", winnerTeamId)
+    .eq("is_starter", true)
+    .eq("players.division", division);
+  const taken = new Set(
+    (divStarters ?? []).map((r: any) => r.lineup_order).filter((o: number | null) => o != null),
+  );
+  let assignedOrder: number | null = null;
+  for (let i = 1; i <= slotLimit; i++) { if (!taken.has(i)) { assignedOrder = i; break; } }
+
   await admin.from("rosters").insert({
     league_id: leagueId,
     team_id: winnerTeamId,
     player_id: playerId,
     acquired_week: 1,
+    is_starter: assignedOrder !== null,
+    lineup_order: assignedOrder,
   });
   await admin.from("draft_picks").insert({
     draft_id: draft.id,
     pick_number: draft.current_pick,
-    round: Math.ceil(draft.current_pick / Math.max(1, members.length)),
+    round: Math.ceil(draft.current_pick / Math.max(1, positionedCount)),
     team_id: winnerTeamId,
     player_id: playerId,
   });
@@ -211,15 +240,30 @@ export async function finalizeAuctionPick(leagueId: number): Promise<void> {
     .update({ auction_budget_remaining: Math.max(0, remaining) })
     .eq("id", winnerTeamId);
 
-  // Advance to the next nominator.
-  const nextPick = draft.current_pick + 1;
-  const totalPicks = members.length * draft.total_rounds;
-  if (nextPick > totalPicks) {
+  // Advance to the next nominator. Skip any team whose roster is already full —
+  // a full team can't open a nomination (its max bid is 0), so leaving it on the
+  // clock would deadlock the auction. The draft completes once every positioned
+  // team is full (not at a fixed pick count, which breaks when a member has no
+  // draft_position).
+  const { data: rosterRows } = await admin
+    .from("rosters")
+    .select("team_id")
+    .eq("league_id", leagueId);
+  const ownedByTeam = new Map<number, number>();
+  for (const r of rosterRows ?? []) {
+    ownedByTeam.set((r as any).team_id, (ownedByTeam.get((r as any).team_id) ?? 0) + 1);
+  }
+  const positioned = members.filter((m: any) => m.draft_position != null);
+  const allFull =
+    positioned.length > 0 &&
+    positioned.every((m: any) => (ownedByTeam.get(m.id) ?? 0) >= draft.total_rounds);
+
+  if (allFull) {
     await admin
       .from("drafts")
       .update({
         status: "complete",
-        current_pick: nextPick,
+        current_pick: draft.current_pick + 1,
         auction_current_player_id: null,
         auction_current_bid: null,
         auction_high_bidder_team_id: null,
@@ -231,11 +275,21 @@ export async function finalizeAuctionPick(leagueId: number): Promise<void> {
     await admin.from("leagues").update({ draft_status: "complete" }).eq("id", leagueId);
     await regenerateLeagueMatchups(leagueId);
   } else {
-    const nextNominator = currentNominator(members, nextPick);
+    let np = draft.current_pick + 1;
+    let nextNominator = currentNominator(members, np);
+    let guard = 0;
+    while (
+      nextNominator &&
+      (ownedByTeam.get((nextNominator as any).id) ?? 0) >= draft.total_rounds &&
+      guard++ < 100000
+    ) {
+      np++;
+      nextNominator = currentNominator(members, np);
+    }
     await admin
       .from("drafts")
       .update({
-        current_pick: nextPick,
+        current_pick: np,
         current_pick_started_at: new Date().toISOString(),
         auction_current_player_id: null,
         auction_current_bid: null,

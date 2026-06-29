@@ -279,6 +279,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
         draft={draft ? {
           id: draft.id,
           status: draft.status,
+          type: (draft as any).type,
           currentPick: draft.current_pick,
           totalRounds: draft.total_rounds,
           secondsPerPick: (draft as any).seconds_per_pick ?? 60,

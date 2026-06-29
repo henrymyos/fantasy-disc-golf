@@ -25,7 +25,7 @@ export default async function DraftResultPage({
 
   const { data: draft } = await supabase
     .from("drafts")
-    .select("id, status, current_pick, total_rounds, third_round_reversal")
+    .select("id, status, type, current_pick, total_rounds, third_round_reversal")
     .eq("id", draftId)
     .eq("league_id", id)
     .single();
@@ -78,7 +78,7 @@ export default async function DraftResultPage({
       </Link>
       <DraftBoard
         leagueId={Number(id)}
-        draft={{ id: draft.id, status: draft.status, currentPick: draft.current_pick, totalRounds: draft.total_rounds, thirdRoundReversal: !!(draft as any).third_round_reversal }}
+        draft={{ id: draft.id, status: draft.status, type: (draft as any).type, currentPick: draft.current_pick, totalRounds: draft.total_rounds, thirdRoundReversal: !!(draft as any).third_round_reversal }}
         members={members}
         picks={picks}
         availablePlayers={[]}

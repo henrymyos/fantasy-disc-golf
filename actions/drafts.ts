@@ -261,10 +261,14 @@ export async function undoPick(leagueId: number, pickNumber: number): Promise<vo
 
   const { data: draft } = await admin
     .from("drafts")
-    .select("id, status")
+    .select("id, status, type")
     .eq("league_id", leagueId)
     .single();
   if (!draft) return;
+  // Undo only handles snake drafts. For an auction it would delete the roster /
+  // draft_pick rows without refunding auction_budget_remaining or clearing the
+  // live nomination state, permanently corrupting budgets — so refuse here.
+  if ((draft as any).type === "auction") return;
   if (draft.status !== "in_progress" && draft.status !== "paused" && draft.status !== "complete") {
     return;
   }

@@ -10,6 +10,7 @@ import { resolvePickOwnerId, type PickOwnerOverrides } from "@/lib/draft-pick-ow
 type DraftInfo = {
   id: number;
   status: string;
+  type?: string;
   currentPick: number;
   totalRounds: number;
   secondsPerPick?: number;
@@ -382,7 +383,13 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
       const reversed = isRoundReversed(round, trr);
       const posInRound = reversed ? N - m.draftPosition + 1 : m.draftPosition;
       const pickLabel = `${round}.${posInRound}`;
-      const pick = pickMap.get(pickNum);
+      // For auctions, pick_number is sequential nomination order (not a snake
+      // slot), so a snake-slot lookup would render picks under the wrong team.
+      // Only show a pick here when its actual winner is this column's team.
+      // Snake drafts — including traded slots, shown via the traded badge — are
+      // unaffected.
+      const pickRaw = pickMap.get(pickNum);
+      const pick = draft?.type === "auction" && pickRaw && pickRaw.teamId !== m.id ? undefined : pickRaw;
       const isCurrent =
         pickNum === currentPick && (draft?.status === "in_progress" || draft?.status === "paused");
 
