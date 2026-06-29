@@ -77,20 +77,42 @@ export async function startNextSeason(leagueId: number): Promise<RolloverResult>
     return { ok: false, message: "This season has already been rolled over." };
   }
 
-  // 2. Kept players for the upcoming season.
+  // 2. Kept players for the upcoming season. Dedupe across the whole league so
+  //    a given player is seeded onto at most one roster: ownership can have
+  //    shifted since keepers were saved, so two teams may both hold a keeper row
+  //    for the same player. First team by (team_id, player_id) order wins, and
+  //    obviously invalid rows are skipped — that way one bad/duplicate keeper
+  //    can't trip the rosters unique(league_id, player_id) and wipe out the
+  //    whole insert batch (i.e. nobody getting keepers).
   const keptByTeam = new Map<number, number[]>();
+  const seenPlayers = new Set<number>();
   if (keepersPerTeam > 0) {
     const { data: keeps } = await admin
       .from("keeper_picks")
       .select("team_id, player_id")
       .eq("league_id", leagueId)
-      .eq("season_year", nextYear);
+      .eq("season_year", nextYear)
+      .order("team_id")
+      .order("player_id");
     for (const k of keeps ?? []) {
-      const arr = keptByTeam.get((k as any).team_id) ?? [];
-      arr.push((k as any).player_id);
-      keptByTeam.set((k as any).team_id, arr);
+      const teamId = (k as any).team_id;
+      const playerId = (k as any).player_id;
+      if (teamId == null || playerId == null) continue; // skip invalid rows
+      if (seenPlayers.has(playerId)) continue; // already claimed by an earlier team
+      seenPlayers.add(playerId);
+      const arr = keptByTeam.get(teamId) ?? [];
+      arr.push(playerId);
+      keptByTeam.set(teamId, arr);
     }
   }
+
+  // Current teams in the league — used below to size the draft off the team that
+  // kept the FEWEST (a team missing from keptByTeam kept nothing).
+  const { data: teamRows } = await admin
+    .from("league_members")
+    .select("id")
+    .eq("league_id", leagueId);
+  const teamIds = (teamRows ?? []).map((m: any) => m.id);
 
   // 3. The league's draft row(s).
   const { data: drafts } = await admin.from("drafts").select("id").eq("league_id", leagueId).order("id");
@@ -121,8 +143,14 @@ export async function startNextSeason(leagueId: number): Promise<RolloverResult>
   if (rosterRows.length > 0) await admin.from("rosters").insert(rosterRows);
 
   // 6. Reset the draft to pending. Kept players occupy roster slots, so the new
-  //    draft fills the remaining rounds.
-  const newRounds = Math.max(1, rosterSize - keepersPerTeam);
+  //    draft fills the remaining rounds. Size it off the team that kept the
+  //    FEWEST (0 for any team that kept nothing) so even that team can still
+  //    fill its roster. Teams that kept more than the minimum simply fill up
+  //    before the final rounds.
+  const minKept = teamIds.length > 0
+    ? Math.min(...teamIds.map((tid: number) => keptByTeam.get(tid)?.length ?? 0))
+    : 0;
+  const newRounds = Math.max(1, rosterSize - minKept);
   if (keepDraftId != null) {
     await admin
       .from("drafts")

@@ -24,6 +24,16 @@ export async function setKeepers(
     .single();
   if (!member) return;
 
+  // Keeper deadline: picks can only change while the draft is still editable.
+  // Once the draft leaves 'pending' (scheduled, in progress, paused, or
+  // complete) the keepers are locked, so bail out as a no-op.
+  const { data: draft } = await admin
+    .from("drafts")
+    .select("status")
+    .eq("league_id", leagueId)
+    .single();
+  if (!draft || (draft as any).status !== "pending") return;
+
   const { data: league } = await admin
     .from("leagues")
     .select("keepers_per_team")
