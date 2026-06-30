@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { resetWaiverPriority, runWaiverProcessing } from "@/lib/waivers";
 import { runLineupUnsetCheck } from "@/lib/lineup-unset-check";
 import { autoFinalizeDueWeeks, wednesdayAfter } from "@/lib/auto-finalize";
+import { runDueDraftTimers } from "@/lib/draft-timer";
 
 // Daily Vercel cron. Two responsibilities:
 //   1. When a tournament starts today, lock waivers for every league and reset
@@ -104,6 +105,13 @@ export async function GET(request: Request) {
   // 4) Lineup-unset notifications for any tournament within the next 6h.
   const lineupCheck = await runLineupUnsetCheck(admin, 6);
 
+  // 5) Draft-timer backstop: advance any unattended draft whose pick / auction
+  //    clock has expired. Folded into this daily cron so the project stays within
+  //    the Hobby plan's 2-cron limit (a 3rd */5 cron fails the deploy). The
+  //    /api/draft-cron route still exists for manual triggering, or for a
+  //    higher-frequency schedule once on a paid plan.
+  const draftTimers = await runDueDraftTimers(admin);
+
   return NextResponse.json({
     ok: true,
     today,
@@ -113,5 +121,6 @@ export async function GET(request: Request) {
     processedLeagueIds: processed,
     autoFinalized,
     lineupNotificationsSent: lineupCheck.notificationsSent,
+    draftTimers,
   });
 }
