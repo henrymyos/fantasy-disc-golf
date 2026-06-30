@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { regenerateLeagueMatchups } from "@/actions/matchups";
+import { finalizeDraftCompletion } from "@/lib/draft-postpone";
 import { resolvePickOwnerId, buildPickOwnerOverrides } from "@/lib/draft-pick-owners";
 
 // Core draft-timer logic. These intentionally live OUTSIDE any "use server"
@@ -224,7 +224,7 @@ export async function runExpiredSnakePick(admin: AdminClient, leagueId: number):
   });
 
   if ((result as any)?.complete) {
-    await regenerateLeagueMatchups(leagueId);
+    await finalizeDraftCompletion(admin, leagueId);
   }
 
   return true;
@@ -338,7 +338,7 @@ export async function runExpiredAuctionFinalize(admin: AdminClient, leagueId: nu
       })
       .eq("id", draft.id);
     await admin.from("leagues").update({ draft_status: "complete" }).eq("id", leagueId);
-    await regenerateLeagueMatchups(leagueId);
+    await finalizeDraftCompletion(admin, leagueId);
   } else {
     let np = draft.current_pick + 1;
     let nextNominator = currentNominator(members, np);

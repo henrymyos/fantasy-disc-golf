@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { regenerateLeagueMatchups } from "@/actions/matchups";
+import { finalizeDraftCompletion } from "@/lib/draft-postpone";
 import { resolvePickOwnerId, buildPickOwnerOverrides } from "@/lib/draft-pick-owners";
 
 export async function startDraft(leagueId: number): Promise<void> {
@@ -231,7 +231,7 @@ export async function makeDraftPick(leagueId: number, playerId: number): Promise
   });
 
   if ((result as any)?.complete) {
-    await regenerateLeagueMatchups(leagueId);
+    await finalizeDraftCompletion(admin, leagueId);
   }
 
   revalidatePath(`/league/${leagueId}/draft`);
@@ -396,7 +396,7 @@ export async function commissionerMakePick(leagueId: number, playerId: number): 
   });
 
   if ((result as any)?.complete) {
-    await regenerateLeagueMatchups(leagueId);
+    await finalizeDraftCompletion(admin, leagueId);
   }
 
   revalidatePath(`/league/${leagueId}/draft`);

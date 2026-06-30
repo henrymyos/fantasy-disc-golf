@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { regenerateLeagueMatchups } from "@/actions/matchups";
+import { finalizeDraftCompletion } from "@/lib/draft-postpone";
 import { pickBestAvailableForTeam, runExpiredSnakePick } from "@/lib/draft-timer";
 
 /** Replace a user's ranking list for this league with the given ordered ids. */
@@ -63,7 +63,7 @@ export async function autoPickFromRankings(leagueId: number): Promise<void> {
   });
 
   if ((result as any)?.complete) {
-    await regenerateLeagueMatchups(leagueId);
+    await finalizeDraftCompletion(admin, leagueId);
   }
 
   revalidatePath(`/league/${leagueId}/draft`);

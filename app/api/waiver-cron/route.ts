@@ -4,6 +4,7 @@ import { resetWaiverPriority, runWaiverProcessing } from "@/lib/waivers";
 import { runLineupUnsetCheck } from "@/lib/lineup-unset-check";
 import { autoFinalizeDueWeeks, wednesdayAfter } from "@/lib/auto-finalize";
 import { runDueDraftTimers } from "@/lib/draft-timer";
+import { applyDraftPostponements } from "@/lib/draft-postpone";
 
 // Daily Vercel cron. Two responsibilities:
 //   1. When a tournament starts today, lock waivers for every league and reset
@@ -112,6 +113,21 @@ export async function GET(request: Request) {
   //    higher-frequency schedule once on a paid plan.
   const draftTimers = await runDueDraftTimers(admin);
 
+  // 6) Draft postponements: if a draft is running late, drop any selected event
+  //    whose lineup-lock deadline (1h before first tee) has already passed, so
+  //    week 1 doesn't land on an already-started tournament. Draft completion
+  //    runs this precisely too; this is the backstop for a draft that stalls
+  //    past an event.
+  const { data: liveDrafts } = await admin
+    .from("drafts")
+    .select("league_id")
+    .neq("status", "complete");
+  const postponed: Record<number, string[]> = {};
+  for (const d of liveDrafts ?? []) {
+    const dropped = await applyDraftPostponements(admin, (d as any).league_id);
+    if (dropped.length > 0) postponed[(d as any).league_id] = dropped;
+  }
+
   return NextResponse.json({
     ok: true,
     today,
@@ -122,5 +138,6 @@ export async function GET(request: Request) {
     autoFinalized,
     lineupNotificationsSent: lineupCheck.notificationsSent,
     draftTimers,
+    postponed,
   });
 }
