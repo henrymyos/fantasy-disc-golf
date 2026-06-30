@@ -76,6 +76,9 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
     .eq("league_id", id)
     .single();
   const showMockDraft = draft?.status !== "complete";
+  // Once a draft has a scheduled time (but hasn't finished), let everyone peek at
+  // the draft board alongside the mock-draft option.
+  const draftScheduled = draft?.status === "pending" && !!(draft as any)?.scheduled_at;
 
   // Setup checklist: any-matchup existence is needed; member count comes from
   // the members query below, so steps are assembled after that.
@@ -468,7 +471,44 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
           </div>
         )}
 
-        {showMockDraft && (
+        {showMockDraft && draftScheduled ? (
+          // Draft is scheduled: split control — view the draft board (left) and
+          // run a mock draft (right).
+          <div className="grid grid-cols-2 gap-3">
+            <Link
+              href={`/league/${id}/draft`}
+              className="block bg-[#1a1d23] rounded-2xl p-5 border border-white/5 hover:border-[#36D7B7]/40 hover:bg-[#1a1d23]/80 transition"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-[#36D7B7]/20 border border-[#36D7B7]/30 flex items-center justify-center text-xl shrink-0">
+                  📋
+                </div>
+                <div className="min-w-0">
+                  <p className="text-white font-bold text-sm">View Draft Board</p>
+                  <p className="text-gray-400 text-xs mt-0.5 truncate">
+                    Draft order &amp; board
+                  </p>
+                </div>
+              </div>
+            </Link>
+            <Link
+              href={`/league/${id}/mock-draft`}
+              className="block bg-[#1a1d23] rounded-2xl p-5 border border-white/5 hover:border-[#4B3DFF]/40 hover:bg-[#1a1d23]/80 transition"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-[#4B3DFF]/20 border border-[#4B3DFF]/30 flex items-center justify-center text-xl shrink-0">
+                  🎯
+                </div>
+                <div className="min-w-0">
+                  <p className="text-white font-bold text-sm">Mock Draft</p>
+                  <p className="text-gray-400 text-xs mt-0.5 truncate">
+                    Practice against bots
+                  </p>
+                </div>
+              </div>
+            </Link>
+          </div>
+        ) : showMockDraft ? (
           <Link
             href={`/league/${id}/mock-draft`}
             className="block bg-[#1a1d23] rounded-2xl p-5 border border-white/5 hover:border-[#4B3DFF]/40 hover:bg-[#1a1d23]/80 transition"
@@ -488,7 +528,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
               <span className="text-gray-400 text-lg shrink-0">→</span>
             </div>
           </Link>
-        )}
+        ) : null}
 
         {latestRecap && (
           <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
