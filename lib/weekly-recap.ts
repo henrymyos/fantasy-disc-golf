@@ -17,6 +17,7 @@ export async function generateWeeklyRecap(
   supabase: SupabaseClient,
   leagueId: number,
   week: number,
+  tournamentIds: number[] = [],
 ): Promise<string | null> {
   const { data: matchups } = await supabase
     .from("matchups")
@@ -29,12 +30,12 @@ export async function generateWeeklyRecap(
   if (!matchups || matchups.length === 0) return null;
 
   // Top starter for each team in this week's event(s) — used to season the
-  // sentences with a "on the back of X's win at Tournament" clause.
-  const { data: tournaments } = await supabase
-    .from("tournaments")
-    .select("id, name")
-    .eq("week", week);
-  const tournamentIds = (tournaments ?? []).map((t: any) => t.id);
+  // sentences with a "on the back of X's win at Tournament" clause. The event(s)
+  // for this league week are passed in by the finalizer (resolved via the
+  // league's selected-event order, not the global tournaments.week).
+  const { data: tournaments } = tournamentIds.length > 0
+    ? await supabase.from("tournaments").select("id, name").in("id", tournamentIds)
+    : { data: [] as any[] };
   const tournamentNameById = new Map<number, string>(
     (tournaments ?? []).map((t: any) => [t.id, t.name]),
   );

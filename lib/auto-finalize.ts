@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { runPdgaImport } from "@/lib/pdga-import";
 import { finalizeWeekScoresCore, advanceWeekCore } from "@/lib/scoring-finalize";
+import { getLeagueSchedule } from "@/lib/league-schedule";
 
 /**
  * The lock deadline for a week: the first Wednesday at 00:00 UTC strictly after
@@ -32,28 +33,19 @@ export async function autoFinalizeDueWeeks(admin: SupabaseClient): Promise<strin
     .from("leagues")
     .select("id, current_week, draft_status");
 
-  // Latest end date per week (events share global week numbers).
-  const { data: tournaments } = await admin
-    .from("tournaments")
-    .select("week, end_date")
-    .not("end_date", "is", null);
-  const endByWeek = new Map<number, string>();
-  for (const t of tournaments ?? []) {
-    const w = (t as any).week as number;
-    const e = (t as any).end_date as string;
-    const prev = endByWeek.get(w);
-    if (!prev || e > prev) endByWeek.set(w, e);
-  }
-
   let imported = false;
   for (const league of leagues ?? []) {
     if ((league as any).draft_status !== "complete") continue;
     const leagueId = (league as any).id as number;
     const week = (league as any).current_week as number;
 
-    const endDate = endByWeek.get(week);
-    if (!endDate) continue; // no event this week — leave it to the commissioner
-    if (now < wednesdayAfter(endDate).getTime()) continue; // review window still open
+    // Resolve this league week to its event through the league's own
+    // selected-event order — the global tournaments.week is not a reliable
+    // per-league index (subset schedules, non-1-based week numbers).
+    const schedule = await getLeagueSchedule(admin, leagueId);
+    const leagueWeek = schedule?.weeks.find((w) => w.week === week);
+    if (!leagueWeek) continue; // no event mapped to this week — leave it to the commissioner
+    if (now < wednesdayAfter(leagueWeek.endDate).getTime()) continue; // review window still open
 
     // A behind league advances at most one week per daily run — avoids a burst
     // of finalized weeks + notifications all at once. It catches up over days.
@@ -77,8 +69,7 @@ export async function autoFinalizeDueWeeks(admin: SupabaseClient): Promise<strin
       // hasn't posted them or the import failed), wait rather than locking a
       // bogus 0-0 result for everyone. A later cron run will pick it up once
       // results exist; the commissioner can also finalize manually.
-      const { data: weekTourneys } = await admin.from("tournaments").select("id").eq("week", week);
-      const weekTids = (weekTourneys ?? []).map((t: any) => t.id);
+      const weekTids = leagueWeek.tournamentIds;
       let hasResults = false;
       if (weekTids.length > 0) {
         const { count: rc } = await admin

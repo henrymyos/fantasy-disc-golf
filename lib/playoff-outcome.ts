@@ -1,8 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { effectiveSelection, getPlayoffSlugs, PLAYOFF_COUNT, type DgptEvent } from "@/lib/dgpt-2026-schedule";
-import { getScheduleEvents, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
 import { rankTeams } from "@/lib/standings";
 import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
+import { getLeagueSchedule } from "@/lib/league-schedule";
 import { playoffBracketSize, simulatePlayoffs, type Seed, type RoundInput, type PlayoffResult } from "@/lib/playoffs";
 
 export type StandingEntry = {
@@ -32,10 +31,6 @@ export type PlayoffOutcome = {
   lastPlace: StandingEntry | null;
 };
 
-function normalizeName(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
 /**
  * Computes final standings and runs the playoff bracket from real weekly scores
  * during the playoff events. Shared by the playoffs page and the season review
@@ -47,7 +42,7 @@ export async function getPlayoffOutcome(
 ): Promise<PlayoffOutcome> {
   const { data: league } = await supabase
     .from("leagues")
-    .select("scoring_mode, selected_event_slugs, season_year")
+    .select("scoring_mode")
     .eq("id", leagueId)
     .single();
   const scoringMode = (((league as any)?.scoring_mode ?? "head_to_head") as
@@ -80,7 +75,12 @@ export async function getPlayoffOutcome(
     }
   });
 
-  const weeklyTotals = await getTeamWeeklyTotals(supabase, leagueId);
+  // Canonical league schedule: maps each league week to its selected event /
+  // tournament so standings and the bracket score the right events even for a
+  // custom subset schedule. Regular weeks drive standings; the bracket also needs
+  // playoff-week scores, fetched separately ("all") below.
+  const schedule = await getLeagueSchedule(supabase, leagueId);
+  const weeklyTotals = await getTeamWeeklyTotals(supabase, leagueId, { weeks: "regular", schedule });
   if (scoringMode !== "head_to_head") {
     const alt = computeAltRecords(weeklyTotals, scoringMode);
     for (const [tid, rec] of alt) {
@@ -115,40 +115,30 @@ export async function getPlayoffOutcome(
     })
     .filter((x): x is StandingEntry => x !== null);
 
-  // Playoff events (last N selected), earliest → latest.
-  const events = await getScheduleEvents(supabase, (league as any)?.season_year ?? DEFAULT_SEASON_YEAR);
-  const selectedSlugs = effectiveSelection((league as any)?.selected_event_slugs, events);
-  const playoffSlugs = getPlayoffSlugs(selectedSlugs, PLAYOFF_COUNT, events);
-  const playoffSchedule: DgptEvent[] = events
-    .filter((e) => playoffSlugs.includes(e.slug))
-    .sort((a, b) => a.startDate.localeCompare(b.startDate));
+  // Playoff weeks = the league's selected playoff events, in schedule order.
+  const playoffWeeks = (schedule?.weeks ?? []).filter((w) => w.isPlayoff);
 
-  // Map each playoff event to a tournament week + whether results are in.
-  const { data: tournaments } = await supabase
-    .from("tournaments")
-    .select("id, week, pdga_event_id, name")
-    .eq("season_year", (league as any)?.season_year ?? DEFAULT_SEASON_YEAR);
-  const { data: resultRows } = await supabase
-    .from("tournament_results")
-    .select("tournament_id");
-  const tournamentsWithResults = new Set<number>((resultRows ?? []).map((r: any) => r.tournament_id));
-  const weekHasResults = new Set<number>();
-  const byPdga = new Map<number, { week: number; id: number }>();
-  const byName = new Map<string, { week: number; id: number }>();
-  (tournaments ?? []).forEach((t: any) => {
-    if (t.pdga_event_id != null) byPdga.set(t.pdga_event_id, { week: t.week, id: t.id });
-    if (t.name) byName.set(normalizeName(t.name), { week: t.week, id: t.id });
-    if (tournamentsWithResults.has(t.id)) weekHasResults.add(t.week);
-  });
-  const resolveEvent = (e: DgptEvent): { week: number | null; complete: boolean; name: string } => {
-    const hit = (e.pdgaEventId != null ? byPdga.get(e.pdgaEventId) : undefined) ?? byName.get(normalizeName(e.name));
-    const week = hit?.week ?? null;
-    return { week, complete: week != null && weekHasResults.has(week), name: e.name };
-  };
-  const playoffEvents: ResolvedPlayoffEvent[] = playoffSchedule.map(resolveEvent);
+  // Which playoff-event tournaments have results in yet → "complete".
+  const playoffTids = playoffWeeks.flatMap((w) => w.tournamentIds);
+  const tidsWithResults = new Set<number>();
+  if (playoffTids.length > 0) {
+    const { data: resultRows } = await supabase
+      .from("tournament_results")
+      .select("tournament_id")
+      .in("tournament_id", playoffTids);
+    for (const r of resultRows ?? []) tidsWithResults.add((r as any).tournament_id);
+  }
+  const playoffEvents: ResolvedPlayoffEvent[] = playoffWeeks.map((w) => ({
+    name: w.event.name,
+    week: w.week, // league week index
+    complete: w.tournamentIds.some((t) => tidsWithResults.has(t)),
+  }));
+
+  // Per-team scores during the playoff weeks, keyed by the same league weeks.
+  const weeklyTotalsAll = await getTeamWeeklyTotals(supabase, leagueId, { weeks: "all", schedule });
 
   // Bracket + simulation.
-  const bracketSize = playoffBracketSize(playoffSchedule.length, standings.length);
+  const bracketSize = playoffBracketSize(playoffWeeks.length, standings.length);
   const numRounds = bracketSize >= 2 ? Math.log2(bracketSize) : 0;
   const seeds: Seed[] = standings.slice(0, bracketSize).map((s, i) => ({
     teamId: s.teamId,
@@ -163,7 +153,7 @@ export async function getPlayoffOutcome(
 
   const scoreFor = (teamId: number, week: number | null): number | null => {
     if (week == null) return null;
-    const v = weeklyTotals.get(teamId)?.get(week);
+    const v = weeklyTotalsAll.get(teamId)?.get(week);
     return v == null ? null : v;
   };
 

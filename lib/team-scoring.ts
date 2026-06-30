@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fantasyPointsFromResult, resolveScoringRules } from "@/lib/scoring-rules";
 import { cappedStarterIds, type StarterRow } from "@/lib/lineup-slots";
-import { DEFAULT_SEASON_YEAR } from "@/lib/schedule";
+import { getLeagueSchedule, type LeagueSchedule } from "@/lib/league-schedule";
 
 /**
  * For each (team, week) pair in the league, sum the fantasy_points of the team's
@@ -18,28 +18,34 @@ import { DEFAULT_SEASON_YEAR } from "@/lib/schedule";
 export async function getTeamWeeklyTotals(
   supabase: SupabaseClient,
   leagueId: number,
+  opts: { weeks?: "regular" | "all"; schedule?: LeagueSchedule | null } = {},
 ): Promise<Map<number, Map<number, number>>> {
+  const include = opts.weeks ?? "regular";
   const { data: league } = await supabase
     .from("leagues")
-    .select("scoring_rules, season_year, mpo_starters, fpo_starters")
+    .select("scoring_rules, mpo_starters, fpo_starters")
     .eq("id", leagueId)
     .single();
   const rules = resolveScoringRules((league as any)?.scoring_rules);
-  const seasonYear = (league as any)?.season_year ?? DEFAULT_SEASON_YEAR;
   const mpoSlots = (league as any)?.mpo_starters ?? 4;
   const fpoSlots = (league as any)?.fpo_starters ?? 2;
 
-  // tournament_id -> week, scoped to this league's season.
-  const { data: tournaments } = await supabase
-    .from("tournaments")
-    .select("id, week")
-    .eq("season_year", seasonYear);
+  // Canonical league-week -> tournament mapping (see lib/league-schedule). League
+  // weeks are this league's selected events in order, so weekly totals line up
+  // with matchups and the bracket. Playoff weeks are excluded by default so they
+  // don't inflate regular-season records; pass weeks:"all" (the playoff bracket)
+  // to include them.
+  const schedule =
+    opts.schedule !== undefined ? opts.schedule : await getLeagueSchedule(supabase, leagueId);
   const weekByTournament = new Map<number, number>();
   const tournamentIds: number[] = [];
-  (tournaments ?? []).forEach((t: any) => {
-    weekByTournament.set(t.id, t.week);
-    tournamentIds.push(t.id);
-  });
+  for (const w of schedule?.weeks ?? []) {
+    if (include === "regular" && w.isPlayoff) continue;
+    for (const tid of w.tournamentIds) {
+      weekByTournament.set(tid, w.week);
+      tournamentIds.push(tid);
+    }
+  }
 
   // Every team in the league, so a team with no starters still appears (scored 0).
   const { data: teamRows } = await supabase

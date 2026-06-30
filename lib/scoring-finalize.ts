@@ -7,6 +7,7 @@ import { DEFAULT_SEASON_YEAR, getScheduleEvents } from "@/lib/schedule";
 import { buildSeasonSchedule } from "@/lib/matchup-scheduler";
 import { effectiveSelection } from "@/lib/dgpt-2026-schedule";
 import { regularSeasonWeekCount } from "@/lib/season-weeks";
+import { getLeagueSchedule } from "@/lib/league-schedule";
 
 /** Round-robin pairing for a given week (used when next week's matchups don't
  *  already exist). */
@@ -44,21 +45,19 @@ export async function finalizeWeekScoresCore(
   const recap = opts.recap ?? true;
   const { data: league } = await admin
     .from("leagues")
-    .select("scoring_rules, season_year, mpo_starters, fpo_starters")
+    .select("scoring_rules, mpo_starters, fpo_starters")
     .eq("id", leagueId)
     .single();
   const rules = resolveScoringRules((league as any)?.scoring_rules);
-  const seasonYear = (league as any)?.season_year ?? DEFAULT_SEASON_YEAR;
   const mpoSlots = (league as any)?.mpo_starters ?? 4;
   const fpoSlots = (league as any)?.fpo_starters ?? 2;
 
-  // Scope to this league's season so reused week numbers don't blend results.
-  const { data: tournaments } = await admin
-    .from("tournaments")
-    .select("id")
-    .eq("week", week)
-    .eq("season_year", seasonYear);
-  const tournamentIds = (tournaments ?? []).map((t) => t.id);
+  // Map this LEAGUE week to the event it represents (the league's Nth selected
+  // event), then to that event's tournament(s). Keying on the league's
+  // selected-event order — not the global tournaments.week — is what makes a
+  // custom/subset schedule score the right event for each week.
+  const schedule = await getLeagueSchedule(admin, leagueId);
+  const tournamentIds = schedule?.weekToTournamentIds.get(week) ?? [];
   if (tournamentIds.length === 0) return;
 
   const { data: results } = await admin
@@ -117,7 +116,7 @@ export async function finalizeWeekScoresCore(
     }).eq("id", (m as any).id);
   }
 
-  if (recap) await generateWeeklyRecap(admin, leagueId, week);
+  if (recap) await generateWeeklyRecap(admin, leagueId, week, tournamentIds);
 
   if (!notify) return;
 
