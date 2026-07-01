@@ -243,6 +243,11 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
   const [search, setSearch] = useState("");
   const [panelHeight, setPanelHeight] = useState(280);
   const panelDragRef = useRef<{ startY: number; startH: number } | null>(null);
+  const panelDraggedRef = useRef(false);
+  // Clicking a team header focuses that team: their picks (by current
+  // ownership, so traded-for picks count and traded-away ones don't) stay lit
+  // while every other column dims. Click again to clear.
+  const [focusedTeamId, setFocusedTeamId] = useState<number | null>(null);
   // Full-screen board: covers the sidebar/nav so the grid gets the whole
   // viewport. Defaults on when you land on a live draft; a top exit arrow
   // (and the Full screen button) toggle it.
@@ -362,18 +367,25 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
   // grows the panel, down shrinks it. Pointer capture keeps move events coming
   // even when the finger/cursor leaves the handle.
   const onPanelDragStart = (e: React.PointerEvent) => {
-    // Only resize when the drag starts on empty header space — taps on the
-    // tabs / filters / search behave normally.
-    if ((e.target as HTMLElement).closest("button, input, a, select")) return;
+    // Let text inputs keep their own gestures; anywhere else on the header
+    // (including the full-width tabs) can start a resize once the pointer
+    // actually moves vertically — a plain tap still switches tabs.
+    if ((e.target as HTMLElement).closest("input, select, textarea")) return;
     panelDragRef.current = { startY: e.clientY, startH: clampedPanelHeight };
-    try {
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    } catch {}
+    panelDraggedRef.current = false;
   };
   const onPanelDragMove = (e: React.PointerEvent) => {
     const d = panelDragRef.current;
     if (!d) return;
-    const next = d.startH + (d.startY - e.clientY);
+    const dy = d.startY - e.clientY;
+    if (!panelDraggedRef.current) {
+      if (Math.abs(dy) < 5) return;
+      panelDraggedRef.current = true;
+      try {
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      } catch {}
+    }
+    const next = d.startH + dy;
     const max = fullPanelHeight > 0 ? fullPanelHeight : next;
     setPanelHeight(Math.max(PANEL_MIN, Math.min(next, max)));
   };
@@ -523,14 +535,23 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
   // Build flat grid cells
   const gridCells: React.ReactNode[] = [];
 
-  // Team header cells
+  // Team header cells — clicking one focuses that team's picks.
   members.forEach((m) => {
     const isOnClock = m.id === currentPickTeamId && draft?.status === "in_progress";
     const isMe = m.id === myMemberId;
+    const isFocused = focusedTeamId === m.id;
+    const headerDim = focusedTeamId != null && !isFocused;
     gridCells.push(
-      <div
+      <button
         key={`h-${m.id}`}
-        className={`px-2 py-2 text-center rounded-lg ${isOnClock ? "bg-[#36D7B7]/15" : "bg-[#0f1117]"}`}
+        type="button"
+        onClick={() => setFocusedTeamId((cur) => (cur === m.id ? null : m.id))}
+        title={isFocused ? "Show all teams" : `Highlight ${m.teamName}'s picks`}
+        className={`w-full px-2 py-2 text-center rounded-lg transition ${
+          isOnClock ? "bg-[#36D7B7]/15" : "bg-[#0f1117]"
+        } ${
+          isFocused ? "ring-2 ring-[#4B3DFF]" : headerDim ? "opacity-40 hover:opacity-100" : "hover:bg-white/5"
+        }`}
       >
         <p className={`text-xs font-bold truncate leading-tight ${isMe ? "text-white" : "text-gray-300"}`}>
           {m.teamName}
@@ -539,7 +560,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
         {isOnClock && (
           <p className="text-[10px] text-[#36D7B7] font-semibold animate-pulse mt-1">ON THE CLOCK</p>
         )}
-      </div>
+      </button>
     );
   });
 
@@ -575,12 +596,18 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
         </div>
       ) : null;
 
+      // Team focus: a slot belongs to its current owner (the traded-to team if
+      // traded, else this column's team), so traded-for picks light up and
+      // traded-away ones dim.
+      const cellOwnerId = tradedOwnerId ?? m.id;
+      const dimClass = focusedTeamId != null && cellOwnerId !== focusedTeamId ? " opacity-30" : "";
+
       if (pick) {
         const { first, last } = splitName(pick.playerName);
         const cellStyle = { background: divBg(pick.playerDivision), color: "var(--pick-fg)" } as const;
         const profileHref = pick.playerId != null ? `/league/${leagueId}/player/${pick.playerId}` : null;
         const cardClass =
-          "flex flex-col p-1.5 min-h-[60px] rounded-lg transition hover:ring-2 hover:ring-white/30 hover:brightness-110";
+          `flex flex-col p-1.5 min-h-[60px] rounded-lg transition hover:ring-2 hover:ring-white/30 hover:brightness-110${dimClass}`;
         const meta = (
           <>
             {tradedBadge}
@@ -660,7 +687,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
               key={`${round}-${m.id}`}
               type="button"
               onClick={() => setPicker({ mode: "assign" })}
-              className="flex flex-col items-center justify-center p-1.5 min-h-[60px] rounded-lg bg-[#36D7B7]/10 ring-2 ring-[#36D7B7] ring-inset hover:bg-[#36D7B7]/20 transition"
+              className={`flex flex-col items-center justify-center p-1.5 min-h-[60px] rounded-lg bg-[#36D7B7]/10 ring-2 ring-[#36D7B7] ring-inset hover:bg-[#36D7B7]/20 transition${dimClass}`}
             >
               {onClockBody}
             </button>
@@ -669,7 +696,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
           gridCells.push(
             <div
               key={`${round}-${m.id}`}
-              className="flex flex-col items-center justify-center p-1.5 min-h-[60px] rounded-lg bg-[#36D7B7]/10 ring-2 ring-[#36D7B7] ring-inset"
+              className={`flex flex-col items-center justify-center p-1.5 min-h-[60px] rounded-lg bg-[#36D7B7]/10 ring-2 ring-[#36D7B7] ring-inset transition${dimClass}`}
             >
               {onClockBody}
             </div>
@@ -679,7 +706,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
         gridCells.push(
           <div
             key={`${round}-${m.id}`}
-            className="flex flex-col p-1.5 min-h-[60px] rounded-lg bg-[#1a1d23]"
+            className={`flex flex-col p-1.5 min-h-[60px] rounded-lg bg-[#1a1d23] transition${dimClass}`}
           >
             {tradedBadge}
             <div className="flex justify-start">
@@ -973,16 +1000,18 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
           className="shrink-0 mt-2 rounded-xl border border-white/5 bg-[#1a1d23] flex flex-col overflow-hidden"
           style={{ height: clampedPanelHeight }}
         >
-          {/* Tab header — also the drag surface: drag up/down from any spot
-              that isn't a button/input to resize the panel. */}
+          {/* Tab header — also the drag surface: a vertical drag anywhere here
+              (including on the tabs) resizes the panel; a plain tap on a tab
+              still switches tabs. */}
           <div
             onPointerDown={onPanelDragStart}
             onPointerMove={onPanelDragMove}
             onPointerUp={onPanelDragEnd}
             onPointerCancel={onPanelDragEnd}
-            className="flex items-center gap-2 px-3 pt-3 pb-2 border-b border-white/5 shrink-0 flex-wrap cursor-ns-resize touch-none"
+            className="shrink-0 px-3 pt-2 pb-2 border-b border-white/5 cursor-ns-resize touch-none"
           >
-            <div className="flex items-center gap-6">
+            {/* Tabs spread across the full width of the panel */}
+            <div className="flex">
               {([
                 { key: "available", label: "Available" },
                 { key: "queue", label: "Queue" },
@@ -990,8 +1019,11 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
               ] as { key: BottomTab; label: string }[]).map((t) => (
                 <button
                   key={t.key}
-                  onClick={() => setBottomTab(t.key)}
-                  className={`pb-0.5 text-sm font-semibold border-b-2 transition cursor-pointer ${
+                  onClick={() => {
+                    if (panelDraggedRef.current) return;
+                    setBottomTab(t.key);
+                  }}
+                  className={`flex-1 pb-1.5 text-sm font-semibold text-center border-b-2 transition ${
                     bottomTab === t.key
                       ? "text-white border-[#4B3DFF]"
                       : "text-gray-400 border-transparent hover:text-white"
@@ -1003,7 +1035,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
             </div>
 
             {bottomTab === "available" && (
-              <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-2">
+              <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-2 mt-2">
                 {hasMyRankings && (
                   <div className="flex gap-1 bg-[#0f1117] rounded-lg p-0.5 w-48 sm:w-auto">
                     {([
@@ -1051,9 +1083,9 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
             )}
 
             {isMyPick && (
-              <span className="ml-auto text-[#36D7B7] font-bold text-xs animate-pulse">
+              <p className="mt-2 text-[#36D7B7] font-bold text-xs animate-pulse">
                 {bottomTab === "team" ? "Switch to Available to draft" : "YOUR PICK — select a player"}
-              </span>
+              </p>
             )}
           </div>
 
