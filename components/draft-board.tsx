@@ -330,6 +330,9 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
   // grows the panel, down shrinks it. Pointer capture keeps move events coming
   // even when the finger/cursor leaves the handle.
   const onPanelDragStart = (e: React.PointerEvent) => {
+    // Only resize when the drag starts on empty header space — taps on the
+    // tabs / filters / search behave normally.
+    if ((e.target as HTMLElement).closest("button, input, a, select")) return;
     panelDragRef.current = { startY: e.clientY, startH: clampedPanelHeight };
     try {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -917,46 +920,33 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
           className="shrink-0 mt-2 rounded-xl border border-white/5 bg-[#1a1d23] flex flex-col overflow-hidden"
           style={{ height: clampedPanelHeight }}
         >
-          {/* Drag handle — grab and drag up to expand, down to shrink. */}
+          {/* Tab header — also the drag surface: drag up/down from any spot
+              that isn't a button/input to resize the panel. */}
           <div
             onPointerDown={onPanelDragStart}
             onPointerMove={onPanelDragMove}
             onPointerUp={onPanelDragEnd}
             onPointerCancel={onPanelDragEnd}
-            className="flex items-center justify-center pt-2.5 pb-2 shrink-0 cursor-ns-resize touch-none"
-            title="Drag to resize"
-            role="separator"
-            aria-label="Resize panel"
+            className="flex items-center gap-2 px-3 pt-3 pb-2 border-b border-white/5 shrink-0 flex-wrap cursor-ns-resize touch-none"
           >
-            <div className="w-10 h-1.5 rounded-full bg-white/25" />
-          </div>
-          {/* Tab header */}
-          <div className="flex items-center gap-2 px-3 pb-2 border-b border-white/5 shrink-0 flex-wrap">
-            <div className="flex gap-1 bg-[#0f1117] rounded-lg p-0.5">
-              <button
-                onClick={() => setBottomTab("available")}
-                className={`px-3 py-1 rounded-md text-xs font-semibold transition ${
-                  bottomTab === "available" ? "bg-[#4B3DFF] text-white" : "text-gray-400 hover:text-white"
-                }`}
-              >
-                Available ({availablePlayers.length})
-              </button>
-              <button
-                onClick={() => setBottomTab("queue")}
-                className={`px-3 py-1 rounded-md text-xs font-semibold transition ${
-                  bottomTab === "queue" ? "bg-[#4B3DFF] text-white" : "text-gray-400 hover:text-white"
-                }`}
-              >
-                Queue ({queueIds.length})
-              </button>
-              <button
-                onClick={() => setBottomTab("team")}
-                className={`px-3 py-1 rounded-md text-xs font-semibold transition ${
-                  bottomTab === "team" ? "bg-[#4B3DFF] text-white" : "text-gray-400 hover:text-white"
-                }`}
-              >
-                Team ({viewingTeamPicks.length})
-              </button>
+            <div className="flex items-center gap-6">
+              {([
+                { key: "available", label: "Available" },
+                { key: "queue", label: "Queue" },
+                { key: "team", label: "Team" },
+              ] as { key: BottomTab; label: string }[]).map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => setBottomTab(t.key)}
+                  className={`pb-0.5 text-sm font-semibold border-b-2 transition cursor-pointer ${
+                    bottomTab === t.key
+                      ? "text-white border-[#4B3DFF]"
+                      : "text-gray-400 border-transparent hover:text-white"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
             </div>
 
             {bottomTab === "available" && (
