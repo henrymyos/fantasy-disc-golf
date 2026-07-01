@@ -22,12 +22,12 @@ type PickInfo = { pickNumber: number; teamId: number; playerId: number | null; p
 type AvailablePlayer = { id: number; name: string; division: string; worldRanking: number | null; overallRank: number | null; pdgaRating?: number | null; totalPoints?: number };
 type Tab = "all" | "mpo" | "fpo";
 type BottomTab = "available" | "team";
-type PanelSize = "small" | "medium" | "large" | "full";
 
-// "full" mode hides the board grid and lets the panel take the remaining
-// flex height — the numeric value here isn't used for that case.
-const PANEL_HEIGHTS: Record<PanelSize, number> = { small: 140, medium: 240, large: 460, full: 0 };
-const PANEL_ORDER: PanelSize[] = ["small", "medium", "large", "full"];
+// The bottom Available/Team panel is drag-resizable: grab the handle and drag
+// up to expand / down to shrink (replaces the old fixed-size arrow buttons).
+// Height is tracked in px, clamped between PANEL_MIN and the full available
+// height derived from the measured container.
+const PANEL_MIN = 132;
 
 type MyRanking = { playerId: number; rank: number };
 type SortMode = "mine" | "default";
@@ -281,7 +281,8 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
   const [tab, setTab] = useState<Tab>("all");
   const [bottomTab, setBottomTab] = useState<BottomTab>("available");
   const [search, setSearch] = useState("");
-  const [panelSize, setPanelSize] = useState<PanelSize>("medium");
+  const [panelHeight, setPanelHeight] = useState(280);
+  const panelDragRef = useRef<{ startY: number; startH: number } | null>(null);
   // Full-screen board: covers the sidebar/nav so the grid gets the whole
   // viewport. Defaults on when you land on a live draft; a top exit arrow
   // (and the Full screen button) toggle it.
@@ -371,14 +372,9 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
     return () => document.removeEventListener("keydown", onKey);
   }, [cardMenu, picker]);
 
-  const panelIdx = PANEL_ORDER.indexOf(panelSize);
-  const canEnlarge = panelIdx < PANEL_ORDER.length - 1;
-  const canShrink = panelIdx > 0;
-
-  // Measure the outer container and status bar so we can compute an actual
-  // pixel height for "full" mode — keeping every panel size on the same
-  // transitioned `height` property so the animation stays smooth instead of
-  // snapping when we switch from a fixed size to a flex-based layout.
+  // Measure the outer container and status bar so we can derive the maximum
+  // height the panel can grow to (container minus the top bar and the panel's
+  // top margin) when the user drags it up.
   const containerRef = useRef<HTMLDivElement>(null);
   const statusBarRef = useRef<HTMLDivElement>(null);
   const [containerH, setContainerH] = useState(0);
@@ -399,7 +395,31 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
   }, []);
   const PANEL_TOP_MARGIN = 8; // matches mt-2 on the panel wrapper
   const fullPanelHeight = Math.max(0, containerH - statusH - PANEL_TOP_MARGIN);
-  const panelHeight = panelSize === "full" ? fullPanelHeight : PANEL_HEIGHTS[panelSize];
+  const maxPanelHeight = fullPanelHeight > 0 ? fullPanelHeight : Number.POSITIVE_INFINITY;
+  const clampedPanelHeight = Math.max(PANEL_MIN, Math.min(panelHeight, maxPanelHeight));
+
+  // Pointer-drag on the panel handle (works for touch + mouse): dragging up
+  // grows the panel, down shrinks it. Pointer capture keeps move events coming
+  // even when the finger/cursor leaves the handle.
+  const onPanelDragStart = (e: React.PointerEvent) => {
+    panelDragRef.current = { startY: e.clientY, startH: clampedPanelHeight };
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
+  };
+  const onPanelDragMove = (e: React.PointerEvent) => {
+    const d = panelDragRef.current;
+    if (!d) return;
+    const next = d.startH + (d.startY - e.clientY);
+    const max = fullPanelHeight > 0 ? fullPanelHeight : next;
+    setPanelHeight(Math.max(PANEL_MIN, Math.min(next, max)));
+  };
+  const onPanelDragEnd = (e: React.PointerEvent) => {
+    panelDragRef.current = null;
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
+  };
 
   // Poll when draft is live (skip in read-only view)
   useEffect(() => {
@@ -784,7 +804,12 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
 
       {/* Top bar. Full screen: [✕] · centered status · [⚙ menu]. Inline: status
           on the left, action pills + Full screen button on the right. */}
-      <div ref={statusBarRef} className="relative flex items-center justify-between px-1 py-2 shrink-0">
+      <div
+        ref={statusBarRef}
+        className={`relative flex items-center justify-between px-1 py-2 shrink-0${
+          fullscreen ? " pt-[max(env(safe-area-inset-top),0.75rem)]" : ""
+        }`}
+      >
         {fullscreen ? (
           <>
             <button
@@ -792,18 +817,18 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
               onClick={() => setFullscreen(false)}
               title="Close full screen"
               aria-label="Close full screen"
-              className="relative z-10 text-gray-200 hover:text-white transition p-1.5 -ml-1"
+              className="shrink-0 text-gray-200 hover:text-white transition p-1.5 -ml-1"
             >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
-            <div className="absolute inset-x-0 flex items-center justify-center gap-2 px-12 pointer-events-none">
+            <div className="flex-1 flex items-center justify-center gap-2 min-w-0 px-2 pointer-events-none">
               {statusSpans}
             </div>
             {hasMenuActions ? (
-              <div ref={settingsRef} className="relative z-10">
+              <div ref={settingsRef} className="relative shrink-0">
                 <button
                   type="button"
                   onClick={() => setSettingsOpen((o) => !o)}
@@ -916,33 +941,24 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
       {/* Bottom panel: Available / My Team */}
       {drafted && !readOnly && (
         <div
-          className="shrink-0 mt-2 rounded-xl border border-white/5 bg-[#1a1d23] flex flex-col transition-[height] duration-200"
-          style={{ height: panelHeight }}
+          className="shrink-0 mt-2 rounded-xl border border-white/5 bg-[#1a1d23] flex flex-col overflow-hidden"
+          style={{ height: clampedPanelHeight }}
         >
+          {/* Drag handle — grab and drag up to expand, down to shrink. */}
+          <div
+            onPointerDown={onPanelDragStart}
+            onPointerMove={onPanelDragMove}
+            onPointerUp={onPanelDragEnd}
+            onPointerCancel={onPanelDragEnd}
+            className="flex items-center justify-center pt-2.5 pb-2 shrink-0 cursor-ns-resize touch-none"
+            title="Drag to resize"
+            role="separator"
+            aria-label="Resize panel"
+          >
+            <div className="w-10 h-1.5 rounded-full bg-white/25" />
+          </div>
           {/* Tab header */}
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 shrink-0 flex-wrap">
-            <div className="flex flex-col -my-1">
-              <button
-                onClick={() => canEnlarge && setPanelSize(PANEL_ORDER[panelIdx + 1])}
-                disabled={!canEnlarge}
-                className="text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed leading-none"
-                title="Enlarge"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="18 15 12 9 6 15" />
-                </svg>
-              </button>
-              <button
-                onClick={() => canShrink && setPanelSize(PANEL_ORDER[panelIdx - 1])}
-                disabled={!canShrink}
-                className="text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed leading-none"
-                title="Shrink"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </button>
-            </div>
+          <div className="flex items-center gap-2 px-3 pb-2 border-b border-white/5 shrink-0 flex-wrap">
             <div className="flex gap-1 bg-[#0f1117] rounded-lg p-0.5">
               <button
                 onClick={() => setBottomTab("available")}
@@ -1018,7 +1034,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
           </div>
 
           {/* Body */}
-          <div className="overflow-y-auto flex-1">
+          <div className="overflow-y-auto flex-1 pb-[env(safe-area-inset-bottom)]">
             {bottomTab === "available" ? (
               filtered.length === 0 ? (
                 <p className="text-gray-400 text-xs text-center py-6">No players found</p>
