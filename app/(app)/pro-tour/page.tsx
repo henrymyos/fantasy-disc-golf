@@ -148,14 +148,15 @@ function RankingsList({ division, players }: { division: string; players: string
   );
 }
 
+// Official PDGA World Rankings — updated June 24, 2026
 const MPO_TOP_10 = [
-  "Gannon Buhr", "Ricky Wysocki", "Niklas Anttila", "Calvin Heimburg",
-  "Isaac Robinson", "Paul McBeth", "Anthony Barela", "Cole Redalen",
-  "Adam Hammes", "Kyle Klein",
+  "Gannon Buhr", "Ricky Wysocki", "Calvin Heimburg", "Niklas Anttila",
+  "Isaac Robinson", "Anthony Barela", "Paul McBeth", "Kyle Klein",
+  "Adam Hammes", "Sullivan Tipton",
 ];
 
 const FPO_TOP_10 = [
-  "Holyn Handley", "Missy Gannon", "Ohn Scoggins", "Silva Saarinen",
-  "Kristin Lätt", "Eveliina Salonen", "Henna Blomroos", "Paige Pierce",
+  "Silva Saarinen", "Holyn Handley", "Eveliina Salonen", "Ohn Scoggins",
+  "Missy Gannon", "Kristin Lätt", "Henna Blomroos", "Ella Hansen",
   "Valerie Mandujano", "Cadence Burge",
 ];
