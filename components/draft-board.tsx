@@ -204,6 +204,34 @@ function splitName(full: string): { first: string; last: string } {
   return { first: parts.slice(0, -1).join(" "), last: parts[parts.length - 1] };
 }
 
+// Human-readable per-pick clock for the settings panel (60 -> "60s",
+// 90 -> "1m 30s", 3600 -> "1h", 86400 -> "1d").
+function formatPerPick(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return s === 0 ? `${m}m` : `${m}m ${s}s`;
+  }
+  if (seconds < 86400) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return m === 0 ? `${h}h` : `${h}h ${m}m`;
+  }
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  return h === 0 ? `${d}d` : `${d}d ${h}h`;
+}
+
+function SettingRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <dt className="text-gray-400">{label}</dt>
+      <dd className="text-gray-200 font-medium text-right">{value}</dd>
+    </div>
+  );
+}
+
 export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], picks, availablePlayers, myRankings = [], myMemberId, isCommissioner, mpoSlots = 4, fpoSlots = 2, rosterSize = 14, readOnly }: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("all");
@@ -771,6 +799,26 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
     </>
   );
 
+  // Read-only draft configuration shown in the settings menu — everyone
+  // (including non-commissioners) can open the gear to see this.
+  const settingsInfo = (
+    <div className="px-3 py-2.5">
+      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Draft settings</p>
+      <dl className="space-y-1 text-xs">
+        <SettingRow label="Format" value={draft?.type === "auction" ? "Auction" : "Snake"} />
+        <SettingRow label="Rounds" value={totalRounds} />
+        {draft?.secondsPerPick != null && (
+          <SettingRow label="Time / pick" value={formatPerPick(draft.secondsPerPick)} />
+        )}
+        {draft?.type !== "auction" && (
+          <SettingRow label="3rd-round reversal" value={draft?.thirdRoundReversal ? "On" : "Off"} />
+        )}
+        <SettingRow label="Starters" value={`${mpoSlots} MPO · ${fpoSlots} FPO`} />
+        <SettingRow label="Roster size" value={rosterSize} />
+      </dl>
+    </div>
+  );
+
   return (
     <div
       ref={containerRef}
@@ -803,29 +851,30 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
             <div className="flex-1 flex items-center justify-center gap-2 min-w-0 px-2 pointer-events-none">
               {statusSpans}
             </div>
-            {hasMenuActions ? (
-              <div ref={settingsRef} className="relative shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setSettingsOpen((o) => !o)}
-                  title="Draft settings"
-                  aria-label="Draft settings"
-                  className="text-gray-200 hover:text-white transition p-1.5 -mr-1"
-                >
-                  <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="3" />
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                  </svg>
-                </button>
-                {settingsOpen && (
-                  <div className="absolute right-0 top-full mt-2 z-30 w-52 bg-[#1a1d23] border border-white/10 rounded-xl shadow-xl p-1">
-                    {menuItems}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <span className="inline-block w-8" />
-            )}
+            <div ref={settingsRef} className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setSettingsOpen((o) => !o)}
+                title="Draft settings"
+                aria-label="Draft settings"
+                className="text-gray-200 hover:text-white transition p-1.5 -mr-1"
+              >
+                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+              </button>
+              {settingsOpen && (
+                <div className="absolute right-0 top-full mt-2 z-30 w-56 bg-[#1a1d23] border border-white/10 rounded-xl shadow-xl overflow-hidden">
+                  {/* Read-only draft settings — visible to everyone. */}
+                  {settingsInfo}
+                  {/* Commissioner / on-clock actions (if any). */}
+                  {hasMenuActions && (
+                    <div className="border-t border-white/5 p-1">{menuItems}</div>
+                  )}
+                </div>
+              )}
+            </div>
           </>
         ) : (
           <>
@@ -950,7 +999,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
             </div>
 
             {bottomTab === "available" && (
-              <div className="ml-auto flex flex-col-reverse sm:flex-row sm:items-center gap-2">
+              <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-2">
                 {hasMyRankings && (
                   <div className="flex gap-1 bg-[#0f1117] rounded-lg p-0.5 w-48 sm:w-auto">
                     {([
