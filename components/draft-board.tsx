@@ -46,6 +46,10 @@ type Props = {
   fpoSlots?: number;
   rosterSize?: number;
   readOnly?: boolean;
+  // When provided, the board is mounted full-screen-only: the top-left ✕
+  // calls onExit (e.g. to close the overlay) instead of collapsing to inline,
+  // and the inline "Full screen" button is never shown.
+  onExit?: () => void;
 };
 
 function isRoundReversed(round: number, thirdRoundReversal: boolean): boolean {
@@ -232,7 +236,7 @@ function SettingRow({ label, value }: { label: string; value: React.ReactNode })
   );
 }
 
-export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], picks, availablePlayers, myRankings = [], myMemberId, isCommissioner, mpoSlots = 4, fpoSlots = 2, rosterSize = 14, readOnly }: Props) {
+export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], picks, availablePlayers, myRankings = [], myMemberId, isCommissioner, mpoSlots = 4, fpoSlots = 2, rosterSize = 14, readOnly, onExit }: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("all");
   const [bottomTab, setBottomTab] = useState<BottomTab>("available");
@@ -243,7 +247,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
   // viewport. Defaults on when you land on a live draft; a top exit arrow
   // (and the Full screen button) toggle it.
   const [fullscreen, setFullscreen] = useState<boolean>(
-    () => !readOnly && (draft?.status === "in_progress" || draft?.status === "paused"),
+    () => !!onExit || (!readOnly && (draft?.status === "in_progress" || draft?.status === "paused")),
   );
   // Settings (gear) menu, the per-card change/undo context menu, and the
   // player picker used to assign the on-clock slot or swap an existing pick.
@@ -838,9 +842,9 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
           <>
             <button
               type="button"
-              onClick={() => setFullscreen(false)}
-              title="Close full screen"
-              aria-label="Close full screen"
+              onClick={() => (onExit ? onExit() : setFullscreen(false))}
+              title="Close draft board"
+              aria-label="Close draft board"
               className="shrink-0 text-gray-200 hover:text-white transition p-1.5 -ml-1"
             >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

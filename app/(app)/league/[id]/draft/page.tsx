@@ -1,7 +1,6 @@
 import { notFound, redirect } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { DraftBoard } from "@/components/draft-board";
+import { DraftRoom } from "@/components/draft-room";
 import { DraftScheduleForm } from "@/components/draft-schedule-form";
 import { LocalTime } from "@/components/local-time";
 import { randomizeDraftOrder } from "@/actions/drafts";
@@ -154,23 +153,36 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
   const scheduledAt = (draft as any)?.scheduled_at as string | null;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-end gap-2">
-        <Link
-          href={`/league/${id}/rankings`}
-          className="flex items-center gap-2 text-sm bg-[#36D7B7]/15 hover:bg-[#36D7B7]/25 border border-[#36D7B7]/30 text-[#36D7B7] hover:text-white font-semibold px-3 py-1.5 rounded-lg transition"
-        >
-          <span>⭐</span>
-          <span>My Rankings</span>
-        </Link>
-        <Link
-          href={`/league/${id}/mock-draft`}
-          className="flex items-center gap-2 text-sm bg-[#4B3DFF]/15 hover:bg-[#4B3DFF]/25 border border-[#4B3DFF]/30 text-[#4B3DFF] hover:text-white font-semibold px-3 py-1.5 rounded-lg transition"
-        >
-          <span>🎯</span>
-          <span>Mock Draft</span>
-        </Link>
-      </div>
+    <div className="max-w-3xl space-y-4">
+      <h1 className="text-2xl font-bold text-white">Draft</h1>
+
+      <DraftRoom
+        isLive={draft?.status === "in_progress"}
+        mockDraftHref={`/league/${id}/mock-draft`}
+        board={{
+          leagueId: Number(id),
+          draft: draft ? {
+            id: draft.id,
+            status: draft.status,
+            type: (draft as any).type,
+            currentPick: draft.current_pick,
+            totalRounds: draft.total_rounds,
+            secondsPerPick: (draft as any).seconds_per_pick ?? 60,
+            currentPickStartedAt: (draft as any).current_pick_started_at ?? null,
+            thirdRoundReversal: !!(draft as any).third_round_reversal,
+          } : null,
+          members,
+          pickOwnerOverrides,
+          picks,
+          availablePlayers,
+          myRankings,
+          myMemberId: myMemberRow?.id ?? null,
+          isCommissioner,
+          mpoSlots,
+          fpoSlots,
+          rosterSize,
+        }}
+      />
 
       {draftPending && scheduledAt && (
         <div className="bg-[#4B3DFF]/10 border border-[#4B3DFF]/30 rounded-xl px-4 py-3 flex items-center gap-3">
@@ -273,30 +285,6 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
       {(draft as any)?.type === "auction" && draft?.status === "in_progress" && (
         <AuctionPanel leagueId={Number(id)} myUserId={user.id} />
       )}
-
-      <DraftBoard
-        leagueId={Number(id)}
-        draft={draft ? {
-          id: draft.id,
-          status: draft.status,
-          type: (draft as any).type,
-          currentPick: draft.current_pick,
-          totalRounds: draft.total_rounds,
-          secondsPerPick: (draft as any).seconds_per_pick ?? 60,
-          currentPickStartedAt: (draft as any).current_pick_started_at ?? null,
-          thirdRoundReversal: !!(draft as any).third_round_reversal,
-        } : null}
-        members={members}
-        pickOwnerOverrides={pickOwnerOverrides}
-        picks={picks}
-        availablePlayers={availablePlayers}
-        myRankings={myRankings}
-        myMemberId={myMemberRow?.id ?? null}
-        isCommissioner={isCommissioner}
-        mpoSlots={mpoSlots}
-        fpoSlots={fpoSlots}
-        rosterSize={rosterSize}
-      />
     </div>
   );
 }
