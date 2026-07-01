@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { startDraft, pauseDraft, resumeDraft, makeDraftPick, undoLastPick, undoPick, commissionerMakePick } from "@/actions/drafts";
+import { startDraft, pauseDraft, resumeDraft, makeDraftPick, undoLastPick, undoPick, replacePick, commissionerMakePick } from "@/actions/drafts";
 import { autoPickFromRankings, autoPickExpired } from "@/actions/rankings";
 import { resolvePickOwnerId, type PickOwnerOverrides } from "@/lib/draft-pick-owners";
 
@@ -204,6 +204,78 @@ function splitName(full: string): { first: string; last: string } {
   return { first: parts.slice(0, -1).join(" "), last: parts[parts.length - 1] };
 }
 
+// A drafted-pick cell the commissioner can act on: normal tap/click opens the
+// player profile, while right-click (desktop) or long-press (touch) surfaces
+// the change/undo menu via onMenu. Rendered as a plain div so the long-press
+// gesture can suppress the follow-up click without fighting <Link>.
+function ManagedPickCell({
+  href,
+  style,
+  className,
+  onMenu,
+  children,
+}: {
+  href: string | null;
+  style: React.CSSProperties;
+  className: string;
+  onMenu: (x: number, y: number) => void;
+  children: React.ReactNode;
+}) {
+  const router = useRouter();
+  const timerRef = useRef<number | null>(null);
+  const startRef = useRef<{ x: number; y: number } | null>(null);
+  const suppressRef = useRef(false);
+
+  const clearTimer = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  return (
+    <div
+      style={style}
+      className={`${className} select-none`}
+      title="Tap to view · long-press or right-click for options"
+      onClick={() => {
+        if (suppressRef.current) {
+          suppressRef.current = false;
+          return;
+        }
+        if (href) router.push(href);
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onMenu(e.clientX, e.clientY);
+      }}
+      onTouchStart={(e) => {
+        const t = e.touches[0];
+        startRef.current = { x: t.clientX, y: t.clientY };
+        clearTimer();
+        timerRef.current = window.setTimeout(() => {
+          suppressRef.current = true;
+          if (startRef.current) onMenu(startRef.current.x, startRef.current.y);
+        }, 450);
+      }}
+      onTouchMove={(e) => {
+        const t = e.touches[0];
+        if (
+          startRef.current &&
+          (Math.abs(t.clientX - startRef.current.x) > 8 ||
+            Math.abs(t.clientY - startRef.current.y) > 8)
+        ) {
+          clearTimer();
+        }
+      }}
+      onTouchEnd={clearTimer}
+      onTouchCancel={clearTimer}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], picks, availablePlayers, myRankings = [], myMemberId, isCommissioner, mpoSlots = 4, fpoSlots = 2, rosterSize = 14, readOnly }: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("all");
@@ -216,6 +288,18 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
   const [fullscreen, setFullscreen] = useState<boolean>(
     () => !readOnly && (draft?.status === "in_progress" || draft?.status === "paused"),
   );
+  // Settings (gear) menu, the per-card change/undo context menu, and the
+  // player picker used to assign the on-clock slot or swap an existing pick.
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement | null>(null);
+  const [cardMenu, setCardMenu] = useState<
+    { pickNumber: number; label: string; playerName: string; x: number; y: number } | null
+  >(null);
+  const [picker, setPicker] = useState<
+    { mode: "assign" } | { mode: "change"; pickNumber: number; currentName: string } | null
+  >(null);
+  const [pickerSearch, setPickerSearch] = useState("");
+  const [pickerTab, setPickerTab] = useState<Tab>("all");
   const hasMyRankings = myRankings.length > 0;
   // Default to the user's own rankings when they've set any; otherwise the
   // generic points/overall ordering. The user can flip between the two from
@@ -254,6 +338,38 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
   useEffect(() => {
     if (viewingTeamId == null && myMemberId != null) setViewingTeamId(myMemberId);
   }, [myMemberId, viewingTeamId]);
+
+  // Close the settings (gear) menu on outside click / Escape.
+  useEffect(() => {
+    if (!settingsOpen) return;
+    function onPointer(e: PointerEvent) {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setSettingsOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setSettingsOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [settingsOpen]);
+
+  // Escape closes the card context menu and the player picker.
+  useEffect(() => {
+    if (!cardMenu && !picker) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setCardMenu(null);
+        setPicker(null);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [cardMenu, picker]);
 
   const panelIdx = PANEL_ORDER.indexOf(panelSize);
   const canEnlarge = panelIdx < PANEL_ORDER.length - 1;
@@ -341,6 +457,42 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
       return (a.worldRanking ?? 9999) - (b.worldRanking ?? 9999);
     });
 
+  // Commissioner (in a live, non-read-only board) can manage picks: assign the
+  // on-clock slot and change/undo drafted cards.
+  const canManage = isCommissioner && !readOnly;
+
+  // Available players for the assign/change picker — its own search + division
+  // filter, ordered like the main list (points, then overall rank).
+  const pickerFiltered = useMemo(
+    () =>
+      availablePlayers
+        .filter((p) =>
+          pickerTab === "all" ? true : pickerTab === "mpo" ? p.division === "MPO" : p.division !== "MPO",
+        )
+        .filter((p) => !pickerSearch || p.name.toLowerCase().includes(pickerSearch.toLowerCase()))
+        .sort((a, b) => {
+          const pa = a.totalPoints ?? 0;
+          const pb = b.totalPoints ?? 0;
+          if (pa !== pb) return pb - pa;
+          return (a.overallRank ?? 9999) - (b.overallRank ?? 9999);
+        }),
+    [availablePlayers, pickerTab, pickerSearch],
+  );
+
+  // Route a picker selection to the right server action, then refresh.
+  const submitPicker = (playerId: number) => {
+    const p = picker;
+    setPicker(null);
+    setPickerSearch("");
+    startTransition(() => {
+      const run =
+        p && p.mode === "change"
+          ? replacePick(leagueId, p.pickNumber, playerId)
+          : commissionerMakePick(leagueId, playerId);
+      void run.then(() => router.refresh());
+    });
+  };
+
   // Build flat grid cells
   const gridCells: React.ReactNode[] = [];
 
@@ -416,77 +568,85 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
       if (pick) {
         const { first, last } = splitName(pick.playerName);
         const cellStyle = { background: divBg(pick.playerDivision), color: "var(--pick-fg)" } as const;
-        const canUndo =
-          isCommissioner &&
-          (draft?.status === "in_progress" || draft?.status === "paused" || draft?.status === "complete");
-        // Whole cell is a Link to the player profile (everyone can view).
-        // Commissioners get a small ✕ overlay in the corner that rewinds the
-        // draft to this pick — kept as a sibling of the Link so the click
-        // events don't nest.
-        const cellInner = (
-          <Link
-            href={pick.playerId != null ? `/league/${leagueId}/player/${pick.playerId}` : "#"}
-            style={cellStyle}
-            className="flex flex-col p-1.5 min-h-[60px] rounded-lg transition hover:ring-2 hover:ring-white/30 hover:brightness-110 cursor-pointer"
-            title={`View ${pick.playerName}'s profile`}
-          >
+        const profileHref = pick.playerId != null ? `/league/${leagueId}/player/${pick.playerId}` : null;
+        const cardClass =
+          "flex flex-col p-1.5 min-h-[60px] rounded-lg transition hover:ring-2 hover:ring-white/30 hover:brightness-110 cursor-pointer";
+        const cardBody = (
+          <>
             {tradedBadge}
             <div className="flex justify-between items-center">
               <span className="text-[10px] font-mono" style={{ color: "var(--pick-fg-muted)", opacity: 0.7 }}>{pickLabel}</span>
-              {/* Division label hidden when the ✕ overlay takes its corner. */}
-              {!canUndo && (
-                <span className="text-[10px] font-semibold" style={{ color: "var(--pick-fg-muted)" }}>{pick.playerDivision}</span>
-              )}
+              <span className="text-[10px] font-semibold" style={{ color: "var(--pick-fg-muted)" }}>{pick.playerDivision}</span>
             </div>
             <div className="flex-1 flex flex-col justify-end mt-1">
               {first && <p className="text-[11px] leading-tight break-words" style={{ color: "var(--pick-fg-muted)" }}>{first}</p>}
               <p className="font-bold text-sm leading-tight break-words" style={{ color: "var(--pick-fg)" }}>{last}</p>
             </div>
-          </Link>
+          </>
         );
-        if (canUndo) {
-          const confirmMsg = `Undo pick ${pickLabel} (${pick.playerName})? This rewinds the draft to pick ${pickLabel} — all later picks will be removed and the team will be back on the clock.`;
+        if (canManage) {
+          // Tap opens the player profile; right-click / long-press opens the
+          // change-or-undo menu (replaces the old ✕ overlay).
+          const playerName = pick.playerName;
           gridCells.push(
-            <div key={`${round}-${m.id}`} className="relative">
-              {cellInner}
-              <form
-                action={undoPick.bind(null, leagueId, pickNum)}
-                onSubmit={(e) => {
-                  if (!window.confirm(confirmMsg)) {
-                    e.preventDefault();
-                    return;
-                  }
-                  startTransition(() => { setTimeout(() => router.refresh(), 300); });
-                }}
-                className="absolute top-1 right-1"
-              >
-                <button
-                  type="submit"
-                  className="w-5 h-5 rounded-full bg-black/35 hover:bg-black/65 text-white text-[11px] leading-none flex items-center justify-center transition"
-                  title={`Undo to pick ${pickLabel} (rewinds all later picks)`}
-                  aria-label={`Undo to pick ${pickLabel}`}
-                >
-                  ×
-                </button>
-              </form>
-            </div>
+            <ManagedPickCell
+              key={`${round}-${m.id}`}
+              href={profileHref}
+              style={cellStyle}
+              className={cardClass}
+              onMenu={(x, y) => setCardMenu({ pickNumber: pickNum, label: pickLabel, playerName, x, y })}
+            >
+              {cardBody}
+            </ManagedPickCell>
           );
         } else {
           gridCells.push(
-            <div key={`${round}-${m.id}`}>{cellInner}</div>
+            <div key={`${round}-${m.id}`}>
+              {profileHref ? (
+                <Link href={profileHref} style={cellStyle} className={cardClass} title={`View ${pick.playerName}'s profile`}>
+                  {cardBody}
+                </Link>
+              ) : (
+                <div style={cellStyle} className="flex flex-col p-1.5 min-h-[60px] rounded-lg">
+                  {cardBody}
+                </div>
+              )}
+            </div>
           );
         }
       } else if (isCurrent) {
-        gridCells.push(
-          <div
-            key={`${round}-${m.id}`}
-            className="flex flex-col items-center justify-center p-1.5 min-h-[60px] rounded-lg bg-[#36D7B7]/10 ring-2 ring-[#36D7B7] ring-inset"
-          >
+        const onClockBody = (
+          <>
             {tradedBadge}
             <span className="text-[#36D7B7] text-[10px] font-mono">{pickLabel}</span>
             <span className="text-[#36D7B7] text-xs font-semibold animate-pulse mt-1">on the clock</span>
-          </div>
+            {canManage && draft?.status === "in_progress" && (
+              <span className="text-[#36D7B7]/70 text-[9px] mt-0.5">tap to assign</span>
+            )}
+          </>
         );
+        if (canManage && draft?.status === "in_progress") {
+          // Commissioner can fill the on-clock slot directly from the board.
+          gridCells.push(
+            <button
+              key={`${round}-${m.id}`}
+              type="button"
+              onClick={() => setPicker({ mode: "assign" })}
+              className="flex flex-col items-center justify-center p-1.5 min-h-[60px] rounded-lg bg-[#36D7B7]/10 ring-2 ring-[#36D7B7] ring-inset hover:bg-[#36D7B7]/20 transition"
+            >
+              {onClockBody}
+            </button>
+          );
+        } else {
+          gridCells.push(
+            <div
+              key={`${round}-${m.id}`}
+              className="flex flex-col items-center justify-center p-1.5 min-h-[60px] rounded-lg bg-[#36D7B7]/10 ring-2 ring-[#36D7B7] ring-inset"
+            >
+              {onClockBody}
+            </div>
+          );
+        }
       } else {
         gridCells.push(
           <div
@@ -543,6 +703,78 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
   const benchCapacity = Math.max(0, rosterSize - totalStarterSlots);
   const emptyBenchCount = Math.max(0, benchCapacity - benchPicks.length);
 
+  // Draft actions available to this viewer/state — shared by the inline status
+  // bar and the full-screen gear menu.
+  const showAutoPick = !readOnly && isMyPick;
+  const showStart = !readOnly && isCommissioner && draft?.status === "pending";
+  const showUndoLast =
+    !readOnly && isCommissioner &&
+    (draft?.status === "in_progress" || draft?.status === "paused" || draft?.status === "complete") &&
+    picks.length > 0;
+  const showPause = !readOnly && isCommissioner && draft?.status === "in_progress";
+  const showResume = !readOnly && isCommissioner && draft?.status === "paused";
+  const hasMenuActions = showAutoPick || showStart || showUndoLast || showPause || showResume;
+
+  // Status text (round / pick / countdown / your-pick) shared by both layouts.
+  const statusSpans = (
+    <>
+      {draft?.status === "pending" && <span className="text-gray-400 text-sm">Draft has not started</span>}
+      {draft?.status === "in_progress" && (
+        <>
+          <span className="text-white text-sm font-semibold">Round {currentRound} · Pick {currentPick} of {N * totalRounds}</span>
+          <PickCountdown
+            leagueId={leagueId}
+            secondsPerPick={draft.secondsPerPick ?? 60}
+            startedAt={draft.currentPickStartedAt ?? null}
+            pickNumber={currentPick}
+          />
+        </>
+      )}
+      {draft?.status === "paused" && (
+        <span className="text-yellow-400 text-sm font-semibold">Paused — Round {currentRound}, Pick {currentPick}</span>
+      )}
+      {draft?.status === "complete" && (
+        <span className="text-[#36D7B7] text-sm font-semibold">Draft Complete</span>
+      )}
+      {isMyPick && (
+        <span className="text-xs bg-[#36D7B7]/20 text-[#36D7B7] px-2 py-0.5 rounded-full font-semibold animate-pulse">
+          YOUR PICK
+        </span>
+      )}
+    </>
+  );
+
+  // Full-screen gear-menu items (same server actions as the inline pills).
+  const menuItems = (
+    <>
+      {showAutoPick && (
+        <form action={autoPickFromRankings.bind(null, leagueId)} onSubmit={() => setSettingsOpen(false)}>
+          <button className="w-full text-left px-3 py-2 rounded-lg text-sm text-[#36D7B7] hover:bg-white/5 transition">Auto-pick my slot</button>
+        </form>
+      )}
+      {showStart && (
+        <form action={startDraft.bind(null, leagueId)} onSubmit={() => setSettingsOpen(false)}>
+          <button className="w-full text-left px-3 py-2 rounded-lg text-sm text-white hover:bg-white/5 transition">Start draft</button>
+        </form>
+      )}
+      {showPause && (
+        <form action={pauseDraft.bind(null, leagueId)} onSubmit={() => setSettingsOpen(false)}>
+          <button className="w-full text-left px-3 py-2 rounded-lg text-sm text-yellow-300 hover:bg-white/5 transition">Pause draft</button>
+        </form>
+      )}
+      {showResume && (
+        <form action={resumeDraft.bind(null, leagueId)} onSubmit={() => setSettingsOpen(false)}>
+          <button className="w-full text-left px-3 py-2 rounded-lg text-sm text-[#36D7B7] hover:bg-white/5 transition">Resume draft</button>
+        </form>
+      )}
+      {showUndoLast && (
+        <form action={undoLastPick.bind(null, leagueId)} onSubmit={() => setSettingsOpen(false)}>
+          <button className="w-full text-left px-3 py-2 rounded-lg text-sm text-gray-200 hover:bg-white/5 transition">Undo last pick</button>
+        </form>
+      )}
+    </>
+  );
+
   return (
     <div
       ref={containerRef}
@@ -550,109 +782,114 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
       style={fullscreen ? undefined : { height: "calc(100vh - 152px)" }}
     >
 
-      {/* Status bar */}
-      <div ref={statusBarRef} className="flex items-center justify-between px-1 py-2 shrink-0">
-        <div className="flex items-center gap-3">
-          {fullscreen && (
+      {/* Top bar. Full screen: [✕] · centered status · [⚙ menu]. Inline: status
+          on the left, action pills + Full screen button on the right. */}
+      <div ref={statusBarRef} className="relative flex items-center justify-between px-1 py-2 shrink-0">
+        {fullscreen ? (
+          <>
             <button
               type="button"
               onClick={() => setFullscreen(false)}
-              title="Exit full screen"
-              aria-label="Exit full screen"
-              className="flex items-center text-gray-300 hover:text-white transition -ml-1 shrink-0"
+              title="Close full screen"
+              aria-label="Close full screen"
+              className="relative z-10 text-gray-200 hover:text-white transition p-1.5 -ml-1"
             >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M15 18l-6-6 6-6" />
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
-          )}
-          {draft?.status === "pending" && <span className="text-gray-400 text-sm">Draft has not started</span>}
-          {draft?.status === "in_progress" && (
-            <>
-              <span className="text-white text-sm font-semibold">Round {currentRound} · Pick {currentPick} of {N * totalRounds}</span>
-              <PickCountdown
-                leagueId={leagueId}
-                secondsPerPick={draft.secondsPerPick ?? 60}
-                startedAt={draft.currentPickStartedAt ?? null}
-                pickNumber={currentPick}
-              />
-            </>
-          )}
-          {draft?.status === "paused" && (
-            <span className="text-yellow-400 text-sm font-semibold">Paused — Round {currentRound}, Pick {currentPick}</span>
-          )}
-          {draft?.status === "complete" && (
-            <span className="text-[#36D7B7] text-sm font-semibold">Draft Complete</span>
-          )}
-          {isMyPick && (
-            <span className="text-xs bg-[#36D7B7]/20 text-[#36D7B7] px-2 py-0.5 rounded-full font-semibold animate-pulse">
-              YOUR PICK
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-        {!readOnly && (
-          <div className="flex gap-2">
-            {isMyPick && (
-              <form action={autoPickFromRankings.bind(null, leagueId)}>
-                <button className="border border-[#36D7B7]/40 hover:bg-[#36D7B7]/10 text-[#36D7B7] hover:text-white font-semibold px-3 py-1.5 rounded-lg text-sm transition">
-                  Auto-pick
+            <div className="absolute inset-x-0 flex items-center justify-center gap-2 px-12 pointer-events-none">
+              {statusSpans}
+            </div>
+            {hasMenuActions ? (
+              <div ref={settingsRef} className="relative z-10">
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen((o) => !o)}
+                  title="Draft settings"
+                  aria-label="Draft settings"
+                  className="text-gray-200 hover:text-white transition p-1.5 -mr-1"
+                >
+                  <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  </svg>
                 </button>
-              </form>
+                {settingsOpen && (
+                  <div className="absolute right-0 top-full mt-2 z-30 w-52 bg-[#1a1d23] border border-white/10 rounded-xl shadow-xl p-1">
+                    {menuItems}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <span className="inline-block w-8" />
             )}
-            {isCommissioner && draft?.status === "pending" && (
-              <form action={startDraft.bind(null, leagueId)}>
-                <button className="bg-[#36D7B7] hover:bg-[#2bc4a6] text-black font-bold px-5 py-1.5 rounded-lg text-sm transition">
-                  Start Draft
-                </button>
-              </form>
-            )}
-            {isCommissioner &&
-              (draft?.status === "in_progress" || draft?.status === "paused" || draft?.status === "complete") &&
-              picks.length > 0 && (
-                <form action={undoLastPick.bind(null, leagueId)}>
-                  <button
-                    className="border border-white/15 text-gray-300 hover:bg-white/5 hover:text-white px-3 py-1.5 rounded-lg text-sm font-semibold transition"
-                    title="Undo the most recent pick"
-                  >
-                    Undo pick
-                  </button>
-                </form>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-3">{statusSpans}</div>
+            <div className="flex items-center gap-2">
+              {!readOnly && (
+                <div className="flex gap-2">
+                  {showAutoPick && (
+                    <form action={autoPickFromRankings.bind(null, leagueId)}>
+                      <button className="border border-[#36D7B7]/40 hover:bg-[#36D7B7]/10 text-[#36D7B7] hover:text-white font-semibold px-3 py-1.5 rounded-lg text-sm transition">
+                        Auto-pick
+                      </button>
+                    </form>
+                  )}
+                  {showStart && (
+                    <form action={startDraft.bind(null, leagueId)}>
+                      <button className="bg-[#36D7B7] hover:bg-[#2bc4a6] text-black font-bold px-5 py-1.5 rounded-lg text-sm transition">
+                        Start Draft
+                      </button>
+                    </form>
+                  )}
+                  {showUndoLast && (
+                    <form action={undoLastPick.bind(null, leagueId)}>
+                      <button
+                        className="border border-white/15 text-gray-300 hover:bg-white/5 hover:text-white px-3 py-1.5 rounded-lg text-sm font-semibold transition"
+                        title="Undo the most recent pick"
+                      >
+                        Undo pick
+                      </button>
+                    </form>
+                  )}
+                  {showPause && (
+                    <form action={pauseDraft.bind(null, leagueId)}>
+                      <button className="border border-yellow-500/40 text-yellow-400 hover:bg-yellow-400/10 px-4 py-1.5 rounded-lg text-sm font-semibold transition">
+                        Pause
+                      </button>
+                    </form>
+                  )}
+                  {showResume && (
+                    <form action={resumeDraft.bind(null, leagueId)}>
+                      <button className="bg-[#36D7B7] hover:bg-[#2bc4a6] text-black font-bold px-5 py-1.5 rounded-lg text-sm transition">
+                        Resume
+                      </button>
+                    </form>
+                  )}
+                </div>
               )}
-            {isCommissioner && draft?.status === "in_progress" && (
-              <form action={pauseDraft.bind(null, leagueId)}>
-                <button className="border border-yellow-500/40 text-yellow-400 hover:bg-yellow-400/10 px-4 py-1.5 rounded-lg text-sm font-semibold transition">
-                  Pause
-                </button>
-              </form>
-            )}
-            {isCommissioner && draft?.status === "paused" && (
-              <form action={resumeDraft.bind(null, leagueId)}>
-                <button className="bg-[#36D7B7] hover:bg-[#2bc4a6] text-black font-bold px-5 py-1.5 rounded-lg text-sm transition">
-                  Resume
-                </button>
-              </form>
-            )}
-          </div>
+              <button
+                type="button"
+                onClick={() => setFullscreen(true)}
+                title="Expand to full screen"
+                aria-label="Expand to full screen"
+                className="flex items-center gap-1.5 text-gray-400 hover:text-white transition text-sm px-2 py-1.5 rounded-lg hover:bg-white/5 shrink-0"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 3 21 3 21 9" />
+                  <polyline points="9 21 3 21 3 15" />
+                  <line x1="21" y1="3" x2="14" y2="10" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </svg>
+                <span className="hidden sm:inline">Full screen</span>
+              </button>
+            </div>
+          </>
         )}
-        {!fullscreen && (
-          <button
-            type="button"
-            onClick={() => setFullscreen(true)}
-            title="Expand to full screen"
-            aria-label="Expand to full screen"
-            className="flex items-center gap-1.5 text-gray-400 hover:text-white transition text-sm px-2 py-1.5 rounded-lg hover:bg-white/5 shrink-0"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 3 21 3 21 9" />
-              <polyline points="9 21 3 21 3 15" />
-              <line x1="21" y1="3" x2="14" y2="10" />
-              <line x1="3" y1="21" x2="10" y2="14" />
-            </svg>
-            <span className="hidden sm:inline">Full screen</span>
-          </button>
-        )}
-        </div>
       </div>
 
       {/* Board grid. `min-h-0` lets the flex item shrink to 0 height when the
@@ -986,6 +1223,151 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Change / undo context menu for a drafted card (commissioner). */}
+      {cardMenu && (
+        <>
+          <div
+            className="fixed inset-0 z-[60]"
+            onClick={() => setCardMenu(null)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setCardMenu(null);
+            }}
+          />
+          <div
+            className="fixed z-[61] w-44 bg-[#1a1d23] border border-white/10 rounded-xl shadow-2xl p-1"
+            style={{
+              top: Math.min(cardMenu.y, window.innerHeight - 140),
+              left: Math.min(cardMenu.x, window.innerWidth - 190),
+            }}
+          >
+            <div className="px-3 py-1.5 text-[11px] text-gray-400 truncate border-b border-white/5 mb-1">
+              Pick {cardMenu.label} · {cardMenu.playerName}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setPicker({
+                  mode: "change",
+                  pickNumber: cardMenu.pickNumber,
+                  currentName: cardMenu.playerName,
+                });
+                setCardMenu(null);
+              }}
+              className="w-full text-left px-3 py-2 rounded-lg text-sm text-gray-200 hover:bg-white/5 transition"
+            >
+              Change pick
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const { pickNumber, label, playerName } = cardMenu;
+                setCardMenu(null);
+                if (
+                  window.confirm(
+                    `Undo pick ${label} (${playerName})? This rewinds the draft to pick ${label} — all later picks will be removed and the team will be back on the clock.`,
+                  )
+                ) {
+                  startTransition(() => {
+                    void undoPick(leagueId, pickNumber).then(() => router.refresh());
+                  });
+                }
+              }}
+              className="w-full text-left px-3 py-2 rounded-lg text-sm text-red-300 hover:bg-red-500/10 transition"
+            >
+              Undo pick
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Player picker — assign the on-clock slot or swap an existing pick. */}
+      {picker && (
+        <div
+          className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/60 sm:p-4"
+          onClick={() => {
+            setPicker(null);
+            setPickerSearch("");
+          }}
+        >
+          <div
+            className="w-full sm:max-w-md bg-[#1a1d23] border border-white/10 rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+              <div className="min-w-0">
+                <p className="text-white font-semibold text-sm">
+                  {picker.mode === "assign" ? "Assign player" : "Change pick"}
+                </p>
+                {picker.mode === "change" && (
+                  <p className="text-gray-400 text-xs mt-0.5 truncate">Replacing {picker.currentName}</p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setPicker(null);
+                  setPickerSearch("");
+                }}
+                className="text-gray-400 hover:text-white transition p-1 shrink-0"
+                aria-label="Close"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5">
+              <div className="flex gap-1 bg-[#0f1117] rounded-lg p-0.5">
+                {(["all", "mpo", "fpo"] as Tab[]).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setPickerTab(t)}
+                    className={`px-3 py-1 rounded-md text-xs font-semibold transition ${
+                      t === pickerTab ? "bg-[#4B3DFF] text-white" : "text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    {t.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="text"
+                autoFocus
+                placeholder="Search players..."
+                value={pickerSearch}
+                onChange={(e) => setPickerSearch(e.target.value)}
+                className="flex-1 bg-[#0f1117] border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-[#4B3DFF]"
+              />
+            </div>
+            <div className="overflow-y-auto flex-1">
+              {pickerFiltered.length === 0 ? (
+                <p className="text-gray-400 text-xs text-center py-6">No players found</p>
+              ) : (
+                pickerFiltered.map((player) => (
+                  <button
+                    key={player.id}
+                    type="button"
+                    onClick={() => submitPicker(player.id)}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 border-b border-white/5 hover:bg-white/5 text-left transition"
+                  >
+                    <span className="text-white text-sm flex-1 truncate min-w-0">{player.name}</span>
+                    {player.pdgaRating != null && (
+                      <span className="text-xs text-gray-400 font-semibold tabular-nums shrink-0">{player.pdgaRating}</span>
+                    )}
+                    <span className={`text-xs font-semibold shrink-0 ${divColor(player.division)}`}>
+                      {player.division}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}

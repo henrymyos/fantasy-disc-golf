@@ -348,6 +348,118 @@ export async function undoLastPick(leagueId: number): Promise<void> {
  * all of the draft state (lineup slot assignment, roster insertion, current
  * pick advancement) stays consistent with a normal pick.
  */
+/**
+ * Commissioner-only: replace the player in an already-made pick with a
+ * different (undrafted) player, in place — every later pick is left untouched
+ * (unlike undoPick, which rewinds). Frees the old player's roster row and
+ * assigns the new player the lowest open starter slot of their division for
+ * that team, mirroring claim_draft_pick's slot logic (overflow -> bench).
+ * Snake drafts only.
+ */
+export async function replacePick(
+  leagueId: number,
+  pickNumber: number,
+  newPlayerId: number,
+): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const admin = createAdminClient();
+  const { data: league } = await admin
+    .from("leagues")
+    .select("commissioner_id, mpo_starters, fpo_starters")
+    .eq("id", leagueId)
+    .single();
+  if (!league || league.commissioner_id !== user.id) return;
+
+  const { data: draft } = await admin
+    .from("drafts")
+    .select("id, type")
+    .eq("league_id", leagueId)
+    .single();
+  if (!draft) return;
+  // Auction rosters carry budget state a plain swap wouldn't reconcile, so
+  // (like undoPick) this only handles snake drafts.
+  if ((draft as any).type === "auction") return;
+
+  const { data: pick } = await admin
+    .from("draft_picks")
+    .select("id, team_id, player_id")
+    .eq("draft_id", (draft as any).id)
+    .eq("pick_number", pickNumber)
+    .maybeSingle();
+  if (!pick) return;
+
+  const oldPlayerId = (pick as any).player_id as number | null;
+  const teamId = (pick as any).team_id as number;
+  if (oldPlayerId === newPlayerId) return; // no-op
+
+  const { data: newPlayer } = await admin
+    .from("players")
+    .select("id, division")
+    .eq("id", newPlayerId)
+    .single();
+  if (!newPlayer) return;
+
+  // Reject a player already drafted anywhere in this league.
+  const { data: existingRoster } = await admin
+    .from("rosters")
+    .select("id")
+    .eq("league_id", leagueId)
+    .eq("player_id", newPlayerId)
+    .maybeSingle();
+  if (existingRoster) return;
+
+  // Free the outgoing player's roster row (and its starter slot) first so the
+  // slot can be reused by the incoming player.
+  if (oldPlayerId != null) {
+    await admin.from("rosters").delete().eq("league_id", leagueId).eq("player_id", oldPlayerId);
+  }
+
+  const division = (newPlayer as any).division as string;
+  const slotLimit = division === "MPO"
+    ? ((league as any).mpo_starters ?? 4)
+    : ((league as any).fpo_starters ?? 2);
+
+  const { data: starterRows } = await admin
+    .from("rosters")
+    .select("lineup_order, players(division)")
+    .eq("league_id", leagueId)
+    .eq("team_id", teamId)
+    .eq("is_starter", true);
+  const usedOrders = new Set<number>(
+    (starterRows ?? [])
+      .filter((r: any) => {
+        const rel = r.players;
+        const div = Array.isArray(rel) ? rel[0]?.division : rel?.division;
+        return div === division && r.lineup_order != null;
+      })
+      .map((r: any) => r.lineup_order as number),
+  );
+  let assignedOrder: number | null = null;
+  for (let i = 1; i <= slotLimit; i++) {
+    if (!usedOrders.has(i)) { assignedOrder = i; break; }
+  }
+
+  await admin.from("rosters").insert({
+    league_id: leagueId,
+    team_id: teamId,
+    player_id: newPlayerId,
+    acquired_week: 1,
+    is_starter: assignedOrder != null,
+    lineup_order: assignedOrder,
+  });
+
+  await admin
+    .from("draft_picks")
+    .update({ player_id: newPlayerId })
+    .eq("id", (pick as any).id);
+
+  revalidatePath(`/league/${leagueId}/draft`);
+  revalidatePath(`/league/${leagueId}/lineups`);
+}
+
 export async function commissionerMakePick(leagueId: number, playerId: number): Promise<void> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
