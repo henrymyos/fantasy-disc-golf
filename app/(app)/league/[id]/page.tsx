@@ -320,7 +320,29 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   }
 
   return (
-    <div className="grid lg:grid-cols-3 gap-6">
+    <div className="space-y-6">
+      {draft?.status === "in_progress" && (
+        <Link
+          href={`/league/${id}/draft?board=1`}
+          className="flex items-center justify-between gap-3 rounded-2xl border border-green-500/40 bg-green-500/10 hover:bg-green-500/20 px-5 py-4 transition group"
+        >
+          <div className="flex items-center gap-3">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+            </span>
+            <div>
+              <p className="text-white font-bold leading-tight">Draft is live</p>
+              <p className="text-green-300/80 text-xs mt-0.5">Jump into the draft board</p>
+            </div>
+          </div>
+          <span className="text-green-400 font-semibold text-sm group-hover:text-white transition shrink-0">
+            Live Draft →
+          </span>
+        </Link>
+      )}
+
+      <div className="grid lg:grid-cols-3 gap-6">
       {/* Standings (or team roster before the draft) */}
       <div className="lg:col-span-1 min-w-0 bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
         <h2 className="font-bold text-white mb-4">{preDraft ? "Teams" : "Standings"}</h2>
@@ -688,6 +710,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
           </div>
         )}
 
+      </div>
       </div>
     </div>
   );

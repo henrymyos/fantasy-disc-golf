@@ -12,12 +12,14 @@ export function DraftRoom({
   board,
   isLive,
   mockDraftHref,
+  autoOpen = false,
 }: {
   board: BoardProps;
   isLive: boolean;
   mockDraftHref: string;
+  autoOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoOpen);
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

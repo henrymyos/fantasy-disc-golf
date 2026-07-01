@@ -9,8 +9,15 @@ import { DraftTypeForm } from "@/components/draft-type-form";
 import { DurationPicker } from "@/components/duration-picker";
 import { AuctionPanel } from "@/components/auction-panel";
 
-export default async function DraftPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function DraftPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ board?: string }>;
+}) {
   const { id } = await params;
+  const autoOpenBoard = (await searchParams).board === "1";
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -158,6 +165,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
 
       <DraftRoom
         isLive={draft?.status === "in_progress"}
+        autoOpen={autoOpenBoard}
         mockDraftHref={`/league/${id}/mock-draft`}
         board={{
           leagueId: Number(id),
