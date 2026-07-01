@@ -204,78 +204,6 @@ function splitName(full: string): { first: string; last: string } {
   return { first: parts.slice(0, -1).join(" "), last: parts[parts.length - 1] };
 }
 
-// A drafted-pick cell the commissioner can act on: normal tap/click opens the
-// player profile, while right-click (desktop) or long-press (touch) surfaces
-// the change/undo menu via onMenu. Rendered as a plain div so the long-press
-// gesture can suppress the follow-up click without fighting <Link>.
-function ManagedPickCell({
-  href,
-  style,
-  className,
-  onMenu,
-  children,
-}: {
-  href: string | null;
-  style: React.CSSProperties;
-  className: string;
-  onMenu: (x: number, y: number) => void;
-  children: React.ReactNode;
-}) {
-  const router = useRouter();
-  const timerRef = useRef<number | null>(null);
-  const startRef = useRef<{ x: number; y: number } | null>(null);
-  const suppressRef = useRef(false);
-
-  const clearTimer = () => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  };
-
-  return (
-    <div
-      style={style}
-      className={`${className} select-none`}
-      title="Tap to view · long-press or right-click for options"
-      onClick={() => {
-        if (suppressRef.current) {
-          suppressRef.current = false;
-          return;
-        }
-        if (href) router.push(href);
-      }}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        onMenu(e.clientX, e.clientY);
-      }}
-      onTouchStart={(e) => {
-        const t = e.touches[0];
-        startRef.current = { x: t.clientX, y: t.clientY };
-        clearTimer();
-        timerRef.current = window.setTimeout(() => {
-          suppressRef.current = true;
-          if (startRef.current) onMenu(startRef.current.x, startRef.current.y);
-        }, 450);
-      }}
-      onTouchMove={(e) => {
-        const t = e.touches[0];
-        if (
-          startRef.current &&
-          (Math.abs(t.clientX - startRef.current.x) > 8 ||
-            Math.abs(t.clientY - startRef.current.y) > 8)
-        ) {
-          clearTimer();
-        }
-      }}
-      onTouchEnd={clearTimer}
-      onTouchCancel={clearTimer}
-    >
-      {children}
-    </div>
-  );
-}
-
 export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], picks, availablePlayers, myRankings = [], myMemberId, isCommissioner, mpoSlots = 4, fpoSlots = 2, rosterSize = 14, readOnly }: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("all");
@@ -560,11 +488,6 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
   // Build flat grid cells
   const gridCells: React.ReactNode[] = [];
 
-  // Corner cell
-  gridCells.push(
-    <div key="corner" className="bg-[#0f1117] rounded-lg p-2 sticky left-0 z-10" />
-  );
-
   // Team header cells
   members.forEach((m) => {
     const isOnClock = m.id === currentPickTeamId && draft?.status === "in_progress";
@@ -587,18 +510,6 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
 
   // Round rows
   for (let round = 1; round <= totalRounds; round++) {
-    const isCurrentRound = round === currentRound && (draft?.status === "in_progress" || draft?.status === "paused");
-
-    // Round label cell
-    gridCells.push(
-      <div
-        key={`round-${round}`}
-        className={`bg-[#0f1117] rounded-lg flex items-center justify-center sticky left-0 z-10 ${isCurrentRound ? "text-white font-bold" : "text-gray-400"}`}
-      >
-        <span className="text-xs font-mono">R{round}</span>
-      </div>
-    );
-
     // Pick cells for each team
     members.forEach((m) => {
       const pickNum = getPickNumber(round, m.draftPosition, N, trr);
@@ -634,45 +545,63 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
         const cellStyle = { background: divBg(pick.playerDivision), color: "var(--pick-fg)" } as const;
         const profileHref = pick.playerId != null ? `/league/${leagueId}/player/${pick.playerId}` : null;
         const cardClass =
-          "flex flex-col p-1.5 min-h-[60px] rounded-lg transition hover:ring-2 hover:ring-white/30 hover:brightness-110 cursor-pointer";
-        const cardBody = (
+          "flex flex-col p-1.5 min-h-[60px] rounded-lg transition hover:ring-2 hover:ring-white/30 hover:brightness-110";
+        const meta = (
           <>
             {tradedBadge}
             <div className="flex justify-between items-center">
               <span className="text-[10px] font-mono" style={{ color: "var(--pick-fg-muted)", opacity: 0.7 }}>{pickLabel}</span>
               <span className="text-[10px] font-semibold" style={{ color: "var(--pick-fg-muted)" }}>{pick.playerDivision}</span>
             </div>
-            <div className="flex-1 flex flex-col justify-end mt-1">
-              {first && <p className="text-[11px] leading-tight break-words" style={{ color: "var(--pick-fg-muted)" }}>{first}</p>}
-              <p className="font-bold text-sm leading-tight break-words" style={{ color: "var(--pick-fg)" }}>{last}</p>
-            </div>
+          </>
+        );
+        const nameBlock = (
+          <>
+            {first && <p className="text-[11px] leading-tight break-words" style={{ color: "var(--pick-fg-muted)" }}>{first}</p>}
+            <p className="font-bold text-sm leading-tight break-words" style={{ color: "var(--pick-fg)" }}>{last}</p>
           </>
         );
         if (canManage) {
-          // Tap opens the player profile; right-click / long-press opens the
-          // change-or-undo menu (replaces the old ✕ overlay).
+          // Commissioner: clicking the box (anywhere but the name) opens the
+          // change/undo menu; the name itself still links to the profile.
           const playerName = pick.playerName;
           gridCells.push(
-            <ManagedPickCell
+            <div
               key={`${round}-${m.id}`}
-              href={profileHref}
               style={cellStyle}
-              className={cardClass}
-              onMenu={(x, y) => setCardMenu({ pickNumber: pickNum, label: pickLabel, playerName, x, y })}
+              className={`${cardClass} cursor-pointer select-none`}
+              title="Click for pick options"
+              onClick={(e) =>
+                setCardMenu({ pickNumber: pickNum, label: pickLabel, playerName, x: e.clientX, y: e.clientY })
+              }
             >
-              {cardBody}
-            </ManagedPickCell>
+              {meta}
+              {profileHref ? (
+                <Link
+                  href={profileHref}
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex-1 flex flex-col justify-end mt-1 min-w-0 hover:underline"
+                  title={`View ${pick.playerName}'s profile`}
+                >
+                  {nameBlock}
+                </Link>
+              ) : (
+                <div className="flex-1 flex flex-col justify-end mt-1">{nameBlock}</div>
+              )}
+            </div>
           );
         } else {
           gridCells.push(
             <div key={`${round}-${m.id}`}>
               {profileHref ? (
-                <Link href={profileHref} style={cellStyle} className={cardClass} title={`View ${pick.playerName}'s profile`}>
-                  {cardBody}
+                <Link href={profileHref} style={cellStyle} className={`${cardClass} cursor-pointer`} title={`View ${pick.playerName}'s profile`}>
+                  {meta}
+                  <div className="flex-1 flex flex-col justify-end mt-1">{nameBlock}</div>
                 </Link>
               ) : (
-                <div style={cellStyle} className="flex flex-col p-1.5 min-h-[60px] rounded-lg">
-                  {cardBody}
+                <div style={cellStyle} className={cardClass}>
+                  {meta}
+                  <div className="flex-1 flex flex-col justify-end mt-1">{nameBlock}</div>
                 </div>
               )}
             </div>
@@ -972,9 +901,9 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: `44px repeat(${N}, minmax(112px, 150px))`,
+              gridTemplateColumns: `repeat(${N}, minmax(112px, 150px))`,
               gap: "4px",
-              minWidth: `${44 + N * 116}px`,
+              minWidth: `${N * 116}px`,
             }}
           >
             {gridCells}
