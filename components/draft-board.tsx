@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { startDraft, pauseDraft, resumeDraft, makeDraftPick, undoLastPick, undoPick, replacePick, commissionerMakePick } from "@/actions/drafts";
-import { autoPickFromRankings, autoPickExpired } from "@/actions/rankings";
+import { autoPickFromRankings, autoPickExpired, setRankings } from "@/actions/rankings";
 import { resolvePickOwnerId, type PickOwnerOverrides } from "@/lib/draft-pick-owners";
 
 type DraftInfo = {
@@ -21,7 +21,7 @@ type Member = { id: number; teamName: string; draftPosition: number };
 type PickInfo = { pickNumber: number; teamId: number; playerId: number | null; playerName: string; playerDivision: string };
 type AvailablePlayer = { id: number; name: string; division: string; worldRanking: number | null; overallRank: number | null; pdgaRating?: number | null; totalPoints?: number };
 type Tab = "all" | "mpo" | "fpo";
-type BottomTab = "available" | "team";
+type BottomTab = "available" | "queue" | "team";
 
 // The bottom Available/Team panel is drag-resizable: grab the handle and drag
 // up to expand / down to shrink (replaces the old fixed-size arrow buttons).
@@ -513,6 +513,50 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
     });
   };
 
+  // Draft queue — unified with the user's saved rankings (user_player_rankings),
+  // so the queue order is exactly what auto-pick uses. The visible queue is the
+  // ranked list narrowed to still-available players; any already-drafted ranked
+  // players are parked at the end on save so the saved list isn't lost.
+  const playerById = useMemo(() => {
+    const m = new Map<number, AvailablePlayer>();
+    for (const p of availablePlayers) m.set(p.id, p);
+    return m;
+  }, [availablePlayers]);
+  const rankedOrder = useMemo(
+    () => [...myRankings].sort((a, b) => a.rank - b.rank).map((r) => r.playerId),
+    [myRankings],
+  );
+  const queueIds = useMemo(
+    () => rankedOrder.filter((id) => playerById.has(id)),
+    [rankedOrder, playerById],
+  );
+  const parkedIds = useMemo(
+    () => rankedOrder.filter((id) => !playerById.has(id)),
+    [rankedOrder, playerById],
+  );
+  const queuedSet = useMemo(() => new Set(queueIds), [queueIds]);
+
+  const persistQueue = (nextQueue: number[]) => {
+    startTransition(() => {
+      void setRankings(leagueId, [...nextQueue, ...parkedIds]).then(() => router.refresh());
+    });
+  };
+  const addToQueue = (playerId: number) => {
+    if (queuedSet.has(playerId)) return;
+    persistQueue([...queueIds, playerId]);
+  };
+  const removeFromQueue = (playerId: number) => {
+    persistQueue(queueIds.filter((id) => id !== playerId));
+  };
+  const moveInQueue = (playerId: number, dir: -1 | 1) => {
+    const i = queueIds.indexOf(playerId);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= queueIds.length) return;
+    const next = [...queueIds];
+    [next[i], next[j]] = [next[j], next[i]];
+    persistQueue(next);
+  };
+
   // Build flat grid cells
   const gridCells: React.ReactNode[] = [];
 
@@ -969,6 +1013,14 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
                 Available ({availablePlayers.length})
               </button>
               <button
+                onClick={() => setBottomTab("queue")}
+                className={`px-3 py-1 rounded-md text-xs font-semibold transition ${
+                  bottomTab === "queue" ? "bg-[#4B3DFF] text-white" : "text-gray-400 hover:text-white"
+                }`}
+              >
+                Queue ({queueIds.length})
+              </button>
+              <button
                 onClick={() => setBottomTab("team")}
                 className={`px-3 py-1 rounded-md text-xs font-semibold transition ${
                   bottomTab === "team" ? "bg-[#4B3DFF] text-white" : "text-gray-400 hover:text-white"
@@ -1028,7 +1080,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
 
             {isMyPick && (
               <span className="ml-auto text-[#36D7B7] font-bold text-xs animate-pulse">
-                {bottomTab === "available" ? "YOUR PICK — select a player" : "Switch to Available to draft"}
+                {bottomTab === "team" ? "Switch to Available to draft" : "YOUR PICK — select a player"}
               </span>
             )}
           </div>
@@ -1095,8 +1147,123 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
                         {player.division}
                       </span>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        queuedSet.has(player.id) ? removeFromQueue(player.id) : addToQueue(player.id)
+                      }
+                      className={`shrink-0 p-1.5 rounded-lg transition ${
+                        queuedSet.has(player.id)
+                          ? "text-[#36D7B7] hover:bg-[#36D7B7]/10"
+                          : "text-gray-500 hover:text-white hover:bg-white/10"
+                      }`}
+                      title={queuedSet.has(player.id) ? "Remove from queue" : "Add to queue"}
+                      aria-label={queuedSet.has(player.id) ? "Remove from queue" : "Add to queue"}
+                    >
+                      {queuedSet.has(player.id) ? (
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M6 2h12a1 1 0 0 1 1 1v18l-7-4-7 4V3a1 1 0 0 1 1-1z" />
+                        </svg>
+                      ) : (
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="12" y1="5" x2="12" y2="19" />
+                          <line x1="5" y1="12" x2="19" y2="12" />
+                        </svg>
+                      )}
+                    </button>
                   </div>
                 ))
+              )
+            ) : bottomTab === "queue" ? (
+              queueIds.length === 0 ? (
+                <p className="text-gray-400 text-xs text-center py-6 px-4">
+                  Your queue is empty. Add players with <span className="text-[#36D7B7]">+</span> from the Available tab — the order here is what auto-pick uses.
+                </p>
+              ) : (
+                queueIds.map((id, idx) => {
+                  const player = playerById.get(id);
+                  if (!player) return null;
+                  return (
+                    <div
+                      key={id}
+                      className="flex items-center gap-2 px-3 py-2 border-b border-white/5 hover:bg-white/5 transition"
+                    >
+                      <span className="text-gray-400 text-xs font-mono w-5 text-right shrink-0 tabular-nums">{idx + 1}</span>
+                      <div className="flex-1 min-w-0 flex items-center gap-2">
+                        <Link
+                          href={`/league/${leagueId}/player/${id}`}
+                          className="text-white text-sm truncate min-w-0 hover:underline"
+                          title={`View ${player.name}'s profile`}
+                        >
+                          {player.name}
+                        </Link>
+                        {player.pdgaRating != null && (
+                          <span className="text-xs text-gray-400 font-semibold tabular-nums shrink-0" title="Current PDGA Rating">
+                            {player.pdgaRating}
+                          </span>
+                        )}
+                        <span className={`text-xs font-semibold shrink-0 ${divColor(player.division)}`}>
+                          {player.division}
+                        </span>
+                      </div>
+                      {draft?.status === "in_progress" && (isMyPick || isCommissioner) && (
+                        <form
+                          action={(isMyPick ? makeDraftPick : commissionerMakePick).bind(null, leagueId, id)}
+                          onSubmit={() => startTransition(() => { setTimeout(() => router.refresh(), 300); })}
+                          className="shrink-0"
+                        >
+                          <button
+                            type="submit"
+                            className={`text-xs px-2.5 py-1 rounded-full transition text-white ${
+                              isMyPick ? "bg-[#4B3DFF] hover:bg-[#3a2ee0]" : "bg-white/10 hover:bg-white/20 border border-white/15"
+                            }`}
+                            title={isMyPick ? "Draft this player" : "Pick on behalf of the on-clock team"}
+                          >
+                            {isMyPick ? "Draft" : "Assign"}
+                          </button>
+                        </form>
+                      )}
+                      <div className="flex items-center shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => moveInQueue(id, -1)}
+                          disabled={idx === 0}
+                          className="p-1 text-gray-400 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed"
+                          title="Move up"
+                          aria-label="Move up"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="18 15 12 9 6 15" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveInQueue(id, 1)}
+                          disabled={idx === queueIds.length - 1}
+                          className="p-1 text-gray-400 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed"
+                          title="Move down"
+                          aria-label="Move down"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeFromQueue(id)}
+                          className="p-1 text-gray-400 hover:text-red-300 transition"
+                          title="Remove from queue"
+                          aria-label="Remove from queue"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
               )
             ) : (
               <div className="px-3 py-2 space-y-2">
