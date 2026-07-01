@@ -210,6 +210,12 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
   const [bottomTab, setBottomTab] = useState<BottomTab>("available");
   const [search, setSearch] = useState("");
   const [panelSize, setPanelSize] = useState<PanelSize>("medium");
+  // Full-screen board: covers the sidebar/nav so the grid gets the whole
+  // viewport. Defaults on when you land on a live draft; a top exit arrow
+  // (and the Full screen button) toggle it.
+  const [fullscreen, setFullscreen] = useState<boolean>(
+    () => !readOnly && (draft?.status === "in_progress" || draft?.status === "paused"),
+  );
   const hasMyRankings = myRankings.length > 0;
   // Default to the user's own rankings when they've set any; otherwise the
   // generic points/overall ordering. The user can flip between the two from
@@ -350,7 +356,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
     gridCells.push(
       <div
         key={`h-${m.id}`}
-        className={`px-2 py-3 text-center rounded-lg ${isOnClock ? "bg-[#36D7B7]/15" : "bg-[#0f1117]"}`}
+        className={`px-2 py-2 text-center rounded-lg ${isOnClock ? "bg-[#36D7B7]/15" : "bg-[#0f1117]"}`}
       >
         <p className={`text-xs font-bold truncate leading-tight ${isMe ? "text-white" : "text-gray-300"}`}>
           {m.teamName}
@@ -421,7 +427,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
           <Link
             href={pick.playerId != null ? `/league/${leagueId}/player/${pick.playerId}` : "#"}
             style={cellStyle}
-            className="flex flex-col p-2 min-h-[80px] rounded-lg transition hover:ring-2 hover:ring-white/30 hover:brightness-110 cursor-pointer"
+            className="flex flex-col p-1.5 min-h-[60px] rounded-lg transition hover:ring-2 hover:ring-white/30 hover:brightness-110 cursor-pointer"
             title={`View ${pick.playerName}'s profile`}
           >
             {tradedBadge}
@@ -474,7 +480,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
         gridCells.push(
           <div
             key={`${round}-${m.id}`}
-            className="flex flex-col items-center justify-center p-2 min-h-[80px] rounded-lg bg-[#36D7B7]/10 ring-2 ring-[#36D7B7] ring-inset"
+            className="flex flex-col items-center justify-center p-1.5 min-h-[60px] rounded-lg bg-[#36D7B7]/10 ring-2 ring-[#36D7B7] ring-inset"
           >
             {tradedBadge}
             <span className="text-[#36D7B7] text-[10px] font-mono">{pickLabel}</span>
@@ -485,7 +491,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
         gridCells.push(
           <div
             key={`${round}-${m.id}`}
-            className="flex flex-col p-2 min-h-[80px] rounded-lg bg-[#1a1d23]"
+            className="flex flex-col p-1.5 min-h-[60px] rounded-lg bg-[#1a1d23]"
           >
             {tradedBadge}
             <div className="flex justify-start">
@@ -538,11 +544,28 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
   const emptyBenchCount = Math.max(0, benchCapacity - benchPicks.length);
 
   return (
-    <div ref={containerRef} className="flex flex-col" style={{ height: "calc(100vh - 152px)" }}>
+    <div
+      ref={containerRef}
+      className={fullscreen ? "fixed inset-0 z-50 bg-[#0f1117] flex flex-col px-3 sm:px-4" : "flex flex-col"}
+      style={fullscreen ? undefined : { height: "calc(100vh - 152px)" }}
+    >
 
       {/* Status bar */}
       <div ref={statusBarRef} className="flex items-center justify-between px-1 py-2 shrink-0">
         <div className="flex items-center gap-3">
+          {fullscreen && (
+            <button
+              type="button"
+              onClick={() => setFullscreen(false)}
+              title="Exit full screen"
+              aria-label="Exit full screen"
+              className="flex items-center text-gray-300 hover:text-white transition -ml-1 shrink-0"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </button>
+          )}
           {draft?.status === "pending" && <span className="text-gray-400 text-sm">Draft has not started</span>}
           {draft?.status === "in_progress" && (
             <>
@@ -567,6 +590,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
             </span>
           )}
         </div>
+        <div className="flex items-center gap-2">
         {!readOnly && (
           <div className="flex gap-2">
             {isMyPick && (
@@ -611,6 +635,24 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
             )}
           </div>
         )}
+        {!fullscreen && (
+          <button
+            type="button"
+            onClick={() => setFullscreen(true)}
+            title="Expand to full screen"
+            aria-label="Expand to full screen"
+            className="flex items-center gap-1.5 text-gray-400 hover:text-white transition text-sm px-2 py-1.5 rounded-lg hover:bg-white/5 shrink-0"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 3 21 3 21 9" />
+              <polyline points="9 21 3 21 3 15" />
+              <line x1="21" y1="3" x2="14" y2="10" />
+              <line x1="3" y1="21" x2="10" y2="14" />
+            </svg>
+            <span className="hidden sm:inline">Full screen</span>
+          </button>
+        )}
+        </div>
       </div>
 
       {/* Board grid. `min-h-0` lets the flex item shrink to 0 height when the
@@ -624,9 +666,9 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: `44px repeat(${N}, minmax(130px, 180px))`,
+              gridTemplateColumns: `44px repeat(${N}, minmax(112px, 150px))`,
               gap: "4px",
-              minWidth: `${44 + N * 134}px`,
+              minWidth: `${44 + N * 116}px`,
             }}
           >
             {gridCells}
