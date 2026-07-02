@@ -975,7 +975,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
 
       {/* Board grid. `min-h-0` lets the flex item shrink to 0 height when the
           panel claims all available space (e.g. in full-screen panel mode). */}
-      <div className="flex-1 min-h-0 overflow-auto rounded-xl border border-white/5">
+      <div className="flex-1 min-h-0 overflow-auto overscroll-none rounded-xl border border-white/5">
         {N === 0 ? (
           <div className="h-full flex items-center justify-center text-gray-400 text-sm">
             No teams have joined yet
@@ -1090,7 +1090,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
           </div>
 
           {/* Body */}
-          <div className="overflow-y-auto flex-1 pb-[env(safe-area-inset-bottom)]">
+          <div className="overflow-y-auto overscroll-none flex-1 pb-[env(safe-area-inset-bottom)]">
             {bottomTab === "available" ? (
               filtered.length === 0 ? (
                 <p className="text-gray-400 text-xs text-center py-6">No players found</p>
