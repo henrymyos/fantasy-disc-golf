@@ -88,7 +88,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   const { data: members } = await supabase
     .from("league_members")
-    .select("id, team_name, user_id, is_commissioner, waiver_priority, dues_paid, profiles(username)")
+    .select("id, team_name, user_id, is_commissioner, waiver_priority, dues_paid, profiles(username, avatar_url, avatar_color)")
     .eq("league_id", id)
     .order("joined_at");
 
@@ -363,6 +363,12 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                     }`}
                   >
                     <span className="text-gray-400 text-sm w-4">{i + 1}</span>
+                    <TeamAvatar
+                      name={t.team_name}
+                      avatarUrl={(t.profiles as any)?.avatar_url}
+                      avatarColor={(t.profiles as any)?.avatar_color}
+                      seed={t.id}
+                    />
                     <div className="min-w-0">
                       <p className="text-white text-sm font-medium truncate">{t.team_name}</p>
                       <p className="text-gray-400 text-xs truncate">{(t.profiles as any)?.username}</p>
@@ -400,6 +406,12 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <span className="text-gray-400 text-sm w-4">{i + 1}</span>
+                      <TeamAvatar
+                        name={t.team_name}
+                        avatarUrl={(t.profiles as any)?.avatar_url}
+                        avatarColor={(t.profiles as any)?.avatar_color}
+                        seed={t.id}
+                      />
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
                           <p className="text-white text-sm font-medium truncate">{t.team_name}</p>
@@ -807,6 +819,37 @@ function TeamScore({
           <p className="text-gray-400 text-[10px] mt-0.5">~{projected.toFixed(1)} proj</p>
         )}
       </div>
+    </div>
+  );
+}
+
+// Team logo shown in the standings/teams list. Uses the owner's profile avatar
+// when they have one; otherwise a generic circle with their initial, colored in
+// one of the app's two accent colors (blue / green) picked stably per team.
+function TeamAvatar({
+  name,
+  avatarUrl,
+  avatarColor,
+  seed,
+}: {
+  name: string;
+  avatarUrl?: string | null;
+  avatarColor?: string | null;
+  seed: number;
+}) {
+  if (avatarUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover shrink-0 bg-white/10" />
+    );
+  }
+  const color = avatarColor || (seed % 2 === 0 ? "#4B3DFF" : "#36D7B7");
+  return (
+    <div
+      className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-white text-xs font-bold"
+      style={{ backgroundColor: color }}
+    >
+      {name?.[0]?.toUpperCase() ?? "?"}
     </div>
   );
 }
