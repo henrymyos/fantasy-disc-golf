@@ -29,8 +29,8 @@ type TimelineItem =
 
 /**
  * Compact "how long ago" label for a message timestamp: "now", "8m", "2h",
- * "4d", "3w", then a short date for anything older (with the year if it's not
- * the current one). `now` is passed in so a periodic re-render keeps it fresh.
+ * then days ("4d", "21d") for anything a day or older. `now` is passed in so a
+ * periodic re-render keeps it fresh.
  */
 function formatRelativeTime(ts: string, now: number): string {
   const then = new Date(ts).getTime();
@@ -41,17 +41,7 @@ function formatRelativeTime(ts: string, now: number): string {
   if (m < 60) return `${m}m`;
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h`;
-  const d = Math.floor(h / 24);
-  if (d < 7) return `${d}d`;
-  const w = Math.floor(d / 7);
-  if (w < 5) return `${w}w`;
-  const date = new Date(then);
-  const sameYear = date.getFullYear() === new Date(now).getFullYear();
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    ...(sameYear ? {} : { year: "numeric" }),
-  });
+  return `${Math.floor(h / 24)}d`;
 }
 
 /**
