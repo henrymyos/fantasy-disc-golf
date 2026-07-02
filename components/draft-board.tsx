@@ -152,6 +152,7 @@ function PickCountdown({
   pickNumber,
   autoFire = true,
   className = "text-xs font-mono",
+  useTone = true,
 }: {
   leagueId: number;
   secondsPerPick: number;
@@ -162,6 +163,9 @@ function PickCountdown({
   // triggers the auto-pick.
   autoFire?: boolean;
   className?: string;
+  // When false, skip the red/yellow urgency colors and let `className` fully
+  // control the color (the on-clock cell wants a solid pulsing green).
+  useTone?: boolean;
 }) {
   const [now, setNow] = useState(() => Date.now());
   const firedRef = useRef<number | null>(null);
@@ -200,8 +204,9 @@ function PickCountdown({
     const hh = Math.floor((remaining % 86400) / 3600);
     return `${dd}d ${hh}h`;
   })();
-  const tone =
-    remaining <= 10 ? "text-red-400" : remaining <= 30 ? "text-yellow-300" : "text-gray-400";
+  const tone = !useTone
+    ? ""
+    : remaining <= 10 ? "text-red-400" : remaining <= 30 ? "text-yellow-300" : "text-gray-400";
   return (
     <span className={`${className} ${tone}`} title="Time remaining on this pick">
       {display}
@@ -710,23 +715,20 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
         const onClockBody = (
           <>
             {tradedBadge}
-            <div className="flex justify-start">
-              <span className="text-[#36D7B7] text-[10px] font-mono">{pickLabel}</span>
-            </div>
-            <div className="flex-1 flex items-center justify-center">
-              {draft?.status === "in_progress" ? (
-                <PickCountdown
-                  leagueId={leagueId}
-                  secondsPerPick={draft.secondsPerPick ?? 60}
-                  startedAt={draft.currentPickStartedAt ?? null}
-                  pickNumber={currentPick}
-                  autoFire={false}
-                  className="text-sm font-bold font-mono"
-                />
-              ) : (
-                <span className="text-yellow-400 text-xs font-semibold">Paused</span>
-              )}
-            </div>
+            <span className="absolute top-1.5 left-1.5 text-[#36D7B7] text-[10px] font-mono">{pickLabel}</span>
+            {draft?.status === "in_progress" ? (
+              <PickCountdown
+                leagueId={leagueId}
+                secondsPerPick={draft.secondsPerPick ?? 60}
+                startedAt={draft.currentPickStartedAt ?? null}
+                pickNumber={currentPick}
+                autoFire={false}
+                useTone={false}
+                className="text-sm font-bold font-mono text-[#36D7B7] animate-pulse"
+              />
+            ) : (
+              <span className="text-yellow-400 text-xs font-semibold">Paused</span>
+            )}
           </>
         );
         if (canManage && draft?.status === "in_progress") {
@@ -736,7 +738,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
               key={`${round}-${m.id}`}
               type="button"
               onClick={() => setPicker({ mode: "assign" })}
-              className={`flex flex-col p-1.5 min-h-[60px] rounded-lg bg-[#36D7B7]/10 ring-2 ring-[#36D7B7] ring-inset hover:bg-[#36D7B7]/20 transition${dimClass}`}
+              className={`relative flex items-center justify-center p-1.5 min-h-[60px] rounded-lg bg-[#36D7B7]/10 ring-2 ring-[#36D7B7] ring-inset hover:bg-[#36D7B7]/20 transition${dimClass}`}
             >
               {onClockBody}
             </button>
@@ -745,7 +747,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
           gridCells.push(
             <div
               key={`${round}-${m.id}`}
-              className={`flex flex-col p-1.5 min-h-[60px] rounded-lg bg-[#36D7B7]/10 ring-2 ring-[#36D7B7] ring-inset transition${dimClass}`}
+              className={`relative flex items-center justify-center p-1.5 min-h-[60px] rounded-lg bg-[#36D7B7]/10 ring-2 ring-[#36D7B7] ring-inset transition${dimClass}`}
             >
               {onClockBody}
             </div>
@@ -1149,22 +1151,18 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
                     key={player.id}
                     className="flex items-center gap-3 px-3 py-2 border-b border-white/5 hover:bg-white/5 transition"
                   >
-                    {draft?.status === "in_progress" && (isMyPick || isCommissioner) ? (
+                    {draft?.status === "in_progress" && isMyPick ? (
                       <form
-                        action={(isMyPick ? makeDraftPick : commissionerMakePick).bind(null, leagueId, player.id)}
+                        action={makeDraftPick.bind(null, leagueId, player.id)}
                         onSubmit={() => startTransition(() => { setTimeout(() => router.refresh(), 300); })}
                         className="shrink-0 -mr-2"
                       >
                         <button
                           type="submit"
-                          className={`text-xs px-3 py-1.5 rounded-full transition text-white ${
-                            isMyPick
-                              ? "bg-[#4B3DFF] hover:bg-[#3a2ee0]"
-                              : "bg-white/10 hover:bg-white/20 border border-white/15"
-                          }`}
-                          title={isMyPick ? "Draft this player" : "Pick on behalf of the on-clock team"}
+                          className="text-xs px-3 py-1.5 rounded-full transition text-white bg-[#4B3DFF] hover:bg-[#3a2ee0]"
+                          title="Draft this player"
                         >
-                          {isMyPick ? "Draft" : "Assign"}
+                          Draft
                         </button>
                       </form>
                     ) : (
