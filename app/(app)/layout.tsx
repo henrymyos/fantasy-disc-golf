@@ -30,6 +30,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .eq("user_id", user.id)
     .is("read_at", null);
 
+  // Leagues for the sidebar "My Leagues" subsection (most recently joined first).
+  const { data: leagueMemberships } = await supabase
+    .from("league_members")
+    .select("league_id, leagues(id, name, logo_url)")
+    .eq("user_id", user.id)
+    .order("joined_at", { ascending: false });
+  const sidebarLeagues = (leagueMemberships ?? [])
+    .map((m: any) => ({
+      id: m.leagues?.id as number,
+      name: (m.leagues?.name as string) ?? "League",
+      logoUrl: (m.leagues?.logo_url as string | null) ?? null,
+    }))
+    .filter((l) => l.id != null);
+
   return (
     <InstallProvider>
     <div className="min-h-screen bg-[#0f1117]">
@@ -48,7 +62,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </Link>
 
-        <SidebarNav />
+        <SidebarNav leagues={sidebarLeagues} />
 
         <InstallSidebarItem />
 

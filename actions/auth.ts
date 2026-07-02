@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { createHash } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { landingPathForUser } from "@/lib/landing";
 import { z } from "zod";
 
 /**
@@ -239,7 +240,16 @@ export async function login(_state: AuthState, formData: FormData): Promise<Auth
   }
 
   revalidatePath("/", "layout");
-  redirect(safeNext(formData.get("next")));
+  // Honor an explicit destination (e.g. following an invite link); otherwise
+  // land on the league the user was most recently in.
+  const nextRaw = formData.get("next");
+  const hasExplicitNext =
+    typeof nextRaw === "string" &&
+    nextRaw.startsWith("/") &&
+    !nextRaw.startsWith("//") &&
+    !nextRaw.startsWith("/\\");
+  if (hasExplicitNext) redirect(nextRaw);
+  redirect(user ? await landingPathForUser(user.id) : "/dashboard");
 }
 
 export async function logout() {

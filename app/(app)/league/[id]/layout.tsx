@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { LeagueTabNav } from "@/components/league-tab-nav";
 import { LeagueChat } from "@/components/league-chat";
+import { RememberLastLeague } from "@/components/remember-last-league";
 
 export default async function LeagueLayout({
   children,
@@ -55,6 +56,7 @@ export default async function LeagueLayout({
   return (
     // xl:pr reserves room for the always-open chat card (see LeagueChat).
     <div className="pb-8 md:pb-0 xl:pr-[392px]">
+      <RememberLastLeague id={id} />
       {/* League header */}
       <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
         <Link
