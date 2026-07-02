@@ -28,6 +28,33 @@ type TimelineItem =
   | { key: string; ts: string; type: "sys"; event: SystemEvent };
 
 /**
+ * Compact "how long ago" label for a message timestamp: "now", "8m", "2h",
+ * "4d", "3w", then a short date for anything older (with the year if it's not
+ * the current one). `now` is passed in so a periodic re-render keeps it fresh.
+ */
+function formatRelativeTime(ts: string, now: number): string {
+  const then = new Date(ts).getTime();
+  if (!Number.isFinite(then)) return "";
+  const s = Math.floor(Math.max(0, now - then) / 1000);
+  if (s < 60) return "now";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d`;
+  const w = Math.floor(d / 7);
+  if (w < 5) return `${w}w`;
+  const date = new Date(then);
+  const sameYear = date.getFullYear() === new Date(now).getFullYear();
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+}
+
+/**
  * Sleeper-style docked chat: a slim bar pinned to the bottom that previews the
  * most recent message. Tap (or drag up) to expand it into a full-height sheet
  * with channel tabs, scrollable history, and a composer; drag down, tap the
@@ -55,6 +82,12 @@ export function LeagueChat({
   // On wide screens the chat lives as an always-open right sidebar; below that
   // it's the bottom dock. Starts false to match SSR, set on mount.
   const [isDesktop, setIsDesktop] = useState(false);
+  // Ticks so relative timestamps ("8m", "2h") stay current without a reload.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
   const pathname = usePathname();
   // The chat is hidden on settings routes (rendered as null below). Track it
   // here so the body-scroll lock never engages while nothing is shown.
@@ -479,15 +512,12 @@ export function LeagueChat({
           ) : (
             timeline.map((item, idx) => {
               if (item.type === "sys") {
-                return <SystemMessage key={item.key} event={item.event} ts={item.ts} />;
+                return <SystemMessage key={item.key} event={item.event} ts={item.ts} now={now} />;
               }
               const m = item.message;
               const sender = memberById.get(m.sender_member_id);
               const name = sender?.team_name ?? "Team";
-              const time = new Date(m.created_at).toLocaleTimeString("en-US", {
-                hour: "numeric",
-                minute: "2-digit",
-              });
+              const time = formatRelativeTime(m.created_at, now);
               // Group consecutive messages from the same sender: drop the
               // avatar/name header and just show the text, indented.
               const prev = timeline[idx - 1];
@@ -508,7 +538,12 @@ export function LeagueChat({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline gap-2">
                       <span className="font-semibold text-white text-sm truncate">{name}</span>
-                      <span className="text-gray-500 text-[11px] shrink-0">{time}</span>
+                      <span
+                        className="text-gray-500 text-[11px] shrink-0"
+                        title={new Date(m.created_at).toLocaleString()}
+                      >
+                        {time}
+                      </span>
                     </div>
                     <p className="text-gray-200 text-sm leading-snug break-words whitespace-pre-wrap">
                       {m.body}
@@ -601,8 +636,8 @@ function previewFor(
 }
 
 /** Sleeper-style system message for a trade or roster move. */
-function SystemMessage({ event, ts }: { event: SystemEvent; ts: string }) {
-  const time = new Date(ts).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+function SystemMessage({ event, ts, now }: { event: SystemEvent; ts: string; now: number }) {
+  const time = formatRelativeTime(ts, now);
   return (
     <div className="flex items-start gap-2.5 py-1">
       <div className="shrink-0 w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-gray-300">
@@ -612,7 +647,7 @@ function SystemMessage({ event, ts }: { event: SystemEvent; ts: string }) {
         </svg>
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] text-gray-400 mb-1">{time}</p>
+        <p className="text-[10px] text-gray-400 mb-1" title={new Date(ts).toLocaleString()}>{time}</p>
         {event.kind === "trade" ? (
           <>
             <p className="text-sm text-gray-200 font-medium mb-1">A trade has been completed.</p>
