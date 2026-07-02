@@ -84,7 +84,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {children}
       </main>
 
-      <MobileBottomNav />
+      <MobileBottomNav leagues={sidebarLeagues} />
     </div>
     </InstallProvider>
   );
