@@ -150,11 +150,18 @@ function PickCountdown({
   secondsPerPick,
   startedAt,
   pickNumber,
+  autoFire = true,
+  className = "text-xs font-mono",
 }: {
   leagueId: number;
   secondsPerPick: number;
   startedAt: string | null;
   pickNumber: number;
+  // When false, the timer only displays — it won't fire the expire action at
+  // zero. Used for the on-clock board cell so only the single top-bar instance
+  // triggers the auto-pick.
+  autoFire?: boolean;
+  className?: string;
 }) {
   const [now, setNow] = useState(() => Date.now());
   const firedRef = useRef<number | null>(null);
@@ -171,7 +178,7 @@ function PickCountdown({
   const remaining = Math.max(0, secondsPerPick - Math.floor((now - startedMs) / 1000));
 
   // Auto-fire the expire action once per pick when the timer hits zero.
-  if (remaining === 0 && firedRef.current !== pickNumber) {
+  if (autoFire && remaining === 0 && firedRef.current !== pickNumber) {
     firedRef.current = pickNumber;
     void autoPickExpired(leagueId);
   }
@@ -196,7 +203,7 @@ function PickCountdown({
   const tone =
     remaining <= 10 ? "text-red-400" : remaining <= 30 ? "text-yellow-300" : "text-gray-400";
   return (
-    <span className={`text-xs font-mono ${tone}`} title="Time remaining on this pick">
+    <span className={`${className} ${tone}`} title="Time remaining on this pick">
       {display}
     </span>
   );
@@ -578,7 +585,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
         type="button"
         onClick={() => setFocusedTeamId((cur) => (cur === m.id ? null : m.id))}
         title={isFocused ? "Show all teams" : `Highlight ${m.teamName}'s picks`}
-        className={`w-full px-2 py-2 rounded-lg transition ${
+        className={`w-full px-2 pt-6 pb-1.5 rounded-lg transition flex flex-col justify-end ${
           isOnClock ? "bg-[#36D7B7]/15" : "bg-[#0f1117]"
         } ${
           isFocused ? "ring-2 ring-[#4B3DFF]" : headerDim ? "opacity-40 hover:opacity-100" : "hover:bg-white/5"
@@ -590,9 +597,6 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
             {m.teamName}
           </p>
         </div>
-        {isOnClock && (
-          <p className="text-[10px] text-[#36D7B7] font-semibold animate-pulse mt-1 text-center">ON THE CLOCK</p>
-        )}
       </button>
     );
   });
@@ -707,7 +711,18 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
           <>
             {tradedBadge}
             <span className="text-[#36D7B7] text-[10px] font-mono">{pickLabel}</span>
-            <span className="text-[#36D7B7] text-xs font-semibold animate-pulse mt-1">on the clock</span>
+            {draft?.status === "in_progress" ? (
+              <PickCountdown
+                leagueId={leagueId}
+                secondsPerPick={draft.secondsPerPick ?? 60}
+                startedAt={draft.currentPickStartedAt ?? null}
+                pickNumber={currentPick}
+                autoFire={false}
+                className="text-sm font-bold font-mono mt-1"
+              />
+            ) : (
+              <span className="text-yellow-400 text-xs font-semibold mt-1">Paused</span>
+            )}
             {canManage && draft?.status === "in_progress" && (
               <span className="text-[#36D7B7]/70 text-[9px] mt-0.5">tap to assign</span>
             )}
