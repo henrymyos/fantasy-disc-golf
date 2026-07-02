@@ -710,22 +710,23 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
         const onClockBody = (
           <>
             {tradedBadge}
-            <span className="text-[#36D7B7] text-[10px] font-mono">{pickLabel}</span>
-            {draft?.status === "in_progress" ? (
-              <PickCountdown
-                leagueId={leagueId}
-                secondsPerPick={draft.secondsPerPick ?? 60}
-                startedAt={draft.currentPickStartedAt ?? null}
-                pickNumber={currentPick}
-                autoFire={false}
-                className="text-sm font-bold font-mono mt-1"
-              />
-            ) : (
-              <span className="text-yellow-400 text-xs font-semibold mt-1">Paused</span>
-            )}
-            {canManage && draft?.status === "in_progress" && (
-              <span className="text-[#36D7B7]/70 text-[9px] mt-0.5">tap to assign</span>
-            )}
+            <div className="flex justify-start">
+              <span className="text-[#36D7B7] text-[10px] font-mono">{pickLabel}</span>
+            </div>
+            <div className="flex-1 flex items-center justify-center">
+              {draft?.status === "in_progress" ? (
+                <PickCountdown
+                  leagueId={leagueId}
+                  secondsPerPick={draft.secondsPerPick ?? 60}
+                  startedAt={draft.currentPickStartedAt ?? null}
+                  pickNumber={currentPick}
+                  autoFire={false}
+                  className="text-sm font-bold font-mono"
+                />
+              ) : (
+                <span className="text-yellow-400 text-xs font-semibold">Paused</span>
+              )}
+            </div>
           </>
         );
         if (canManage && draft?.status === "in_progress") {
@@ -735,7 +736,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
               key={`${round}-${m.id}`}
               type="button"
               onClick={() => setPicker({ mode: "assign" })}
-              className={`flex flex-col items-center justify-center p-1.5 min-h-[60px] rounded-lg bg-[#36D7B7]/10 ring-2 ring-[#36D7B7] ring-inset hover:bg-[#36D7B7]/20 transition${dimClass}`}
+              className={`flex flex-col p-1.5 min-h-[60px] rounded-lg bg-[#36D7B7]/10 ring-2 ring-[#36D7B7] ring-inset hover:bg-[#36D7B7]/20 transition${dimClass}`}
             >
               {onClockBody}
             </button>
@@ -744,7 +745,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
           gridCells.push(
             <div
               key={`${round}-${m.id}`}
-              className={`flex flex-col items-center justify-center p-1.5 min-h-[60px] rounded-lg bg-[#36D7B7]/10 ring-2 ring-[#36D7B7] ring-inset transition${dimClass}`}
+              className={`flex flex-col p-1.5 min-h-[60px] rounded-lg bg-[#36D7B7]/10 ring-2 ring-[#36D7B7] ring-inset transition${dimClass}`}
             >
               {onClockBody}
             </div>
@@ -1198,31 +1199,31 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
                       <span className={`text-xs font-semibold shrink-0 ${divColor(player.division)}`}>
                         {player.division}
                       </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          queuedSet.has(player.id) ? removeFromQueue(player.id) : addToQueue(player.id)
+                        }
+                        className={`shrink-0 p-1 rounded-lg transition ${
+                          queuedSet.has(player.id)
+                            ? "text-[#36D7B7] hover:bg-[#36D7B7]/10"
+                            : "text-gray-500 hover:text-white hover:bg-white/10"
+                        }`}
+                        title={queuedSet.has(player.id) ? "Remove from queue" : "Add to queue"}
+                        aria-label={queuedSet.has(player.id) ? "Remove from queue" : "Add to queue"}
+                      >
+                        {queuedSet.has(player.id) ? (
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M6 2h12a1 1 0 0 1 1 1v18l-7-4-7 4V3a1 1 0 0 1 1-1z" />
+                          </svg>
+                        ) : (
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19" />
+                            <line x1="5" y1="12" x2="19" y2="12" />
+                          </svg>
+                        )}
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        queuedSet.has(player.id) ? removeFromQueue(player.id) : addToQueue(player.id)
-                      }
-                      className={`shrink-0 p-1.5 rounded-lg transition ${
-                        queuedSet.has(player.id)
-                          ? "text-[#36D7B7] hover:bg-[#36D7B7]/10"
-                          : "text-gray-500 hover:text-white hover:bg-white/10"
-                      }`}
-                      title={queuedSet.has(player.id) ? "Remove from queue" : "Add to queue"}
-                      aria-label={queuedSet.has(player.id) ? "Remove from queue" : "Add to queue"}
-                    >
-                      {queuedSet.has(player.id) ? (
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M6 2h12a1 1 0 0 1 1 1v18l-7-4-7 4V3a1 1 0 0 1 1-1z" />
-                        </svg>
-                      ) : (
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="12" y1="5" x2="12" y2="19" />
-                          <line x1="5" y1="12" x2="19" y2="12" />
-                        </svg>
-                      )}
-                    </button>
                   </div>
                 ))
               )
