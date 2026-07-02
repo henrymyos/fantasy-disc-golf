@@ -1159,14 +1159,21 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
                       >
                         <button
                           type="submit"
-                          className="text-xs px-3 py-1.5 rounded-full transition text-white bg-[#4B3DFF] hover:bg-[#3a2ee0]"
+                          className="text-xs font-bold uppercase tracking-wide px-3 py-1.5 rounded-full transition text-black bg-[#36D7B7] hover:bg-[#2bc4a6]"
                           title="Draft this player"
                         >
                           Draft
                         </button>
                       </form>
                     ) : (
-                      <span className="w-[60px] shrink-0 -mr-2" />
+                      <button
+                        type="button"
+                        disabled
+                        className="shrink-0 -mr-2 text-xs font-bold uppercase tracking-wide px-3 py-1.5 rounded-full bg-white/5 text-gray-500 cursor-default"
+                        title="Wait for your turn to draft"
+                      >
+                        Draft
+                      </button>
                     )}
                     <span
                       className="text-gray-400 text-xs font-mono w-7 text-right shrink-0 tabular-nums"
