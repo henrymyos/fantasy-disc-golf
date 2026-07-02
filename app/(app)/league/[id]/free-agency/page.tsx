@@ -29,7 +29,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
     .eq("user_id", user.id)
     .single();
 
-  if (!myMember) redirect("/dashboard");
+  if (!myMember) redirect("/dashboard?home=1");
 
   const { data: allMembers } = await supabase
     .from("league_members")

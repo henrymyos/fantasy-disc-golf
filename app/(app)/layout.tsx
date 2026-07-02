@@ -53,7 +53,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
       {/* Sidebar (hidden below md) */}
       <aside className="hidden md:flex md:w-14 lg:w-56 bg-[#13151c] border-r border-white/5 flex-col py-6 px-2 lg:px-4 fixed top-0 h-full z-20">
-        <Link href="/dashboard" className="mb-8 block">
+        <Link href="/dashboard?home=1" className="mb-8 block">
           <h1 className="hidden lg:block text-xl font-black text-white tracking-tight">
             <span className="text-[#4B3DFF]">Disc</span> Fantasy
           </h1>

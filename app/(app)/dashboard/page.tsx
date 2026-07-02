@@ -1,12 +1,25 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { landingPathForUser } from "@/lib/landing";
 import type { League } from "@/types";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ home?: string }>;
+}) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  // Opening the app lands here (the installed PWA's start_url is /dashboard).
+  // On a plain open, jump to the league you were most recently in; an explicit
+  // Home visit (?home=1, from the Home button/logo) always shows this screen.
+  if ((await searchParams).home == null) {
+    const dest = await landingPathForUser(user.id);
+    if (dest !== "/dashboard") redirect(dest);
+  }
 
   const { data: profile } = await supabase
     .from("profiles")

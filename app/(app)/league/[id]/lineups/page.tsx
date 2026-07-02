@@ -40,7 +40,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
     .eq("user_id", user.id)
     .single();
 
-  if (!myMember) redirect("/dashboard");
+  if (!myMember) redirect("/dashboard?home=1");
 
   const { data: myRoster } = await supabase
     .from("rosters")

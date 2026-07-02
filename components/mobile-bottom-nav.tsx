@@ -99,7 +99,7 @@ export function MobileBottomNav({ leagues = [] }: { leagues?: LeagueLink[] }) {
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#13151c]/95 backdrop-blur border-t border-white/5 flex justify-around pb-[max(env(safe-area-inset-bottom),0.25rem)] pt-1"
         aria-label="Primary"
       >
-        <Link href="/dashboard" className={tabClass(onHome)}>
+        <Link href="/dashboard?home=1" className={tabClass(onHome)}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 11l9-8 9 8" />
             <path d="M5 9v11h14V9" />

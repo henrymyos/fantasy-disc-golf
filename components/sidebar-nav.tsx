@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 type LeagueLink = { id: number; name: string; logoUrl: string | null };
 
 const NAV_ITEMS = [
-  { href: "/dashboard", icon: "🏠", label: "Home" },
+  { href: "/dashboard?home=1", icon: "🏠", label: "Home" },
   { href: "/pro-tour", icon: "🥏", label: "Pro Tour" },
 ];
 
@@ -23,7 +23,7 @@ export function SidebarNav({ leagues = [] }: { leagues?: LeagueLink[] }) {
   return (
     <nav className="flex-1 min-h-0 overflow-y-auto space-y-1">
       {NAV_ITEMS.map(({ href, icon, label }) => (
-        <Link key={href} href={href} className={linkClass(pathname === href)}>
+        <Link key={href} href={href} className={linkClass(pathname === href.split("?")[0])}>
           <span className="w-5 text-base flex items-center justify-center shrink-0">{icon}</span>
           <span className="hidden lg:block">{label}</span>
         </Link>

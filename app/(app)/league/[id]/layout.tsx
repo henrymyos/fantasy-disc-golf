@@ -33,7 +33,7 @@ export default async function LeagueLayout({
     .single();
 
   if (!membership) {
-    redirect("/dashboard");
+    redirect("/dashboard?home=1");
   }
 
   // Roster of teams powers the chat dock's channel list (League + DMs). It

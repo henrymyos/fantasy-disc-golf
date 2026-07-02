@@ -20,7 +20,7 @@ export function MobileTopBar({
 }) {
   return (
     <header className="md:hidden bg-[#13151c] border-b border-white/5 flex items-center gap-3 sticky top-0 z-30 px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pb-3 pt-[max(env(safe-area-inset-top),0.75rem)]">
-      <Link href="/dashboard" className="shrink-0 flex items-center gap-1.5">
+      <Link href="/dashboard?home=1" className="shrink-0 flex items-center gap-1.5">
         <div className="w-7 h-7 bg-[#4B3DFF] rounded-lg flex items-center justify-center text-white font-black text-xs">
           DF
         </div>

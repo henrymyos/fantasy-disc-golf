@@ -13,7 +13,7 @@ function JoinLeagueForm() {
   return (
     <div className="max-w-md">
       <div className="mb-6">
-        <Link href="/dashboard" className="text-gray-400 hover:text-gray-300 text-sm transition">
+        <Link href="/dashboard?home=1" className="text-gray-400 hover:text-gray-300 text-sm transition">
           ← Back to leagues
         </Link>
       </div>
