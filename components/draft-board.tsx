@@ -17,7 +17,7 @@ type DraftInfo = {
   currentPickStartedAt?: string | null;
   thirdRoundReversal?: boolean;
 };
-type Member = { id: number; teamName: string; draftPosition: number };
+type Member = { id: number; teamName: string; draftPosition: number; avatarUrl?: string | null; avatarColor?: string | null };
 type PickInfo = { pickNumber: number; teamId: number; playerId: number | null; playerName: string; playerDivision: string };
 type AvailablePlayer = { id: number; name: string; division: string; worldRanking: number | null; overallRank: number | null; pdgaRating?: number | null; totalPoints?: number };
 type Tab = "all" | "mpo" | "fpo";
@@ -225,6 +225,37 @@ function formatPerPick(seconds: number): string {
   const d = Math.floor(seconds / 86400);
   const h = Math.floor((seconds % 86400) / 3600);
   return h === 0 ? `${d}d` : `${d}d ${h}h`;
+}
+
+// Team logo shown above each draft column. The owner's profile avatar when
+// they have one, otherwise a generic initial circle in one of the app accents
+// (blue / green), picked stably per team.
+function TeamHeaderAvatar({
+  name,
+  avatarUrl,
+  avatarColor,
+  seed,
+}: {
+  name: string;
+  avatarUrl?: string | null;
+  avatarColor?: string | null;
+  seed: number;
+}) {
+  if (avatarUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={avatarUrl} alt="" className="w-6 h-6 rounded-full object-cover shrink-0 bg-white/10" />
+    );
+  }
+  const color = avatarColor || (seed % 2 === 0 ? "#4B3DFF" : "#36D7B7");
+  return (
+    <div
+      className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center text-white text-[10px] font-bold"
+      style={{ backgroundColor: color }}
+    >
+      {name?.[0]?.toUpperCase() ?? "?"}
+    </div>
+  );
 }
 
 function SettingRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -547,18 +578,20 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
         type="button"
         onClick={() => setFocusedTeamId((cur) => (cur === m.id ? null : m.id))}
         title={isFocused ? "Show all teams" : `Highlight ${m.teamName}'s picks`}
-        className={`w-full px-2 py-2 text-center rounded-lg transition ${
+        className={`w-full px-2 py-2 rounded-lg transition ${
           isOnClock ? "bg-[#36D7B7]/15" : "bg-[#0f1117]"
         } ${
           isFocused ? "ring-2 ring-[#4B3DFF]" : headerDim ? "opacity-40 hover:opacity-100" : "hover:bg-white/5"
         }`}
       >
-        <p className={`text-xs font-bold truncate leading-tight ${isMe ? "text-white" : "text-gray-300"}`}>
-          {m.teamName}
-        </p>
-        <p className="text-gray-400 text-[10px] mt-0.5">#{m.draftPosition}</p>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <TeamHeaderAvatar name={m.teamName} avatarUrl={m.avatarUrl} avatarColor={m.avatarColor} seed={m.id} />
+          <p className={`text-xs font-bold truncate leading-tight ${isMe ? "text-white" : "text-gray-300"}`}>
+            {m.teamName}
+          </p>
+        </div>
         {isOnClock && (
-          <p className="text-[10px] text-[#36D7B7] font-semibold animate-pulse mt-1">ON THE CLOCK</p>
+          <p className="text-[10px] text-[#36D7B7] font-semibold animate-pulse mt-1 text-center">ON THE CLOCK</p>
         )}
       </button>
     );

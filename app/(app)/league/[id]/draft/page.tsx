@@ -56,7 +56,7 @@ export default async function DraftPage({
   // placeholders if their slot hasn't been assigned yet.
   const { data: memberRowsRaw } = await supabase
     .from("league_members")
-    .select("id, team_name, draft_position, joined_at")
+    .select("id, team_name, draft_position, joined_at, profiles(avatar_url, avatar_color)")
     .eq("league_id", id)
     .order("draft_position", { ascending: true, nullsFirst: false })
     .order("joined_at", { ascending: true });
@@ -66,6 +66,8 @@ export default async function DraftPage({
     id: m.id,
     team_name: orderSet ? m.team_name : `Team ${i + 1}`,
     draft_position: orderSet ? m.draft_position : i + 1,
+    avatar_url: m.profiles?.avatar_url ?? null,
+    avatar_color: m.profiles?.avatar_color ?? null,
   }));
 
   const { data: myMemberRow } = await supabase
@@ -134,6 +136,8 @@ export default async function DraftPage({
     id: m.id,
     teamName: m.team_name,
     draftPosition: m.draft_position as number,
+    avatarUrl: m.avatar_url,
+    avatarColor: m.avatar_color,
   }));
 
   const picks = (pickRows ?? []).map((p: any) => ({
