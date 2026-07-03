@@ -119,6 +119,16 @@ export default async function DraftPage({
     rank: r.rank as number,
   }));
 
+  // The user's draft queue for this league — a shortlist kept separate from
+  // their rankings above (adding to the queue doesn't touch the Mine tab).
+  const { data: queueRows } = await supabase
+    .from("draft_queue")
+    .select("player_id, position")
+    .eq("user_id", user.id)
+    .eq("league_id", id)
+    .order("position", { ascending: true });
+  const queue = (queueRows ?? []).map((r: any) => r.player_id as number);
+
   // Sum each player's fantasy points this season so the available list can
   // be ordered like the points leaders view (highest first).
   const { data: resultRows } = await supabase
@@ -188,6 +198,7 @@ export default async function DraftPage({
           picks,
           availablePlayers,
           myRankings,
+          queue,
           myMemberId: myMemberRow?.id ?? null,
           isCommissioner,
           mpoSlots,

@@ -35,6 +35,36 @@ export async function setRankings(leagueId: number, playerIds: number[]): Promis
 }
 
 /**
+ * Replace the user's draft queue for this league with the given ordered ids.
+ * The queue is separate from their rankings (user_player_rankings) — adding a
+ * player here does not touch the Mine/rankings list — but auto-pick prefers it
+ * (see pickBestAvailableForTeam).
+ */
+export async function setQueue(leagueId: number, playerIds: number[]): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const admin = createAdminClient();
+  await admin
+    .from("draft_queue")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("league_id", leagueId);
+
+  const rows = playerIds.map((pid, i) => ({
+    user_id: user.id,
+    league_id: leagueId,
+    player_id: pid,
+    position: i + 1,
+  }));
+  if (rows.length > 0) {
+    await admin.from("draft_queue").insert(rows);
+  }
+  revalidatePath(`/league/${leagueId}/draft`);
+}
+
+/**
  * Auto-pick using the current user's rankings for the active draft pick. Falls
  * back to overall_rank when the user has no entry for a candidate. Only runs
  * when it's the calling user's turn.

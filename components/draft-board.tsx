@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { startDraft, pauseDraft, resumeDraft, makeDraftPick, undoLastPick, undoPick, replacePick, commissionerMakePick } from "@/actions/drafts";
-import { autoPickFromRankings, autoPickExpired, setRankings } from "@/actions/rankings";
+import { autoPickFromRankings, autoPickExpired, setQueue } from "@/actions/rankings";
 import { resolvePickOwnerId, type PickOwnerOverrides } from "@/lib/draft-pick-owners";
 
 type DraftInfo = {
@@ -40,6 +40,8 @@ type Props = {
   picks: PickInfo[];
   availablePlayers: AvailablePlayer[];
   myRankings?: MyRanking[];
+  // Ordered player ids in the user's draft queue (separate from myRankings).
+  queue?: number[];
   myMemberId: number | null;
   isCommissioner: boolean;
   mpoSlots?: number;
@@ -279,7 +281,7 @@ function SettingRow({ label, value }: { label: string; value: React.ReactNode })
   );
 }
 
-export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], picks, availablePlayers, myRankings = [], myMemberId, isCommissioner, mpoSlots = 4, fpoSlots = 2, rosterSize = 14, readOnly, onExit }: Props) {
+export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], picks, availablePlayers, myRankings = [], queue = [], myMemberId, isCommissioner, mpoSlots = 4, fpoSlots = 2, rosterSize = 14, readOnly, onExit }: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("all");
   const [bottomTab, setBottomTab] = useState<BottomTab>("available");
@@ -531,32 +533,24 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
     });
   };
 
-  // Draft queue — unified with the user's saved rankings (user_player_rankings),
-  // so the queue order is exactly what auto-pick uses. The visible queue is the
-  // ranked list narrowed to still-available players; any already-drafted ranked
-  // players are parked at the end on save so the saved list isn't lost.
+  // Draft queue — its own list (draft_queue), separate from the user's saved
+  // rankings, so adding here never touches the Mine tab. Auto-pick still
+  // prefers the queue (then rankings). The visible queue is narrowed to
+  // still-available players; drafted players drop off on the next save.
   const playerById = useMemo(() => {
     const m = new Map<number, AvailablePlayer>();
     for (const p of availablePlayers) m.set(p.id, p);
     return m;
   }, [availablePlayers]);
-  const rankedOrder = useMemo(
-    () => [...myRankings].sort((a, b) => a.rank - b.rank).map((r) => r.playerId),
-    [myRankings],
-  );
   const queueIds = useMemo(
-    () => rankedOrder.filter((id) => playerById.has(id)),
-    [rankedOrder, playerById],
-  );
-  const parkedIds = useMemo(
-    () => rankedOrder.filter((id) => !playerById.has(id)),
-    [rankedOrder, playerById],
+    () => queue.filter((id) => playerById.has(id)),
+    [queue, playerById],
   );
   const queuedSet = useMemo(() => new Set(queueIds), [queueIds]);
 
   const persistQueue = (nextQueue: number[]) => {
     startTransition(() => {
-      void setRankings(leagueId, [...nextQueue, ...parkedIds]).then(() => router.refresh());
+      void setQueue(leagueId, nextQueue).then(() => router.refresh());
     });
   };
   const addToQueue = (playerId: number) => {

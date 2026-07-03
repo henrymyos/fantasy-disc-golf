@@ -125,11 +125,25 @@ export async function pickBestAvailableForTeam(
     divisionById.set((p as any).id, (p as any).division ?? "MPO");
   }
 
-  // Candidate order: user's personal rankings first, then anything missing
-  // from those rankings appended in overall_rank order.
+  // Candidate order: the user's draft queue first (highest priority), then
+  // their personal rankings, then anything missing from both appended in
+  // overall_rank order.
   const candidateIds: number[] = [];
   const seen = new Set<number>();
   if (forUserId) {
+    const { data: queued } = await admin
+      .from("draft_queue")
+      .select("player_id, position")
+      .eq("user_id", forUserId)
+      .eq("league_id", leagueId)
+      .order("position", { ascending: true });
+    for (const r of queued ?? []) {
+      const pid = (r as any).player_id;
+      if (!seen.has(pid)) {
+        candidateIds.push(pid);
+        seen.add(pid);
+      }
+    }
     const { data: rankings } = await admin
       .from("user_player_rankings")
       .select("player_id, rank")
