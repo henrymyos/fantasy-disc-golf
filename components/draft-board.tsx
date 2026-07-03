@@ -1252,7 +1252,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
                           {player.division}
                         </span>
                       </div>
-                      {draft?.status === "in_progress" && isMyPick && (
+                      {draft?.status === "in_progress" && isMyPick ? (
                         <form
                           action={makeDraftPick.bind(null, leagueId, id)}
                           onSubmit={() => startTransition(() => { setTimeout(() => router.refresh(), 300); })}
@@ -1266,6 +1266,15 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
                             Draft
                           </button>
                         </form>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          className="shrink-0 text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-full bg-white/5 text-gray-500 cursor-default"
+                          title="Wait for your turn to draft"
+                        >
+                          Draft
+                        </button>
                       )}
                       <div className="flex items-center shrink-0">
                         <button
