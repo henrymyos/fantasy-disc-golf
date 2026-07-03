@@ -1209,24 +1209,18 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
                         onClick={() =>
                           queuedSet.has(player.id) ? removeFromQueue(player.id) : addToQueue(player.id)
                         }
-                        className={`shrink-0 p-1 rounded-lg transition ${
+                        className={`shrink-0 w-6 h-6 rounded-full border flex items-center justify-center transition ${
                           queuedSet.has(player.id)
-                            ? "text-[#36D7B7] hover:bg-[#36D7B7]/10"
-                            : "text-gray-500 hover:text-white hover:bg-white/10"
+                            ? "bg-[#36D7B7] border-[#36D7B7] text-black hover:bg-[#2bc4a6]"
+                            : "border-white/25 text-gray-400 hover:border-white/50 hover:text-white"
                         }`}
                         title={queuedSet.has(player.id) ? "Remove from queue" : "Add to queue"}
                         aria-label={queuedSet.has(player.id) ? "Remove from queue" : "Add to queue"}
                       >
-                        {queuedSet.has(player.id) ? (
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M6 2h12a1 1 0 0 1 1 1v18l-7-4-7 4V3a1 1 0 0 1 1-1z" />
-                          </svg>
-                        ) : (
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="12" y1="5" x2="12" y2="19" />
-                            <line x1="5" y1="12" x2="19" y2="12" />
-                          </svg>
-                        )}
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="12" y1="5" x2="12" y2="19" />
+                          <line x1="5" y1="12" x2="19" y2="12" />
+                        </svg>
                       </button>
                     </div>
                   </div>
