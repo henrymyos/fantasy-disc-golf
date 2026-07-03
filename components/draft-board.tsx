@@ -1252,20 +1252,18 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
                           {player.division}
                         </span>
                       </div>
-                      {draft?.status === "in_progress" && (isMyPick || isCommissioner) && (
+                      {draft?.status === "in_progress" && isMyPick && (
                         <form
-                          action={(isMyPick ? makeDraftPick : commissionerMakePick).bind(null, leagueId, id)}
+                          action={makeDraftPick.bind(null, leagueId, id)}
                           onSubmit={() => startTransition(() => { setTimeout(() => router.refresh(), 300); })}
                           className="shrink-0"
                         >
                           <button
                             type="submit"
-                            className={`text-xs px-2.5 py-1 rounded-full transition text-white ${
-                              isMyPick ? "bg-[#4B3DFF] hover:bg-[#3a2ee0]" : "bg-white/10 hover:bg-white/20 border border-white/15"
-                            }`}
-                            title={isMyPick ? "Draft this player" : "Pick on behalf of the on-clock team"}
+                            className="text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-full transition text-black bg-[#36D7B7] hover:bg-[#2bc4a6]"
+                            title="Draft this player"
                           >
-                            {isMyPick ? "Draft" : "Assign"}
+                            Draft
                           </button>
                         </form>
                       )}
