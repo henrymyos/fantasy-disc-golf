@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { BackLink } from "@/components/back-link";
 import { NotificationPrefToggle } from "@/components/notification-pref-toggle";
+import { PushSubscribeButton } from "@/components/push-subscribe-button";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,19 @@ export default async function NotificationSettingsPage() {
         <p className="text-gray-400 text-sm mt-1">
           Turn off any of these to stop creating new in-app notifications of that kind. Existing notifications stay in your feed.
         </p>
+      </div>
+
+      {/* Push on this device — subscribes the browser/PWA to Web Push so
+          alerts pop up even when the app is closed. */}
+      <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5 space-y-3">
+        <div>
+          <h3 className="text-white font-semibold">Push on this device</h3>
+          <p className="text-gray-400 text-sm mt-1">
+            Get alerts pop up on this device even when the app is closed. On iPhone or iPad you must first add
+            Disc Fantasy to your Home Screen (Share → Add to Home Screen), open it from there, then enable push below.
+          </p>
+        </div>
+        <PushSubscribeButton />
       </div>
 
       <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
