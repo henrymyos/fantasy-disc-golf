@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef, useTransition } from "react";
+import { useState, useEffect, useMemo, useRef, useTransition, useOptimistic } from "react";
+import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { startDraft, pauseDraft, resumeDraft, makeDraftPick, undoLastPick, undoPick, replacePick, commissionerMakePick } from "@/actions/drafts";
@@ -546,25 +547,34 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
     () => queue.filter((id) => playerById.has(id)),
     [queue, playerById],
   );
-  const queuedSet = useMemo(() => new Set(queueIds), [queueIds]);
+  // Optimistic mirror of the queue so tapping + / − updates the button instantly
+  // instead of waiting on the server round-trip + refresh. It reverts to the
+  // server list once the refresh catches up (which by then matches).
+  const [optimisticQueue, setOptimisticQueue] = useOptimistic<number[], number[]>(
+    queueIds,
+    (_prev, next) => next,
+  );
+  const queuedSet = useMemo(() => new Set(optimisticQueue), [optimisticQueue]);
 
   const persistQueue = (nextQueue: number[]) => {
-    startTransition(() => {
-      void setQueue(leagueId, nextQueue).then(() => router.refresh());
+    startTransition(async () => {
+      setOptimisticQueue(nextQueue);
+      await setQueue(leagueId, nextQueue);
+      router.refresh();
     });
   };
   const addToQueue = (playerId: number) => {
     if (queuedSet.has(playerId)) return;
-    persistQueue([...queueIds, playerId]);
+    persistQueue([...optimisticQueue, playerId]);
   };
   const removeFromQueue = (playerId: number) => {
-    persistQueue(queueIds.filter((id) => id !== playerId));
+    persistQueue(optimisticQueue.filter((id) => id !== playerId));
   };
   const moveInQueue = (playerId: number, dir: -1 | 1) => {
-    const i = queueIds.indexOf(playerId);
+    const i = optimisticQueue.indexOf(playerId);
     const j = i + dir;
-    if (i < 0 || j < 0 || j >= queueIds.length) return;
-    const next = [...queueIds];
+    if (i < 0 || j < 0 || j >= optimisticQueue.length) return;
+    const next = [...optimisticQueue];
     [next[i], next[j]] = [next[j], next[i]];
     persistQueue(next);
   };
@@ -1151,13 +1161,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
                         onSubmit={() => startTransition(() => { setTimeout(() => router.refresh(), 300); })}
                         className="shrink-0 -mr-2"
                       >
-                        <button
-                          type="submit"
-                          className="text-xs font-bold uppercase tracking-wide px-3 py-1.5 rounded-full transition text-black bg-[#36D7B7] hover:bg-[#2bc4a6]"
-                          title="Draft this player"
-                        >
-                          Draft
-                        </button>
+                        <DraftSubmitButton size="md" />
                       </form>
                     ) : (
                       <button
@@ -1221,12 +1225,12 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
                 ))
               )
             ) : bottomTab === "queue" ? (
-              queueIds.length === 0 ? (
+              optimisticQueue.length === 0 ? (
                 <p className="text-gray-400 text-xs text-center py-6 px-4">
                   Your queue is empty. Add players with <span className="text-[#36D7B7]">+</span> from the Available tab — the order here is what auto-pick uses.
                 </p>
               ) : (
-                queueIds.map((id, idx) => {
+                optimisticQueue.map((id, idx) => {
                   const player = playerById.get(id);
                   if (!player) return null;
                   return (
@@ -1258,13 +1262,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
                           onSubmit={() => startTransition(() => { setTimeout(() => router.refresh(), 300); })}
                           className="shrink-0"
                         >
-                          <button
-                            type="submit"
-                            className="text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-full transition text-black bg-[#36D7B7] hover:bg-[#2bc4a6]"
-                            title="Draft this player"
-                          >
-                            Draft
-                          </button>
+                          <DraftSubmitButton size="sm" />
                         </form>
                       ) : (
                         <button
@@ -1292,7 +1290,7 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
                         <button
                           type="button"
                           onClick={() => moveInQueue(id, 1)}
-                          disabled={idx === queueIds.length - 1}
+                          disabled={idx === optimisticQueue.length - 1}
                           className="p-1 text-gray-400 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed"
                           title="Move down"
                           aria-label="Move down"
@@ -1608,5 +1606,31 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
         </div>
       )}
     </div>
+  );
+}
+
+/** Draft-a-player submit button that shows a spinner while its form's server
+ *  action is in flight. useFormStatus reflects only the enclosing <form>, so
+ *  each player's button spins independently. */
+function DraftSubmitButton({ size }: { size: "sm" | "md" }) {
+  const { pending } = useFormStatus();
+  const sizeCls = size === "md" ? "px-3 py-1.5 min-w-[3.5rem]" : "px-2.5 py-1 min-w-[3rem]";
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      aria-busy={pending}
+      className={`inline-flex items-center justify-center text-xs font-bold uppercase tracking-wide ${sizeCls} rounded-full transition text-black bg-[#36D7B7] hover:bg-[#2bc4a6] disabled:hover:bg-[#36D7B7] disabled:cursor-wait`}
+      title="Draft this player"
+    >
+      {pending ? (
+        <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" strokeOpacity="0.3" />
+          <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+        </svg>
+      ) : (
+        "Draft"
+      )}
+    </button>
   );
 }
