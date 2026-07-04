@@ -22,6 +22,21 @@ const KINDS = [
     label: "Lineup reminder",
     description: "If you have empty starter slots within ~6 hours of round-1 tee time.",
   },
+  {
+    kind: "waiver_result" as const,
+    label: "Waiver results",
+    description: "When your waiver claims are processed — won or lost.",
+  },
+  {
+    kind: "member_joined" as const,
+    label: "New league members",
+    description: "When a new team joins one of your leagues.",
+  },
+  {
+    kind: "draft_status" as const,
+    label: "Draft updates",
+    description: "When the draft is scheduled or starts.",
+  },
 ];
 
 export default async function NotificationSettingsPage() {

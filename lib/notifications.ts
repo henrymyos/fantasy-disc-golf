@@ -4,7 +4,10 @@ import { sendPushToUser } from "@/lib/push";
 export type NotificationKind =
   | "trade_proposed"
   | "weekly_result"
-  | "lineup_unset";
+  | "lineup_unset"
+  | "waiver_result"
+  | "member_joined"
+  | "draft_status";
 
 type EnqueueArgs = {
   userId: string;
@@ -69,6 +72,9 @@ function titleFor(kind: NotificationKind): string {
     case "trade_proposed": return "Trade proposed";
     case "weekly_result": return "Week finalized";
     case "lineup_unset": return "Set your lineup";
+    case "waiver_result": return "Waiver result";
+    case "member_joined": return "New member";
+    case "draft_status": return "Draft update";
   }
 }
 

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { enqueueNotification } from "@/lib/notifications";
 import { z } from "zod";
 import { getScheduleEvents, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
 
@@ -168,6 +169,28 @@ export async function joinLeague(
   if ((afterCount ?? 0) > league.max_teams) {
     if (inserted) await admin.from("league_members").delete().eq("id", inserted.id);
     return { message: "This league is full." };
+  }
+
+  // Tell the existing members a new team joined (best-effort).
+  try {
+    const { data: others } = await admin
+      .from("league_members")
+      .select("user_id")
+      .eq("league_id", league.id)
+      .neq("id", inserted?.id ?? -1);
+    for (const m of others ?? []) {
+      const uid = (m as any).user_id;
+      if (!uid) continue;
+      await enqueueNotification(admin, {
+        userId: uid,
+        leagueId: league.id,
+        kind: "member_joined",
+        body: `${teamName} joined ${league.name}.`,
+        link: `/league/${league.id}`,
+      });
+    }
+  } catch (e) {
+    console.warn("member joined notify failed", e);
   }
 
   revalidatePath("/dashboard");

@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { enqueueNotification } from "@/lib/notifications";
 
 // Core waiver helpers. These intentionally live OUTSIDE any "use server" module:
 // they use the admin (service-role) client and perform NO auth checks, so
@@ -248,6 +249,47 @@ export async function runWaiverProcessing(leagueId: number): Promise<void> {
         .update({ waiver_priority: i + 1 })
         .eq("id", reordered[i].id);
     }
+  }
+
+  // Notify each team of their waiver outcome (best-effort). One message per
+  // team: their win if they got one, otherwise that a claim didn't go through.
+  try {
+    const claimIds = claims.map((c: any) => c.id);
+    const { data: outcomes } = await admin
+      .from("waiver_claims")
+      .select("team_id, status, players(name)")
+      .in("id", claimIds);
+    const byTeam = new Map<number, { won?: string; lost?: string }>();
+    for (const o of outcomes ?? []) {
+      const t = (o as any).team_id;
+      const name = (o as any).players?.name ?? "a player";
+      const cur = byTeam.get(t) ?? {};
+      if ((o as any).status === "processed") cur.won = name;
+      else if (!cur.lost) cur.lost = name;
+      byTeam.set(t, cur);
+    }
+    const { data: teamRows } = await admin
+      .from("league_members")
+      .select("id, user_id")
+      .in("id", [...byTeam.keys()]);
+    const userByTeam = new Map<number, string | null>();
+    for (const r of teamRows ?? []) userByTeam.set((r as any).id, (r as any).user_id);
+    for (const [teamId, oc] of byTeam) {
+      const uid = userByTeam.get(teamId);
+      if (!uid) continue;
+      const body = oc.won
+        ? `You won ${oc.won} on waivers.`
+        : `Your waiver claim for ${oc.lost ?? "a player"} didn't go through.`;
+      await enqueueNotification(admin, {
+        userId: uid,
+        leagueId,
+        kind: "waiver_result",
+        body,
+        link: `/league/${leagueId}/free-agency`,
+      });
+    }
+  } catch (e) {
+    console.warn("waiver result notify failed", e);
   }
 
   // Auto-unlock waivers so free agency reopens.

@@ -472,5 +472,36 @@ export async function cancelTrade(tradeId: number): Promise<void> {
   if (trade.status !== "pending") return;
 
   await admin.from("trades").update({ status: "cancelled", resolved_at: new Date().toISOString() }).eq("id", tradeId);
+
+  // Tell the other side the offer was pulled (best-effort).
+  try {
+    const { data: parts } = await admin
+      .from("trade_participants")
+      .select("team_id")
+      .eq("trade_id", tradeId);
+    const teamIds = Array.from(
+      new Set((parts ?? []).map((p: any) => p.team_id).filter((t: number | null) => t != null && t !== trade.proposer_id)),
+    );
+    if (teamIds.length > 0) {
+      const { data: people } = await admin
+        .from("league_members")
+        .select("user_id")
+        .in("id", teamIds);
+      for (const person of people ?? []) {
+        const uid = (person as any).user_id;
+        if (!uid) continue;
+        await enqueueNotification(admin, {
+          userId: uid,
+          leagueId: trade.league_id,
+          kind: "trade_proposed",
+          body: "A trade you were offered was canceled.",
+          link: `/league/${trade.league_id}/trades`,
+        });
+      }
+    }
+  } catch (e) {
+    console.warn("trade cancel notify failed", e);
+  }
+
   revalidatePath(`/league/${trade.league_id}/trades`);
 }

@@ -7,6 +7,31 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { finalizeDraftCompletion } from "@/lib/draft-postpone";
 import { resolvePickOwnerId, buildPickOwnerOverrides } from "@/lib/draft-pick-owners";
 import { notifyDraftPick, notifyOnClock } from "@/lib/draft-notify";
+import { enqueueNotification } from "@/lib/notifications";
+
+/** Notify every league member (optionally excluding one user) of a draft
+ *  status change — used for "scheduled" and "started". Best-effort. */
+async function notifyLeague(
+  admin: ReturnType<typeof createAdminClient>,
+  leagueId: number,
+  body: string,
+  link: string,
+  excludeUserId?: string,
+): Promise<void> {
+  try {
+    const { data: members } = await admin
+      .from("league_members")
+      .select("user_id")
+      .eq("league_id", leagueId);
+    for (const m of members ?? []) {
+      const uid = (m as any).user_id;
+      if (!uid || uid === excludeUserId) continue;
+      await enqueueNotification(admin, { userId: uid, leagueId, kind: "draft_status", body, link });
+    }
+  } catch (e) {
+    console.warn("draft status notify failed", e);
+  }
+}
 
 export async function startDraft(leagueId: number): Promise<void> {
   const supabase = await createClient();
@@ -89,8 +114,17 @@ export async function startDraft(leagueId: number): Promise<void> {
 
   await admin.from("leagues").update({ draft_status: "in_progress" }).eq("id", leagueId);
 
-  // Snake drafts: alert the team on the opening pick. (Auctions run through the
-  // nomination flow, not a snake clock.)
+  // Let the whole league know the draft is live...
+  await notifyLeague(
+    admin,
+    leagueId,
+    "The draft has started — good luck!",
+    `/league/${leagueId}/draft?board=1`,
+    user.id,
+  );
+
+  // ...and, for snake drafts, alert the team on the opening pick. (Auctions run
+  // through the nomination flow, not a snake clock.)
   if ((draftRow as any)?.type !== "auction") {
     try {
       await notifyOnClock(admin, leagueId);
@@ -179,6 +213,19 @@ export async function scheduleDraft(leagueId: number, scheduledAtIso: string | n
     .from("drafts")
     .update({ scheduled_at: scheduledAtIso })
     .eq("id", draft.id);
+
+  // Tell the league when a time is set (not when it's cleared). The draft page
+  // renders the exact time in the viewer's own timezone, so keep the body
+  // timezone-free and point them there.
+  if (scheduledAtIso) {
+    await notifyLeague(
+      admin,
+      leagueId,
+      "The draft has been scheduled — check the draft page for the time.",
+      `/league/${leagueId}/draft`,
+      user.id,
+    );
+  }
 
   revalidatePath(`/league/${leagueId}/draft`);
   revalidatePath(`/league/${leagueId}`);
