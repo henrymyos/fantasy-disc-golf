@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { finalizeDraftCompletion } from "@/lib/draft-postpone";
 import { resolvePickOwnerId, buildPickOwnerOverrides } from "@/lib/draft-pick-owners";
+import { notifyDraftPick } from "@/lib/draft-notify";
 
 // Core draft-timer logic. These intentionally live OUTSIDE any "use server"
 // module: they use the admin (service-role) client and perform NO auth checks,
@@ -239,6 +240,12 @@ export async function runExpiredSnakePick(admin: AdminClient, leagueId: number):
 
   if ((result as any)?.complete) {
     await finalizeDraftCompletion(admin, leagueId);
+  }
+
+  try {
+    await notifyDraftPick(admin, leagueId);
+  } catch (e) {
+    console.warn("draft pick push failed", e);
   }
 
   return true;

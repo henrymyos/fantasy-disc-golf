@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { finalizeDraftCompletion } from "@/lib/draft-postpone";
 import { pickBestAvailableForTeam, runExpiredSnakePick } from "@/lib/draft-timer";
+import { notifyDraftPick } from "@/lib/draft-notify";
 
 /** Replace a user's ranking list for this league with the given ordered ids. */
 export async function setRankings(leagueId: number, playerIds: number[]): Promise<void> {
@@ -94,6 +95,12 @@ export async function autoPickFromRankings(leagueId: number): Promise<void> {
 
   if ((result as any)?.complete) {
     await finalizeDraftCompletion(admin, leagueId);
+  }
+
+  try {
+    await notifyDraftPick(admin, leagueId);
+  } catch (e) {
+    console.warn("draft pick push failed", e);
   }
 
   revalidatePath(`/league/${leagueId}/draft`);

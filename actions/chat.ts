@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendPushToUser } from "@/lib/push";
 import { buildLeagueSystemFeed, type SystemEvent } from "@/lib/chat-feed";
 
 /** Post a chat message in this league. recipientMemberId === null is a
@@ -23,7 +24,7 @@ export async function sendChatMessage(
   const admin = createAdminClient();
   const { data: sender } = await admin
     .from("league_members")
-    .select("id")
+    .select("id, team_name")
     .eq("league_id", leagueId)
     .eq("user_id", user.id)
     .single();
@@ -40,12 +41,53 @@ export async function sendChatMessage(
     if (!rcpt) return;
   }
 
-  await admin.from("chat_messages").insert({
-    league_id: leagueId,
-    sender_member_id: sender.id,
-    recipient_member_id: recipientMemberId,
-    body: trimmed,
-  });
+  const { data: inserted } = await admin
+    .from("chat_messages")
+    .insert({
+      league_id: leagueId,
+      sender_member_id: sender.id,
+      recipient_member_id: recipientMemberId,
+      body: trimmed,
+    })
+    .select("id")
+    .single();
+
+  // Push the message: a DM goes to the recipient only; a league message goes to
+  // every other member. Best-effort — never block sending on push.
+  try {
+    let recipientUserIds: string[] = [];
+    if (recipientMemberId != null) {
+      const { data: r } = await admin
+        .from("league_members")
+        .select("user_id")
+        .eq("id", recipientMemberId)
+        .single();
+      if ((r as any)?.user_id) recipientUserIds = [(r as any).user_id];
+    } else {
+      const { data: mems } = await admin
+        .from("league_members")
+        .select("user_id")
+        .eq("league_id", leagueId)
+        .neq("id", sender.id);
+      recipientUserIds = (mems ?? [])
+        .map((m: any) => m.user_id)
+        .filter((uid: string | null): uid is string => !!uid);
+    }
+    const senderName = (sender as any).team_name ?? "New message";
+    const tag = `chat-${leagueId}-${(inserted as any)?.id ?? "x"}`;
+    await Promise.all(
+      Array.from(new Set(recipientUserIds)).map((uid) =>
+        sendPushToUser(admin, uid, {
+          title: recipientMemberId != null ? `${senderName} · DM` : senderName,
+          body: trimmed,
+          url: `/league/${leagueId}`,
+          tag,
+        }),
+      ),
+    );
+  } catch (e) {
+    console.warn("chat push failed", e);
+  }
 
   revalidatePath(`/league/${leagueId}`);
 }

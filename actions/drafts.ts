@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { finalizeDraftCompletion } from "@/lib/draft-postpone";
 import { resolvePickOwnerId, buildPickOwnerOverrides } from "@/lib/draft-pick-owners";
+import { notifyDraftPick, notifyOnClock } from "@/lib/draft-notify";
 
 export async function startDraft(leagueId: number): Promise<void> {
   const supabase = await createClient();
@@ -87,6 +88,16 @@ export async function startDraft(leagueId: number): Promise<void> {
     .eq("league_id", leagueId);
 
   await admin.from("leagues").update({ draft_status: "in_progress" }).eq("id", leagueId);
+
+  // Snake drafts: alert the team on the opening pick. (Auctions run through the
+  // nomination flow, not a snake clock.)
+  if ((draftRow as any)?.type !== "auction") {
+    try {
+      await notifyOnClock(admin, leagueId);
+    } catch (e) {
+      console.warn("draft start push failed", e);
+    }
+  }
 
   revalidatePath(`/league/${leagueId}/draft`);
 }
@@ -232,6 +243,12 @@ export async function makeDraftPick(leagueId: number, playerId: number): Promise
 
   if ((result as any)?.complete) {
     await finalizeDraftCompletion(admin, leagueId);
+  }
+
+  try {
+    await notifyDraftPick(admin, leagueId);
+  } catch (e) {
+    console.warn("draft pick push failed", e);
   }
 
   revalidatePath(`/league/${leagueId}/draft`);
@@ -509,6 +526,12 @@ export async function commissionerMakePick(leagueId: number, playerId: number): 
 
   if ((result as any)?.complete) {
     await finalizeDraftCompletion(admin, leagueId);
+  }
+
+  try {
+    await notifyDraftPick(admin, leagueId);
+  } catch (e) {
+    console.warn("draft pick push failed", e);
   }
 
   revalidatePath(`/league/${leagueId}/draft`);
