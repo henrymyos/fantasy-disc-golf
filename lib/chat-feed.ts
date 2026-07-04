@@ -24,9 +24,24 @@ export type MoveEvent = {
   actor: string;
   gains: FeedAsset[];
   losses: FeedAsset[];
+  // "waiver" when this add came from a won waiver claim (vs. a free-agent add).
+  via?: "waiver";
 };
 
-export type SystemEvent = TradeEvent | MoveEvent;
+// A plain text notice: member joins, weekly results, draft scheduled.
+export type NoticeEvent = {
+  id: string;
+  kind: "notice";
+  ts: string;
+  variant: "join" | "result" | "draft";
+  title: string;
+  lines?: string[];
+  // Draft notices carry the raw scheduled time so the client can format it in
+  // the viewer's own timezone.
+  scheduledAt?: string | null;
+};
+
+export type SystemEvent = TradeEvent | MoveEvent | NoticeEvent;
 
 function roundOrdinal(n: number): string {
   const s = ["th", "st", "nd", "rd"];
@@ -55,10 +70,21 @@ export async function buildLeagueSystemFeed(
 ): Promise<SystemEvent[]> {
   const { data: memberRows } = await supabase
     .from("league_members")
-    .select("id, team_name")
+    .select("id, team_name, joined_at")
     .eq("league_id", leagueId);
   const teamName = new Map<number, string>(
     (memberRows ?? []).map((m: any) => [m.id as number, (m.team_name as string) ?? "A team"]),
+  );
+
+  // Keys of players won on waivers, so a waiver pickup reads differently from a
+  // plain free-agent add.
+  const { data: wonClaims } = await supabase
+    .from("waiver_claims")
+    .select("team_id, player_id")
+    .eq("league_id", leagueId)
+    .eq("status", "processed");
+  const waiverKeys = new Set<string>(
+    (wonClaims ?? []).map((c: any) => `${c.team_id}:${c.player_id}`),
   );
 
   // Per-team player nicknames, shown under each player's name in the feed.
@@ -108,6 +134,7 @@ export async function buildLeagueSystemFeed(
         actor,
         gains: [player],
         losses: dropped ? [dropped] : [],
+        via: waiverKeys.has(`${teamId}:${(t as any).player_id}`) ? "waiver" : undefined,
       });
     } else if (t.action === "drop") {
       events.push({
@@ -165,6 +192,75 @@ export async function buildLeagueSystemFeed(
         gains: buckets.get(id)!.gains,
         losses: buckets.get(id)!.losses,
       })),
+    });
+  }
+
+  // New members joining the league.
+  for (const m of memberRows ?? []) {
+    if (!(m as any).joined_at) continue;
+    events.push({
+      id: `join-${(m as any).id}`,
+      kind: "notice",
+      ts: (m as any).joined_at,
+      variant: "join",
+      title: `${(m as any).team_name ?? "A team"} joined the league`,
+    });
+  }
+
+  // Finalized weekly results, one notice per week listing every matchup.
+  const { data: finals } = await supabase
+    .from("matchups")
+    .select("week, team1_id, team2_id, team1_score, team2_score, finalized_at")
+    .eq("league_id", leagueId)
+    .eq("is_final", true)
+    .not("finalized_at", "is", null);
+  const weekBuckets = new Map<number, { ts: string; lines: string[] }>();
+  for (const m of finals ?? []) {
+    const wk = (m as any).week as number;
+    const ts = (m as any).finalized_at as string;
+    const t1 = teamName.get((m as any).team1_id) ?? "Team 1";
+    const s1 = Number((m as any).team1_score ?? 0);
+    const t2Id = (m as any).team2_id;
+    const s2 = Number((m as any).team2_score ?? 0);
+    let line: string;
+    if (t2Id == null) {
+      line = `${t1} had a bye (${s1.toFixed(1)})`;
+    } else {
+      const t2 = teamName.get(t2Id) ?? "Team 2";
+      if (s1 === s2) line = `${t1} tied ${t2}, ${s1.toFixed(1)}–${s2.toFixed(1)}`;
+      else if (s1 > s2) line = `${t1} def. ${t2}, ${s1.toFixed(1)}–${s2.toFixed(1)}`;
+      else line = `${t2} def. ${t1}, ${s2.toFixed(1)}–${s1.toFixed(1)}`;
+    }
+    const cur = weekBuckets.get(wk) ?? { ts, lines: [] };
+    if (ts > cur.ts) cur.ts = ts; // latest matchup finalized in the week anchors it
+    cur.lines.push(line);
+    weekBuckets.set(wk, cur);
+  }
+  for (const [wk, v] of weekBuckets) {
+    events.push({
+      id: `week-${wk}`,
+      kind: "notice",
+      ts: v.ts,
+      variant: "result",
+      title: `Week ${wk} results`,
+      lines: v.lines,
+    });
+  }
+
+  // Draft scheduled (only the current time; rescheduling moves the notice).
+  const { data: draftRow } = await supabase
+    .from("drafts")
+    .select("id, scheduled_at, scheduled_set_at")
+    .eq("league_id", leagueId)
+    .maybeSingle();
+  if ((draftRow as any)?.scheduled_set_at && (draftRow as any)?.scheduled_at) {
+    events.push({
+      id: `draft-sched-${(draftRow as any).id}`,
+      kind: "notice",
+      ts: (draftRow as any).scheduled_set_at,
+      variant: "draft",
+      title: "Draft scheduled",
+      scheduledAt: (draftRow as any).scheduled_at,
     });
   }
 

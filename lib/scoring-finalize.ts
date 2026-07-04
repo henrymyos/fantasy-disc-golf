@@ -113,6 +113,7 @@ export async function finalizeWeekScoresCore(
       team1_score: teamScores[(m as any).team1_id] ?? 0,
       team2_score: teamScores[(m as any).team2_id] ?? 0,
       is_final: true,
+      finalized_at: new Date().toISOString(),
     }).eq("id", (m as any).id);
   }
 

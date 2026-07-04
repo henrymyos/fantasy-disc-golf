@@ -150,5 +150,8 @@ export async function getLeagueSystemFeed(leagueId: number): Promise<SystemEvent
     .maybeSingle();
   if (!member) return [];
 
-  return buildLeagueSystemFeed(supabase, leagueId);
+  // Membership is verified above, so read the feed with the admin client — the
+  // derivations touch tables (matchups, waiver_claims, drafts) whose RLS may not
+  // grant plain member reads. Every query is league-scoped.
+  return buildLeagueSystemFeed(admin, leagueId);
 }

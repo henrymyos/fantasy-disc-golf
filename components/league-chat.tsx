@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { sendChatMessage, getLeagueSystemFeed, getVisibleChatMessages } from "@/actions/chat";
-import type { SystemEvent, FeedAsset } from "@/lib/chat-feed";
+import type { SystemEvent, NoticeEvent, FeedAsset } from "@/lib/chat-feed";
 
 type Member = {
   id: number;
@@ -619,22 +619,40 @@ function previewFor(
     };
   }
   const e = item.event;
-  return {
-    sender: null,
-    text: e.kind === "trade" ? "A trade has been completed." : `${e.actor} made a roster move.`,
-  };
+  let text: string;
+  if (e.kind === "trade") {
+    text = "A trade has been completed.";
+  } else if (e.kind === "move") {
+    text = e.via === "waiver" ? `${e.actor} won a player on waivers.` : `${e.actor} made a roster move.`;
+  } else {
+    text = e.title;
+  }
+  return { sender: null, text };
 }
 
-/** Sleeper-style system message for a trade or roster move. */
+/** Sleeper-style system message: a trade, roster move, or a plain notice
+ *  (member join, weekly result, draft scheduled). */
 function SystemMessage({ event, ts, now }: { event: SystemEvent; ts: string; now: number }) {
   const time = formatRelativeTime(ts, now);
+  const emoji =
+    event.kind === "notice"
+      ? event.variant === "result"
+        ? "🏆"
+        : event.variant === "draft"
+          ? "📅"
+          : "👋"
+      : event.kind === "move" && event.via === "waiver"
+        ? "🔄"
+        : null;
   return (
     <div className="flex items-start gap-2.5 py-1">
-      <div className="shrink-0 w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-gray-300">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 2l8 3v6c0 5-3.4 8.5-8 11-4.6-2.5-8-6-8-11V5l8-3z" opacity="0.9" />
-          <path d="M12 7.5l1.2 2.4 2.6.4-1.9 1.8.45 2.6L12 13.9l-2.35 1.2.45-2.6-1.9-1.8 2.6-.4L12 7.5z" fill="#1a1d23" />
-        </svg>
+      <div className="shrink-0 w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-gray-300 text-sm">
+        {emoji ?? (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2l8 3v6c0 5-3.4 8.5-8 11-4.6-2.5-8-6-8-11V5l8-3z" opacity="0.9" />
+            <path d="M12 7.5l1.2 2.4 2.6.4-1.9 1.8.45 2.6L12 13.9l-2.35 1.2.45-2.6-1.9-1.8 2.6-.4L12 7.5z" fill="#1a1d23" />
+          </svg>
+        )}
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-[10px] text-gray-400 mb-1" title={new Date(ts).toLocaleString()}>{time}</p>
@@ -650,19 +668,60 @@ function SystemMessage({ event, ts, now }: { event: SystemEvent; ts: string; now
               ))}
             </div>
           </>
-        ) : (
+        ) : event.kind === "move" ? (
           <>
             <p className="text-sm text-gray-200 font-medium mb-1">
-              <span className="font-semibold text-white">{event.actor}</span> made a roster move.
+              <span className="font-semibold text-white">{event.actor}</span>{" "}
+              {event.via === "waiver" ? "won a player on waivers." : "made a roster move."}
             </p>
             <div className="border-l-2 border-white/15 pl-3">
               <AssetList gains={event.gains} losses={event.losses} />
             </div>
           </>
+        ) : (
+          <NoticeBody event={event} />
         )}
       </div>
     </div>
   );
+}
+
+/** Body for a notice event (join / weekly result / draft scheduled). */
+function NoticeBody({ event }: { event: NoticeEvent }) {
+  const heading =
+    event.variant === "draft"
+      ? `The draft is scheduled for ${formatDraftTime(event.scheduledAt)}`
+      : event.title;
+  return (
+    <>
+      <p className="text-sm text-gray-200 font-medium">
+        <span className="font-semibold text-white">{heading}</span>
+      </p>
+      {event.lines && event.lines.length > 0 && (
+        <div className="mt-1 border-l-2 border-white/15 pl-3 space-y-0.5">
+          {event.lines.map((l, i) => (
+            <p key={i} className="text-gray-300 text-[13px]">
+              {l}
+            </p>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Draft time in the viewer's own timezone. */
+function formatDraftTime(iso: string | null | undefined): string {
+  if (!iso) return "TBD";
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "TBD";
+  return d.toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function AssetList({ gains, losses }: { gains: FeedAsset[]; losses: FeedAsset[] }) {
