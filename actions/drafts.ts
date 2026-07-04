@@ -211,7 +211,8 @@ export async function scheduleDraft(leagueId: number, scheduledAtIso: string | n
 
   await admin
     .from("drafts")
-    .update({ scheduled_at: scheduledAtIso })
+    // Re-arm the pre-draft reminders for the new time.
+    .update({ scheduled_at: scheduledAtIso, reminder_1d_sent: false, reminder_1h_sent: false })
     .eq("id", draft.id);
 
   // Tell the league when a time is set (not when it's cleared). The draft page

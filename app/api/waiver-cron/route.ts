@@ -5,6 +5,7 @@ import { runLineupUnsetCheck } from "@/lib/lineup-unset-check";
 import { autoFinalizeDueWeeks, wednesdayAfter } from "@/lib/auto-finalize";
 import { runDueDraftTimers } from "@/lib/draft-timer";
 import { applyDraftPostponements } from "@/lib/draft-postpone";
+import { runDraftReminders } from "@/lib/draft-reminders";
 
 // Daily Vercel cron. Two responsibilities:
 //   1. When a tournament starts today, lock waivers for every league and reset
@@ -128,6 +129,12 @@ export async function GET(request: Request) {
     if (dropped.length > 0) postponed[(d as any).league_id] = dropped;
   }
 
+  // 7) Pre-draft reminders (~1 day / ~1 hour out). Daily backstop only — for
+  //    timely 1-hour reminders, /api/draft-reminders is hit more frequently by
+  //    an external trigger (the Hobby plan's 2-cron limit rules out a 3rd
+  //    frequent Vercel cron). Idempotent via the per-draft reminder flags.
+  const draftReminders = await runDraftReminders(admin);
+
   return NextResponse.json({
     ok: true,
     today,
@@ -139,5 +146,6 @@ export async function GET(request: Request) {
     lineupNotificationsSent: lineupCheck.notificationsSent,
     draftTimers,
     postponed,
+    draftReminders,
   });
 }
