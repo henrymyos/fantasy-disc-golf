@@ -20,8 +20,17 @@ export default async function ProTourPage() {
   const today = new Date().toISOString().slice(0, 10);
   const season = new Date().getUTCFullYear();
   const allEvents = await getScheduleEvents(supabase, season);
+  // In progress right now (start ≤ today ≤ end) — shown at the top of Upcoming
+  // with a LIVE tag.
+  const liveEvents = allEvents
+    .filter((e) => e.startDate <= today && today <= e.endDate)
+    .sort((a, b) => a.startDate.localeCompare(b.startDate));
+  const upcomingEvents = allEvents
+    .filter((e) => e.startDate > today)
+    .sort((a, b) => a.startDate.localeCompare(b.startDate))
+    .slice(0, 6);
   const recentEvents = allEvents
-    .filter((e) => e.endDate <= today)
+    .filter((e) => e.endDate < today)
     .sort((a, b) => b.endDate.localeCompare(a.endDate))
     .slice(0, 6);
 
@@ -59,6 +68,37 @@ export default async function ProTourPage() {
             DGPT Schedule
           </a>
         </div>
+      </div>
+
+      {/* Upcoming events — anything in progress leads with a LIVE tag. */}
+      <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
+        <h2 className="font-bold text-white mb-4">Upcoming Tournaments</h2>
+
+        {liveEvents.length === 0 && upcomingEvents.length === 0 ? (
+          <p className="text-gray-400 text-sm py-4">No more tournaments this season.</p>
+        ) : (
+          <div className="space-y-3">
+            {liveEvents.map((event) => (
+              <EventRow
+                key={event.slug}
+                event={event}
+                date={formatEventDateRange(event)}
+                location={formatEventLocation(event)}
+                tier={eventTier(event)}
+                live
+              />
+            ))}
+            {upcomingEvents.map((event) => (
+              <EventRow
+                key={event.slug}
+                event={event}
+                date={formatEventDateRange(event)}
+                location={formatEventLocation(event)}
+                tier={eventTier(event)}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Recent events */}
@@ -104,9 +144,10 @@ export default async function ProTourPage() {
   );
 }
 
-function EventRow({ event, date, location, tier }: {
+function EventRow({ event, date, location, tier, live = false }: {
   event: DgptEvent; date: string; location: string;
   tier: { label: string; color: string };
+  live?: boolean;
 }) {
   const url = event.pdgaEventId
     ? `https://www.pdga.com/tour/event/${event.pdgaEventId}`
@@ -116,10 +157,18 @@ function EventRow({ event, date, location, tier }: {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center justify-between p-4 rounded-xl bg-[#0f1117] border border-white/5 hover:border-white/15 transition gap-4"
+      className={`flex items-center justify-between p-4 rounded-xl bg-[#0f1117] border transition gap-4 ${
+        live ? "border-[#36D7B7]/40 hover:border-[#36D7B7]/70" : "border-white/5 hover:border-white/15"
+      }`}
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
+          {live && (
+            <span className="flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-semibold bg-[#36D7B7]/20 text-[#36D7B7]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#36D7B7] animate-pulse" />
+              LIVE
+            </span>
+          )}
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${tier.color}`}>
             {tier.label}
           </span>
