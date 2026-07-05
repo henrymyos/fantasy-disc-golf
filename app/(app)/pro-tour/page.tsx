@@ -6,7 +6,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { getScheduleEvents } from "@/lib/schedule";
 
-const MAJOR_SLUGS = new Set(["champions-cup", "pdga-pro-worlds", "usdgc"]);
+const MAJOR_SLUGS = new Set(["champions-cup", "european-open", "pdga-pro-worlds", "usdgc"]);
 
 function eventTier(event: DgptEvent): { label: string; color: string } {
   if (MAJOR_SLUGS.has(event.slug)) {
