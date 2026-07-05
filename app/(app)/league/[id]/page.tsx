@@ -99,7 +99,9 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   const maxTeams = (league as any).max_teams as number | null;
   const leagueIsFull = maxTeams != null && (members ?? []).length >= maxTeams;
   const showInviteCode = preDraft && !!inviteCode && !leagueIsFull;
-  const emptySlotCount = maxTeams != null ? Math.max(0, maxTeams - (members ?? []).length) : 0;
+  // Open-slot placeholders only make sense while joining is still possible.
+  const emptySlotCount =
+    preDraft && maxTeams != null ? Math.max(0, maxTeams - (members ?? []).length) : 0;
 
   const { data: matchups } = await supabase
     .from("matchups")

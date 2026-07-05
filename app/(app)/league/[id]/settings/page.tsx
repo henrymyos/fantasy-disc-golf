@@ -20,7 +20,7 @@ export default async function LeagueSettingsPage({
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, name, commissioner_id, invite_code, selected_event_slugs, season_year")
+    .select("id, name, commissioner_id, invite_code, selected_event_slugs, season_year, max_teams")
     .eq("id", id)
     .single();
   if (!league) notFound();
@@ -48,7 +48,22 @@ export default async function LeagueSettingsPage({
     .eq("league_id", id)
     .eq("status", "complete");
 
-  const inviteCode = (league as any).invite_code as string | null;
+  // The invite card only matters while the league can still be joined:
+  // pre-draft and not yet full (mirrors the league home page's gate).
+  const { data: draftRow } = await supabase
+    .from("drafts")
+    .select("status")
+    .eq("league_id", id)
+    .maybeSingle();
+  const preDraft = (draftRow as any)?.status == null || (draftRow as any).status === "pending";
+  const { count: memberCount } = await supabase
+    .from("league_members")
+    .select("id", { count: "exact", head: true })
+    .eq("league_id", id);
+  const maxTeams = (league as any).max_teams as number | null;
+  const leagueIsFull = maxTeams != null && (memberCount ?? 0) >= maxTeams;
+  const inviteCode =
+    preDraft && !leagueIsFull ? ((league as any).invite_code as string | null) : null;
   const events = await getScheduleEvents(supabase, (league as any).season_year ?? DEFAULT_SEASON_YEAR);
   const eventSlugs = new Set(events.map((e) => e.slug));
   const selectedSlugs = effectiveSelection((league as any).selected_event_slugs, events);

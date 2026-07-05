@@ -133,7 +133,12 @@ export default async function DashboardPage({
               </div>
               <div className="text-right shrink-0">
                 <DraftBadge status={league.draft_status} />
-                <p className="text-gray-500 text-[10px] mt-1 font-mono">{league.invite_code}</p>
+                {/* Invite code only matters while the league can still be
+                    joined: pre-draft and not yet full. */}
+                {(league.draft_status == null || league.draft_status === "pending") &&
+                  (countByLeague.get(league.id) ?? 0) < league.max_teams && (
+                    <p className="text-gray-500 text-[10px] mt-1 font-mono">{league.invite_code}</p>
+                  )}
               </div>
             </Link>
           ))

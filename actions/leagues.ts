@@ -124,6 +124,17 @@ export async function joinLeague(
     return { message: "League not found. Check your invite code." };
   }
 
+  // Once the draft has started (or finished), the league is closed to new
+  // teams — an old invite code or link shouldn't let anyone in mid-season.
+  const { data: draftRow } = await admin
+    .from("drafts")
+    .select("status")
+    .eq("league_id", league.id)
+    .maybeSingle();
+  if ((draftRow as any)?.status != null && (draftRow as any).status !== "pending") {
+    return { message: "This league's draft has already started, so it's no longer accepting new teams." };
+  }
+
   // Cheap pre-check to reject an already-full league before doing any work.
   const { count } = await admin
     .from("league_members")
