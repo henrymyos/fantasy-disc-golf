@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   effectiveSelection,
   getPlayoffSlugs,
-  PLAYOFF_COUNT,
+  playoffCountForTeams,
   type DgptEvent,
 } from "@/lib/dgpt-2026-schedule";
 import { getScheduleEvents, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
@@ -54,7 +54,7 @@ export async function getLeagueSchedule(
 ): Promise<LeagueSchedule | null> {
   const { data: league } = await supabase
     .from("leagues")
-    .select("selected_event_slugs, season_year")
+    .select("selected_event_slugs, season_year, max_teams")
     .eq("id", leagueId)
     .single();
   if (!league) return null;
@@ -63,7 +63,9 @@ export async function getLeagueSchedule(
   const events = await getScheduleEvents(supabase, seasonYear);
   const selectedSlugs = effectiveSelection((league as any).selected_event_slugs, events);
   const selectedSet = new Set(selectedSlugs);
-  const playoffSet = new Set(getPlayoffSlugs(selectedSlugs, PLAYOFF_COUNT, events));
+  const playoffSet = new Set(
+    getPlayoffSlugs(selectedSlugs, playoffCountForTeams((league as any).max_teams), events),
+  );
 
   // Selected events in schedule order, regular-season events before playoff ones
   // so league week numbering is: 1..regularWeeks regular, then the playoff weeks.

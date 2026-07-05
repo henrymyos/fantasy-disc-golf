@@ -17,7 +17,7 @@ export async function regenerateLeagueMatchups(leagueId: number): Promise<void> 
 
   const { data: league } = await admin
     .from("leagues")
-    .select("selected_event_slugs, current_week, season_year")
+    .select("selected_event_slugs, current_week, season_year, max_teams")
     .eq("id", leagueId)
     .single();
   if (!league) return;
@@ -31,7 +31,7 @@ export async function regenerateLeagueMatchups(leagueId: number): Promise<void> 
 
   const events = await getScheduleEvents(admin, (league as any).season_year ?? DEFAULT_SEASON_YEAR);
   const selectedSlugs = effectiveSelection((league as any).selected_event_slugs, events);
-  const totalWeeks = regularSeasonWeekCount(selectedSlugs, events);
+  const totalWeeks = regularSeasonWeekCount(selectedSlugs, events, (league as any).max_teams);
   const schedule = buildSeasonSchedule(
     members.map((m: any) => ({ id: m.id, divisionName: m.division_name })),
     totalWeeks,

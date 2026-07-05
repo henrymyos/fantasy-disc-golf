@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { effectiveSelection } from "@/lib/dgpt-2026-schedule";
+import { effectiveSelection, playoffCountForTeams } from "@/lib/dgpt-2026-schedule";
 import { getScheduleEvents, resolveScheduleYear, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
 import { EditSeasonForm } from "@/components/edit-season-form";
 
@@ -17,7 +17,7 @@ export default async function EditSeasonPage({
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, name, commissioner_id, selected_event_slugs, season_year")
+    .select("id, name, commissioner_id, selected_event_slugs, season_year, max_teams")
     .eq("id", id)
     .single();
   if (!league) notFound();
@@ -46,6 +46,7 @@ export default async function EditSeasonPage({
       events={events}
       initialSelected={selected}
       hasExplicitSelection={(league as any).selected_event_slugs != null}
+      playoffCount={playoffCountForTeams((league as any).max_teams)}
     />
   );
 }

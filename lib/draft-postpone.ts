@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { effectiveSelection, getPlayoffSlugs, PLAYOFF_COUNT } from "@/lib/dgpt-2026-schedule";
+import { effectiveSelection, getPlayoffSlugs, playoffCountForTeams } from "@/lib/dgpt-2026-schedule";
 import { getScheduleEvents, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
 import { regenerateLeagueMatchups } from "@/actions/matchups";
 
@@ -49,7 +49,7 @@ export async function applyDraftPostponements(
 ): Promise<string[]> {
   const { data: league } = await admin
     .from("leagues")
-    .select("selected_event_slugs, season_year")
+    .select("selected_event_slugs, season_year, max_teams")
     .eq("id", leagueId)
     .single();
   if (!league) return [];
@@ -58,7 +58,9 @@ export async function applyDraftPostponements(
   const events = await getScheduleEvents(admin, seasonYear);
   const selectedSlugs = effectiveSelection((league as any).selected_event_slugs, events);
   const selectedSet = new Set(selectedSlugs);
-  const playoffSet = new Set(getPlayoffSlugs(selectedSlugs, PLAYOFF_COUNT, events));
+  const playoffSet = new Set(
+    getPlayoffSlugs(selectedSlugs, playoffCountForTeams((league as any).max_teams), events),
+  );
 
   // Selected regular-season events in schedule order.
   const regular = events.filter((e) => selectedSet.has(e.slug) && !playoffSet.has(e.slug));

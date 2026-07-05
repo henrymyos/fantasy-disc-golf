@@ -9,7 +9,6 @@ import {
   formatEventDateRange,
   formatEventLocation,
   getPlayoffSlugs,
-  PLAYOFF_COUNT,
 } from "@/lib/dgpt-2026-schedule";
 
 type Props = {
@@ -21,9 +20,12 @@ type Props = {
    *  default (all events) is shown but not yet persisted, so Save stays enabled
    *  to let the commissioner confirm it (which completes the setup step). */
   hasExplicitSelection: boolean;
+  /** How many trailing events are playoffs for this league's size (see
+   *  playoffCountForTeams). */
+  playoffCount: number;
 };
 
-export function EditSeasonForm({ leagueId, seasonYear, events, initialSelected, hasExplicitSelection }: Props) {
+export function EditSeasonForm({ leagueId, seasonYear, events, initialSelected, hasExplicitSelection, playoffCount: playoffSlots }: Props) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(() => new Set(initialSelected));
   const [pending, startTransition] = useTransition();
@@ -95,7 +97,10 @@ export function EditSeasonForm({ leagueId, seasonYear, events, initialSelected, 
 
   const total = events.length;
   const count = selected.size;
-  const playoffSet = useMemo(() => new Set(getPlayoffSlugs(selected, PLAYOFF_COUNT, events)), [selected, events]);
+  const playoffSet = useMemo(
+    () => new Set(getPlayoffSlugs(selected, playoffSlots, events)),
+    [selected, playoffSlots, events],
+  );
   const playoffCount = playoffSet.size;
   const regularCount = Math.max(0, count - playoffCount);
 
@@ -117,7 +122,7 @@ export function EditSeasonForm({ leagueId, seasonYear, events, initialSelected, 
           </span>
         </div>
         <p className="text-gray-400 text-sm mt-2">
-          Select which {seasonYear} DGPT events count toward the season. The last {PLAYOFF_COUNT}{" "}
+          Select which {seasonYear} DGPT events count toward the season. The last {playoffSlots}{" "}
           selected events of the year are marked as <span className="text-[#F5A524] font-semibold">PLAYOFFS</span>.
         </p>
       </div>

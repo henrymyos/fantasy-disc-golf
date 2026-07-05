@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { PLAYOFF_COUNT } from "@/lib/dgpt-2026-schedule";
+import { playoffCountForTeams } from "@/lib/dgpt-2026-schedule";
 import { getPlayoffOutcome } from "@/lib/playoff-outcome";
 import type { BracketSlot } from "@/lib/playoffs";
 
@@ -18,8 +18,9 @@ export default async function PlayoffsPage({ params }: { params: Promise<{ id: s
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: league } = await supabase.from("leagues").select("id, name").eq("id", id).single();
+  const { data: league } = await supabase.from("leagues").select("id, name, max_teams").eq("id", id).single();
   if (!league) notFound();
+  const playoffSlots = playoffCountForTeams((league as any).max_teams);
 
   const outcome = await getPlayoffOutcome(supabase, Number(id));
   const { standings, bracketSize, playoffEvents, result, championTeamId } = outcome;
@@ -34,7 +35,7 @@ export default async function PlayoffsPage({ params }: { params: Promise<{ id: s
           {playoffEvents.length > 0 ? (
             <>Winners advance on weekly score · {playoffEvents.map((e) => e.name).join(" → ")}</>
           ) : (
-            <>Set up your season schedule to populate the playoffs. The last {PLAYOFF_COUNT} selected events become the bracket.</>
+            <>Set up your season schedule to populate the playoffs. The last {playoffSlots} selected events become the bracket.</>
           )}
         </p>
       </div>

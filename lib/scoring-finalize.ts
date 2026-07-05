@@ -167,7 +167,7 @@ export async function finalizeWeekScoresCore(
 export async function advanceWeekCore(admin: SupabaseClient, leagueId: number): Promise<void> {
   const { data: league } = await admin
     .from("leagues")
-    .select("current_week, selected_event_slugs, season_year")
+    .select("current_week, selected_event_slugs, season_year, max_teams")
     .eq("id", leagueId)
     .single();
   if (!league) return;
@@ -186,7 +186,7 @@ export async function advanceWeekCore(admin: SupabaseClient, leagueId: number): 
   // records and corrupts seeding.
   const events = await getScheduleEvents(admin, (league as any).season_year ?? DEFAULT_SEASON_YEAR);
   const selectedSlugs = effectiveSelection((league as any).selected_event_slugs, events);
-  const regularWeeks = regularSeasonWeekCount(selectedSlugs, events);
+  const regularWeeks = regularSeasonWeekCount(selectedSlugs, events, (league as any).max_teams);
 
   if (nextWeek <= regularWeeks) {
     const { count: existing } = await admin

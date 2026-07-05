@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { deleteLeague } from "@/actions/leagues";
 import { CopyButton } from "@/components/copy-button";
 import { InviteLink } from "@/components/invite-link";
-import { effectiveSelection, getPlayoffSlugs } from "@/lib/dgpt-2026-schedule";
+import { effectiveSelection, getPlayoffSlugs, playoffCountForTeams } from "@/lib/dgpt-2026-schedule";
 import { getScheduleEvents, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
 import { isSeasonOver } from "@/lib/season-status";
 
@@ -69,7 +69,7 @@ export default async function LeagueSettingsPage({
   const selectedSlugs = effectiveSelection((league as any).selected_event_slugs, events);
   const validSelected = selectedSlugs.filter((s) => eventSlugs.has(s));
   const selectedCount = validSelected.length;
-  const playoffCount = getPlayoffSlugs(validSelected, undefined, events).length;
+  const playoffCount = getPlayoffSlugs(validSelected, playoffCountForTeams(maxTeams), events).length;
   const totalEvents = events.length;
   const seasonOver = isSeasonOver(events, validSelected);
 

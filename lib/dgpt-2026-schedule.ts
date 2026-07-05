@@ -71,8 +71,19 @@ export function formatEventLocation(e: DgptEvent): string {
   return e.state ? `${e.city}, ${e.state}` : e.city;
 }
 
-/** Number of selected events at the end of the season treated as playoffs. */
+/** Max number of selected events at the end of the season treated as playoffs. */
 export const PLAYOFF_COUNT = 3;
+
+/**
+ * Playoff weeks a league of this size actually needs: one event per bracket
+ * round, so 8+ teams → 3 (quarters/semis/final), 4–7 teams → 2 (the bracket
+ * caps at 4 teams, so semis/final), 2–3 teams → 1. A single-elim bracket can't
+ * use more rounds than log2(teams); unknown sizes fall back to the max.
+ */
+export function playoffCountForTeams(teamCount: number | null | undefined): number {
+  if (teamCount == null || teamCount < 2) return PLAYOFF_COUNT;
+  return Math.max(1, Math.min(PLAYOFF_COUNT, Math.floor(Math.log2(teamCount))));
+}
 
 /** Returns the slugs of the last N selected events (chronologically by end date)
  *  that should be treated as playoffs. Operates on the provided schedule
