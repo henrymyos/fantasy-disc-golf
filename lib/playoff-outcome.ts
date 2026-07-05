@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { rankTeams } from "@/lib/standings";
 import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
 import { getLeagueSchedule } from "@/lib/league-schedule";
-import { playoffBracketSize, simulatePlayoffs, type Seed, type RoundInput, type PlayoffResult } from "@/lib/playoffs";
+import { playoffBracketSize, playoffRoundCount, simulatePlayoffs, type Seed, type RoundInput, type PlayoffResult } from "@/lib/playoffs";
 
 export type StandingEntry = {
   teamId: number;
@@ -139,7 +139,7 @@ export async function getPlayoffOutcome(
 
   // Bracket + simulation.
   const bracketSize = playoffBracketSize(playoffWeeks.length, standings.length);
-  const numRounds = bracketSize >= 2 ? Math.log2(bracketSize) : 0;
+  const numRounds = playoffRoundCount(bracketSize);
   const seeds: Seed[] = standings.slice(0, bracketSize).map((s, i) => ({
     teamId: s.teamId,
     teamName: s.teamName,

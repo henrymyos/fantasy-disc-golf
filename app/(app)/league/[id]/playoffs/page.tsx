@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { playoffCountForTeams } from "@/lib/dgpt-2026-schedule";
 import { getPlayoffOutcome } from "@/lib/playoff-outcome";
-import type { BracketSlot } from "@/lib/playoffs";
+import { playoffRoundCount, type BracketSlot } from "@/lib/playoffs";
 
 function roundLabel(index: number, total: number): string {
   const fromEnd = total - 1 - index;
@@ -24,7 +24,7 @@ export default async function PlayoffsPage({ params }: { params: Promise<{ id: s
 
   const outcome = await getPlayoffOutcome(supabase, Number(id));
   const { standings, bracketSize, playoffEvents, result, championTeamId } = outcome;
-  const totalRounds = bracketSize >= 2 ? Math.log2(bracketSize) : 0;
+  const totalRounds = playoffRoundCount(bracketSize);
   const championName = championTeamId != null ? outcome.champion?.teamName : null;
 
   return (
@@ -68,6 +68,14 @@ export default async function PlayoffsPage({ params }: { params: Promise<{ id: s
                 </div>
                 <div className="space-y-3 md:space-y-0 md:flex-1 md:flex md:flex-col md:justify-around md:gap-3">
                   {round.matches.map((m, mi) => (
+                    m.isBye ? (
+                      <div key={mi} className="bg-[#0f1117] border border-white/5 rounded-xl p-3 md:p-4">
+                        <TeamLine slot={m.a} isWinner={false} loser={false} />
+                        <p className="text-center text-[#F5A524] text-[11px] font-semibold uppercase tracking-wide mt-1.5">
+                          First-round bye
+                        </p>
+                      </div>
+                    ) : (
                     <div key={mi} className="bg-[#0f1117] border border-white/5 rounded-xl p-3 md:p-4">
                       <TeamLine slot={m.a} isWinner={m.decided && m.winnerTeamId === m.a?.teamId} loser={m.decided && m.winnerTeamId !== m.a?.teamId} />
                       <div className="text-center text-gray-500 text-[11px] my-1 md:my-2">vs</div>
@@ -80,6 +88,7 @@ export default async function PlayoffsPage({ params }: { params: Promise<{ id: s
                         </p>
                       )}
                     </div>
+                    )
                   ))}
                 </div>
               </div>
@@ -128,8 +137,9 @@ export default async function PlayoffsPage({ params }: { params: Promise<{ id: s
             })}
           </div>
           <p className="text-gray-500 text-[11px] mt-3 leading-relaxed">
-            Top {bracketSize} seeds make the bracket (dashed line = cut). Each round is one playoff event; the higher
-            weekly score advances, ties going to the higher seed.
+            Top {bracketSize} seeds make the bracket (dashed line = cut).
+            {bracketSize === 6 && " The top 2 seeds skip the first round on a bye."}{" "}
+            Each round is one playoff event; the higher weekly score advances, ties going to the higher seed.
           </p>
         </div>
       )}
