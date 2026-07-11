@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { applyProjectionVariance } from "@/lib/projections";
 import { getActiveTournament } from "@/lib/lineup-lock";
+import { getLeagueNextTournamentId } from "@/lib/league-schedule";
 import { fantasyPointsFromResult, resolveScoringRules, describeScoreContributions } from "@/lib/scoring-rules";
 
 type StarterRow = {
@@ -138,18 +139,8 @@ export default async function MyMatchupPage({
 
   // Active/upcoming tournament for the actual-vs-projected split + registration.
   const activeTournament = await getActiveTournament(supabase, Number(id));
-  const todayIso = new Date().toISOString().slice(0, 10);
-  let weekTournamentId: number | null = activeTournament?.id ?? null;
-  if (!weekTournamentId) {
-    const { data: upcomingT } = await supabase
-      .from("tournaments")
-      .select("id")
-      .gte("start_date", todayIso)
-      .order("start_date", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    weekTournamentId = (upcomingT as any)?.id ?? null;
-  }
+  const weekTournamentId: number | null =
+    activeTournament?.id ?? (await getLeagueNextTournamentId(supabase, Number(id)));
 
   // Registered-player set + the event name/dates for this week's matchup.
   let registeredSet: Set<number> | null = null;

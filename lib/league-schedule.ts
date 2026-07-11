@@ -48,6 +48,24 @@ function normalizeName(s: string): string {
  * the league's own selected-event order keeps matchup weeks, standings, the
  * auto-finalizer, recaps, and the playoff bracket all pointing at the same event.
  */
+/**
+ * Tournament id of the league's current-or-next SCHEDULED event (first league
+ * week whose event hasn't ended yet and has an imported tournament row), or
+ * null. Use this — not "the next tournament in the DB" — as the projection /
+ * registration target: the next global event may be one this league skipped.
+ */
+export async function getLeagueNextTournamentId(
+  supabase: SupabaseClient,
+  leagueId: number,
+): Promise<number | null> {
+  const schedule = await getLeagueSchedule(supabase, leagueId);
+  const today = new Date().toISOString().slice(0, 10);
+  const week = (schedule?.weeks ?? []).find(
+    (w) => w.endDate >= today && w.tournamentIds.length > 0,
+  );
+  return week?.tournamentIds[0] ?? null;
+}
+
 export async function getLeagueSchedule(
   supabase: SupabaseClient,
   leagueId: number,

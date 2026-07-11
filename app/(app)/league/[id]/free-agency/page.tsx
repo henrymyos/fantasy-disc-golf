@@ -5,6 +5,7 @@ import { FreeAgencyList } from "@/components/free-agency-list";
 import { setWaiversLocked, processWaivers } from "@/actions/rosters";
 import { applyProjectionVariance } from "@/lib/projections";
 import { getActiveTournament } from "@/lib/lineup-lock";
+import { getLeagueNextTournamentId } from "@/lib/league-schedule";
 
 export default async function FreeAgencyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -100,18 +101,8 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
   // target tournament has a populated registration list and the player isn't
   // on it (OUT), null when we have no signal to project from.
   const activeT = await getActiveTournament(supabase, Number(id));
-  const todayIsoNext = new Date().toISOString().slice(0, 10);
-  let nextTournamentId: number | null = activeT?.id ?? null;
-  if (!nextTournamentId) {
-    const { data: upcomingT } = await supabase
-      .from("tournaments")
-      .select("id")
-      .gte("start_date", todayIsoNext)
-      .order("start_date", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    nextTournamentId = (upcomingT as any)?.id ?? null;
-  }
+  const nextTournamentId: number | null =
+    activeT?.id ?? (await getLeagueNextTournamentId(supabase, Number(id)));
   let nextRegisteredSet: Set<number> | null = null;
   if (nextTournamentId != null) {
     const { data: regRow } = await supabase

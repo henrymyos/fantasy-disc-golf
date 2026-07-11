@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { LineupSlot, BenchSlot } from "@/components/lineup-slot";
 import { TeamActionsPanel } from "@/components/team-actions-panel";
 import { getActiveTournament } from "@/lib/lineup-lock";
+import { getLeagueNextTournamentId } from "@/lib/league-schedule";
 import { applyProjectionVariance } from "@/lib/projections";
 import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
 
@@ -71,18 +72,8 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
   // the schedule (the in-progress event if one is happening, else the
   // earliest upcoming event by start_date).
   const playerIds = roster.map((r: any) => r.player_id);
-  const todayIso = new Date().toISOString().slice(0, 10);
-  let nextTournamentId: number | null = activeTournament?.id ?? null;
-  if (!nextTournamentId) {
-    const { data: upcoming } = await supabase
-      .from("tournaments")
-      .select("id")
-      .gte("start_date", todayIso)
-      .order("start_date", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    nextTournamentId = (upcoming as any)?.id ?? null;
-  }
+  const nextTournamentId: number | null =
+    activeTournament?.id ?? (await getLeagueNextTournamentId(supabase, Number(id)));
 
   const { data: allResults } = playerIds.length > 0
     ? await supabase

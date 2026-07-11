@@ -127,12 +127,16 @@ export function FreeAgencyList({
     const d = searchParams.get("div");
     return d === "mpo" || d === "fpo" ? d : "all";
   });
+  // Default to Projected once there's scoring data: season-total points rank
+  // players who may not even be playing next week, while the projection is
+  // registration-aware for the league's next event. Pre-season there's nothing
+  // to project from, so fall back to world ranking.
   const [sort, setSort] = useState<SortKey>(() => {
     const s = searchParams.get("sort");
     return s === "projected" || s === "rank" || s === "points"
       ? s
       : seasonStarted
-        ? "points"
+        ? "projected"
         : "rank";
   });
 
