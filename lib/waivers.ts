@@ -107,7 +107,13 @@ export async function runWaiverProcessing(leagueId: number): Promise<void> {
     .order("claim_order", { ascending: true, nullsFirst: false })
     .order("submitted_at", { ascending: true });
 
-  if (!claims || claims.length === 0) return;
+  // No claims to grant — but still unlock (the final step below) so free
+  // agency reopens. Returning before the unlock left claim-less leagues
+  // locked forever.
+  if (!claims || claims.length === 0) {
+    await admin.from("leagues").update({ waivers_locked: false }).eq("id", leagueId);
+    return;
+  }
 
   // Group claims by team, sorted by team waiver priority, then the member's
   // chosen claim order (first listed is attempted first).
