@@ -6,10 +6,12 @@ import { autoFinalizeDueWeeks, wednesdayAfter } from "@/lib/auto-finalize";
 import { runDueDraftTimers } from "@/lib/draft-timer";
 import { applyDraftPostponements } from "@/lib/draft-postpone";
 import { runDraftReminders } from "@/lib/draft-reminders";
+import { getLeagueSchedule } from "@/lib/league-schedule";
 
 // Daily Vercel cron. Two responsibilities:
-//   1. When a tournament starts today, lock waivers for every league and reset
-//      each league's waiver priority to reverse-of-standings.
+//   1. When a tournament starts today, lock waivers for each league that has
+//      that tournament on its schedule (and a completed draft) and reset that
+//      league's waiver priority to reverse-of-standings.
 //   2. After a tournament has finished AND its review window has passed, process
 //      any locked waivers (the action handles unlocking). Decoupled from the
 //      weekday — see the block below.
@@ -31,7 +33,11 @@ export async function GET(request: Request) {
   const today = new Date().toISOString().slice(0, 10);
   const isWednesday = new Date().getUTCDay() === 3;
 
-  // 1) Tournament starting today → lock + reset priorities
+  // 1) Tournament starting today → lock + reset priorities. League-scoped:
+  //    only leagues whose OWN schedule includes the starting tournament lock —
+  //    a live event a league skipped is an off-week for it. Leagues that
+  //    haven't finished drafting don't lock either: post-draft free agency is
+  //    first-come-first-served until the league's first tournament.
   const { data: startingToday } = await admin
     .from("tournaments")
     .select("id, name")
@@ -39,11 +45,24 @@ export async function GET(request: Request) {
 
   const locked: number[] = [];
   if (startingToday && startingToday.length > 0) {
+    const startingIds = new Set((startingToday as any[]).map((t) => t.id as number));
     const { data: leagues } = await admin.from("leagues").select("id");
     for (const league of leagues ?? []) {
-      await admin.from("leagues").update({ waivers_locked: true }).eq("id", (league as any).id);
-      await resetWaiverPriority((league as any).id);
-      locked.push((league as any).id);
+      const leagueId = (league as any).id as number;
+      const schedule = await getLeagueSchedule(admin, leagueId);
+      const onSchedule = (schedule?.weeks ?? []).some((w) =>
+        w.tournamentIds.some((tid) => startingIds.has(tid)),
+      );
+      if (!onSchedule) continue;
+      const { data: draft } = await admin
+        .from("drafts")
+        .select("status")
+        .eq("league_id", leagueId)
+        .maybeSingle();
+      if ((draft as any)?.status !== "complete") continue;
+      await admin.from("leagues").update({ waivers_locked: true }).eq("id", leagueId);
+      await resetWaiverPriority(leagueId);
+      locked.push(leagueId);
     }
   }
 
@@ -66,38 +85,41 @@ export async function GET(request: Request) {
   //        recently concluded event has passed. This is the same review window
   //        auto-finalize uses, so waivers unlock in lockstep with week scoring —
   //        important because finalization reads live starter rosters.
+  //    Like the lock above, this gate is league-scoped: each locked league
+  //    waits on ITS OWN schedule's events, not whatever tournament happens to
+  //    be running globally. A locked league none of whose scheduled events has
+  //    even concluded was locked spuriously (e.g. by the pre-league-scoping
+  //    version of this cron) — processing it just unlocks it.
   const processed: number[] = [];
   const { data: lockedLeagues } = await admin
     .from("leagues")
     .select("id")
     .eq("waivers_locked", true);
 
-  if (lockedLeagues && lockedLeagues.length > 0) {
-    const { data: running } = await admin
-      .from("tournaments")
-      .select("id")
-      .lte("start_date", today)
-      .gt("end_date", today); // strictly after today: a same-day end no longer blocks
-    const eventInProgress = (running?.length ?? 0) > 0;
-
-    const { data: concluded } = await admin
-      .from("tournaments")
-      .select("end_date")
-      .not("end_date", "is", null)
-      .lte("end_date", today)
-      .order("end_date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const latestEnd = (concluded as any)?.end_date as string | undefined;
+  for (const league of lockedLeagues ?? []) {
+    const leagueId = (league as any).id as number;
+    const schedule = await getLeagueSchedule(admin, leagueId);
+    if (!schedule) continue;
+    const tids = schedule.weeks.flatMap((w) => w.tournamentIds);
+    const { data: trows } = tids.length > 0
+      ? await admin.from("tournaments").select("id, start_date, end_date").in("id", tids)
+      : { data: [] };
+    // Genuinely in progress: started on/before today, ending strictly AFTER
+    // today (a same-day end has played its final round and no longer blocks).
+    const eventInProgress = (trows ?? []).some(
+      (t: any) => t.start_date <= today && t.end_date > today,
+    );
+    if (eventInProgress) continue;
+    const concludedEnds = (trows ?? [])
+      .map((t: any) => t.end_date as string)
+      .filter((e) => e != null && e <= today)
+      .sort();
+    const latestEnd = concludedEnds[concludedEnds.length - 1];
     const reviewWindowPassed =
-      !!latestEnd && Date.now() >= wednesdayAfter(latestEnd).getTime();
-
-    if (!eventInProgress && reviewWindowPassed) {
-      for (const league of lockedLeagues) {
-        await runWaiverProcessing((league as any).id);
-        processed.push((league as any).id);
-      }
-    }
+      !latestEnd || Date.now() >= wednesdayAfter(latestEnd).getTime();
+    if (!reviewWindowPassed) continue;
+    await runWaiverProcessing(leagueId);
+    processed.push(leagueId);
   }
 
   // 3) Auto-finalize any week whose event ended and whose Wednesday review
