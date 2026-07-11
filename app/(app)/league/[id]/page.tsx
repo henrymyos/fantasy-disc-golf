@@ -55,7 +55,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   const isCommissioner = (league as any).commissioner_id === user.id;
 
-  const activeTournament = await getActiveTournament(supabase);
+  const activeTournament = await getActiveTournament(supabase, Number(id));
   const waiversActive = (league as any).waivers_locked === true || activeTournament !== null;
 
   const scheduleEvents = await getScheduleEvents(supabase, (league as any).season_year ?? DEFAULT_SEASON_YEAR);

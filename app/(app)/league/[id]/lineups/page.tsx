@@ -64,7 +64,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
     r.nickname = nickByPlayer.get(r.player_id) ?? null;
   }
 
-  const activeTournament = await getActiveTournament(supabase);
+  const activeTournament = await getActiveTournament(supabase, Number(id));
   const lineupLocked = activeTournament !== null;
 
   // Per-player projected and actual points for the next calendar event on

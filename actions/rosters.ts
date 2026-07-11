@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isLineupLocked, isFreeAgencyLocked, getActiveTournament } from "@/lib/lineup-lock";
+import { isLineupLocked, isFreeAgencyLocked } from "@/lib/lineup-lock";
 import { resetWaiverPriority, runWaiverProcessing } from "@/lib/waivers";
 
 export async function toggleStarter(leagueId: number, rosterSpotId: number, isStarter: boolean): Promise<void> {
@@ -12,7 +12,7 @@ export async function toggleStarter(leagueId: number, rosterSpotId: number, isSt
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  if (await isLineupLocked(supabase)) return;
+  if (await isLineupLocked(supabase, leagueId)) return;
 
   const admin = createAdminClient();
 
@@ -53,7 +53,7 @@ export async function swapStarter(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  if (await isLineupLocked(supabase)) return;
+  if (await isLineupLocked(supabase, leagueId)) return;
 
   const admin = createAdminClient();
 
@@ -100,7 +100,7 @@ export async function swapStarterPositions(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  if (await isLineupLocked(supabase)) return;
+  if (await isLineupLocked(supabase, leagueId)) return;
 
   const admin = createAdminClient();
 
@@ -138,7 +138,7 @@ export async function moveStarterToSlot(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  if (await isLineupLocked(supabase)) return;
+  if (await isLineupLocked(supabase, leagueId)) return;
 
   const admin = createAdminClient();
 
@@ -191,7 +191,7 @@ export async function addFreeAgent(leagueId: number, playerId: number, dropPlaye
   // Free agency is disabled while waivers are locked AND while any tournament
   // is currently in progress — adds during those windows must go through
   // waiver claims so everyone has a shot at hot pickups.
-  if (await isFreeAgencyLocked(supabase, (league as any).waivers_locked)) return;
+  if (await isFreeAgencyLocked(supabase, leagueId, (league as any).waivers_locked)) return;
 
   const { data: draft } = await admin
     .from("drafts")
@@ -293,7 +293,7 @@ export async function dropPlayer(leagueId: number, playerId: number): Promise<vo
     .eq("team_id", member.id)
     .eq("player_id", playerId)
     .maybeSingle();
-  if ((spot as any)?.is_starter && (await isLineupLocked(supabase))) return;
+  if ((spot as any)?.is_starter && (await isLineupLocked(supabase, leagueId))) return;
 
   await admin
     .from("rosters")

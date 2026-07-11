@@ -99,7 +99,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
   // Per-event projection for the next/active tournament. Returns 0 when the
   // target tournament has a populated registration list and the player isn't
   // on it (OUT), null when we have no signal to project from.
-  const activeT = await getActiveTournament(supabase);
+  const activeT = await getActiveTournament(supabase, Number(id));
   const todayIsoNext = new Date().toISOString().slice(0, 10);
   let nextTournamentId: number | null = activeT?.id ?? null;
   if (!nextTournamentId) {

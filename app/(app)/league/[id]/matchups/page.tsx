@@ -68,7 +68,7 @@ export default async function MatchupsPage({ params }: { params: Promise<{ id: s
     .eq("user_id", user.id)
     .single();
 
-  const activeTournament = await getActiveTournament(supabase);
+  const activeTournament = await getActiveTournament(supabase, Number(id));
 
   return (
     <div className="max-w-2xl space-y-6">

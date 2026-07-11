@@ -137,7 +137,7 @@ export default async function MyMatchupPage({
   const t2Id = (matchup as any).team2_id;
 
   // Active/upcoming tournament for the actual-vs-projected split + registration.
-  const activeTournament = await getActiveTournament(supabase);
+  const activeTournament = await getActiveTournament(supabase, Number(id));
   const todayIso = new Date().toISOString().slice(0, 10);
   let weekTournamentId: number | null = activeTournament?.id ?? null;
   if (!weekTournamentId) {

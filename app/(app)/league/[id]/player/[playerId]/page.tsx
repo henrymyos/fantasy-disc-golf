@@ -61,7 +61,7 @@ export default async function PlayerPage({
     .single();
   const draftComplete = draft?.status === "complete";
 
-  const activeTournament = await getActiveTournament(supabase);
+  const activeTournament = await getActiveTournament(supabase, Number(id));
   const waiversActive = ((league as any)?.waivers_locked === true) || activeTournament !== null;
 
   const { data: myRosterRows } = await supabase
