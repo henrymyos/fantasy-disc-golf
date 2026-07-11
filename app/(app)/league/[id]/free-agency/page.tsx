@@ -174,14 +174,9 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
   const overLimit = rosterCount > league.roster_size;
   const openSpots = Math.max(0, league.roster_size - rosterCount);
 
-  const { data: activeTournament } = await supabase
-    .from("tournaments")
-    .select("id, name, end_date")
-    .lte("start_date", new Date().toISOString().slice(0, 10))
-    .gte("end_date", new Date().toISOString().slice(0, 10))
-    .maybeSingle();
-
-  const waiversLocked = (league as any).waivers_locked === true || activeTournament !== null;
+  // League-scoped: a live tournament only pauses free agency when it's on
+  // this league's schedule (activeT above, from getActiveTournament).
+  const waiversLocked = (league as any).waivers_locked === true || activeT !== null;
 
   const { data: myClaims } = await supabase
     .from("waiver_claims")
