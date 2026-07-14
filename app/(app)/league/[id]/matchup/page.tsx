@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { applyProjectionVariance } from "@/lib/projections";
+import { applyProjectionVariance, winProbability } from "@/lib/projections";
 import { getActiveTournament } from "@/lib/lineup-lock";
 import { getLeagueNextTournamentId } from "@/lib/league-schedule";
 import { fantasyPointsFromResult, resolveScoringRules, describeScoreContributions } from "@/lib/scoring-rules";
@@ -28,21 +28,6 @@ type WeekStat = {
   over_par_strokes: number;
   eagle_count: number;
 };
-
-// Standard-normal CDF via Abramowitz & Stegun 7.1.26 approximation.
-function normalCdf(x: number): number {
-  const a1 = 0.254829592;
-  const a2 = -0.284496736;
-  const a3 = 1.421413741;
-  const a4 = -1.453152027;
-  const a5 = 1.061405429;
-  const p = 0.3275911;
-  const sign = x < 0 ? -1 : 1;
-  const ax = Math.abs(x) / Math.SQRT2;
-  const t = 1 / (1 + p * ax);
-  const y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-ax * ax);
-  return 0.5 * (1 + sign * y);
-}
 
 function buildSlotArray(starters: any[], numSlots: number): (any | null)[] {
   const result: (any | null)[] = new Array(numSlots).fill(null);
@@ -332,10 +317,7 @@ export default async function MyMatchupPage({
 
   // Win % uses each team's *finishing* estimate (pace where available),
   // and the residual variance shrinks as the tournament progresses.
-  const baseSigma = 28;
-  const sigma = baseSigma * Math.sqrt(Math.max(0.05, 1 - progressFrac));
-  const z = (t1Finishing - t2Finishing) / Math.sqrt(2 * sigma * sigma);
-  const t1WinPct = Math.round(normalCdf(z) * 100);
+  const t1WinPct = winProbability(t1Finishing, t2Finishing, progressFrac);
   const t2WinPct = 100 - t1WinPct;
   const isMine = (id: number) => id === myMember.id;
 

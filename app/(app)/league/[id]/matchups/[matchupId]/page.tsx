@@ -1,7 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { applyProjectionVariance } from "@/lib/projections";
+import { applyProjectionVariance, winProbability } from "@/lib/projections";
+import { getLeagueSchedule } from "@/lib/league-schedule";
 import { fantasyPointsFromResult, resolveScoringRules, describeScoreContributions } from "@/lib/scoring-rules";
 
 type PlayerRow = {
@@ -27,21 +28,6 @@ type WeekStat = {
   over_par_strokes: number;
   eagle_count: number;
 };
-
-// Standard-normal CDF via Abramowitz & Stegun 7.1.26 approximation.
-function normalCdf(x: number): number {
-  const a1 = 0.254829592;
-  const a2 = -0.284496736;
-  const a3 = 1.421413741;
-  const a4 = -1.453152027;
-  const a5 = 1.061405429;
-  const p = 0.3275911;
-  const sign = x < 0 ? -1 : 1;
-  const ax = Math.abs(x) / Math.SQRT2;
-  const t = 1 / (1 + p * ax);
-  const y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-ax * ax);
-  return 0.5 * (1 + sign * y);
-}
 
 function buildSlotArray(starters: any[], numSlots: number): (any | null)[] {
   const result: (any | null)[] = new Array(numSlots).fill(null);
@@ -95,23 +81,32 @@ export default async function MatchupDetailPage({
   const team1 = matchup.team1 as any;
   const team2 = matchup.team2 as any;
 
-  // This matchup belongs to a specific week → score it against THAT week's
-  // event (not whatever tournament is active now), so a finalized matchup shows
-  // the actual results that produced its locked score.
-  const { data: weekTournaments } = await supabase
-    .from("tournaments")
-    .select("id, name, start_date, end_date, lock_at, registered_player_ids")
-    .eq("week", matchup.week)
-    .order("start_date", { ascending: true });
+  // This matchup belongs to a specific LEAGUE week → resolve that week's event
+  // through the league schedule (matchup.week is the league's own week index;
+  // the global tournaments.week column is a per-import counter and maps to the
+  // wrong event), so every matchup in a week scores against the same event.
+  const schedule = await getLeagueSchedule(supabase, Number(id));
+  const scheduleWeek = schedule?.weeks.find((w) => w.week === matchup.week) ?? null;
+  const weekIds = scheduleWeek?.tournamentIds ?? [];
+  const { data: weekTournaments } = weekIds.length > 0
+    ? await supabase
+        .from("tournaments")
+        .select("id, name, start_date, end_date, lock_at, registered_player_ids")
+        .in("id", weekIds)
+        .order("start_date", { ascending: true })
+    : { data: [] as any[] };
   const weekTournamentIds = new Set((weekTournaments ?? []).map((t: any) => t.id as number));
   const primaryTournament = (weekTournaments ?? [])[0] as any | undefined;
-  const weekTournamentName: string | null = primaryTournament?.name ?? null;
+  const weekTournamentName: string | null =
+    primaryTournament?.name ?? scheduleWeek?.event.name ?? null;
   const weekDateLabel: string | null = (() => {
-    if (!primaryTournament?.start_date) return null;
+    const start = primaryTournament?.start_date ?? scheduleWeek?.event.startDate;
+    const end = primaryTournament?.end_date ?? scheduleWeek?.event.endDate;
+    if (!start) return null;
     const fmt = (d: string) =>
       new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-    const s = fmt(primaryTournament.start_date);
-    const e = primaryTournament.end_date ? fmt(primaryTournament.end_date) : s;
+    const s = fmt(start);
+    const e = end ? fmt(end) : s;
     return s === e ? s : `${s} – ${e}`;
   })();
 
@@ -293,10 +288,7 @@ export default async function MatchupDetailPage({
       : team2Proj;
 
   // Win %: residual variance shrinks as the tournament progresses.
-  const baseSigma = 28;
-  const sigma = baseSigma * Math.sqrt(Math.max(0.05, 1 - progressFrac));
-  const z = (team1Finishing - team2Finishing) / Math.sqrt(2 * sigma * sigma);
-  const t1WinPct = Math.round(normalCdf(z) * 100);
+  const t1WinPct = winProbability(team1Finishing, team2Finishing, progressFrac);
   const t2WinPct = 100 - t1WinPct;
 
   const benchPairCount = Math.max(t1Team.benchRows.length, t2Team.benchRows.length);
