@@ -86,7 +86,7 @@ export default async function PlayerPage({
   const { data: events } = await supabase
     .from("tournaments")
     .select(`
-      id, name, week, start_date, pdga_event_id,
+      id, name, week, start_date, pdga_event_id, registered_player_ids,
       tournament_results(fantasy_points, finishing_position, hot_round_count, bogey_free_count, ace_count)
     `)
     .eq("tournament_results.player_id", playerId)
@@ -331,6 +331,16 @@ export default async function PlayerPage({
               const clean: number = r?.bogey_free_count ?? 0;
               const aces: number = r?.ace_count ?? 0;
 
+              // Registration status: a result row means they competed; otherwise
+              // check the registered list. An empty/missing list means the field
+              // hasn't been synced yet — unknown, not "not registered".
+              const regIds = (event as any).registered_player_ids as number[] | null;
+              const registered: boolean | null = r
+                ? true
+                : regIds && regIds.length > 0
+                  ? regIds.includes(player.id)
+                  : null;
+
               return (
                 <div
                   key={event.id}
@@ -338,7 +348,21 @@ export default async function PlayerPage({
                     i !== 0 ? "border-t border-white/5" : ""
                   }`}
                 >
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <span
+                      className="w-4 shrink-0 text-center text-sm font-bold"
+                      style={{ color: registered === true ? GREEN : registered === false ? RED : undefined }}
+                      title={
+                        registered === true
+                          ? "Registered for this event"
+                          : registered === false
+                            ? "Not registered for this event"
+                            : "Registration not available yet"
+                      }
+                    >
+                      {registered === true ? "✓" : registered === false ? "✕" : ""}
+                    </span>
+                    <div className="min-w-0">
                     {(event as any).pdga_event_id ? (
                       <a
                         href={`https://www.pdga.com/tour/event/${(event as any).pdga_event_id}`}
@@ -359,6 +383,7 @@ export default async function PlayerPage({
                         {new Date(event.start_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                       </p>
                     )}
+                    </div>
                   </div>
                   <span
                     className="text-sm font-bold tabular-nums text-right w-14"
