@@ -270,22 +270,14 @@ export default async function MatchupDetailPage({
 
   const team1Actual = starterTotal(t1Team.starterRows, (r) => r.actual);
   const team2Actual = starterTotal(t2Team.starterRows, (r) => r.actual);
-  const team1Proj = starterTotal(t1Team.starterRows, (r) => r.projected);
-  const team2Proj = starterTotal(t2Team.starterRows, (r) => r.projected);
   const finishingFor = (r: PlayerRow) => r.paceProjected ?? r.projected ?? 0;
   const team1Finishing = starterTotal(t1Team.starterRows, finishingFor);
   const team2Finishing = starterTotal(t2Team.starterRows, finishingFor);
   const isFinal = !!matchup.is_final;
-  const team1Display = isFinal
-    ? matchup.team1_score
-    : inProgress
-      ? team1Actual
-      : team1Proj;
-  const team2Display = isFinal
-    ? matchup.team2_score
-    : inProgress
-      ? team2Actual
-      : team2Proj;
+  // The headline number is always points actually scored this week (0.0 until
+  // the event starts); the projection lives in the ~X line below it.
+  const team1Display = isFinal ? matchup.team1_score : team1Actual;
+  const team2Display = isFinal ? matchup.team2_score : team2Actual;
 
   // Win %: residual variance shrinks as the tournament progresses.
   const t1WinPct = winProbability(team1Finishing, team2Finishing, progressFrac);

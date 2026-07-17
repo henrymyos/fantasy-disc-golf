@@ -294,8 +294,6 @@ export default async function MyMatchupPage({
   const starterTotal = (rows: (StarterRow | null)[], pick: (r: StarterRow) => number | null) =>
     rows.reduce((acc, r) => acc + (r ? (pick(r) ?? 0) : 0), 0);
 
-  const t1Proj = starterTotal(t1Team.starterRows, (r) => r.projected);
-  const t2Proj = starterTotal(t2Team.starterRows, (r) => r.projected);
   const t1Actual = starterTotal(t1Team.starterRows, (r) => r.actual);
   const t2Actual = starterTotal(t2Team.starterRows, (r) => r.actual);
   // Each player's expected finishing total: their live pace if scored,
@@ -304,16 +302,10 @@ export default async function MyMatchupPage({
   const t1Finishing = starterTotal(t1Team.starterRows, finishingFor);
   const t2Finishing = starterTotal(t2Team.starterRows, finishingFor);
   const isFinal = !!(matchup as any).is_final;
-  const t1Display = isFinal
-    ? Number((matchup as any).team1_score)
-    : inProgress
-      ? t1Actual
-      : t1Proj;
-  const t2Display = isFinal
-    ? Number((matchup as any).team2_score)
-    : inProgress
-      ? t2Actual
-      : t2Proj;
+  // The headline number is always points actually scored this week (0.0 until
+  // the event starts); the projection lives in the ~X line below it.
+  const t1Display = isFinal ? Number((matchup as any).team1_score) : t1Actual;
+  const t2Display = isFinal ? Number((matchup as any).team2_score) : t2Actual;
 
   // Win % uses each team's *finishing* estimate (pace where available),
   // and the residual variance shrinks as the tournament progresses.
