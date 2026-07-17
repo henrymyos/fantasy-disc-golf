@@ -333,7 +333,6 @@ export default async function MyMatchupPage({
             name={t1?.team_name ?? "TBD"}
             score={t1Display}
             projected={t1Finishing}
-            winPct={t1WinPct}
             isFinal={isFinal}
             inProgress={inProgress}
             isMine={isMine(t1Id)}
@@ -347,7 +346,6 @@ export default async function MyMatchupPage({
             name={t2?.team_name ?? "TBD"}
             score={t2Display}
             projected={t2Finishing}
-            winPct={t2WinPct}
             isFinal={isFinal}
             inProgress={inProgress}
             isMine={isMine(t2Id)}
@@ -415,7 +413,6 @@ function TeamHeader({
   name,
   score,
   projected,
-  winPct,
   isFinal,
   inProgress,
   isMine,
@@ -424,7 +421,6 @@ function TeamHeader({
   name: string;
   score: number;
   projected: number;
-  winPct: number;
   isFinal: boolean;
   inProgress: boolean;
   isMine: boolean;
@@ -439,8 +435,7 @@ function TeamHeader({
       <p className="text-white text-3xl font-black tabular-nums mt-2">{score.toFixed(1)}</p>
       {!isFinal && (
         <p className="text-gray-400 text-xs mt-1">
-          ~{projected.toFixed(1)} {inProgress ? "final proj" : "projected"} ·{" "}
-          <span className="text-white font-semibold">{winPct}%</span> win
+          ~{projected.toFixed(1)} {inProgress ? "final proj" : "projected"}
         </p>
       )}
     </div>
