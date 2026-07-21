@@ -324,7 +324,35 @@ export type ImportResult = {
     mpoRows: number;
     fpoRows: number;
   }>;
+  liveDeltas: LiveDelta[];
 };
+
+/** Per-player stat change detected between two imports of a LIVE tournament.
+ *  Drives the live feed rows and the hot-round notifications. */
+export type LiveDelta = {
+  tournamentId: number;
+  playerId: number;
+  posFrom: number | null;
+  posTo: number | null;
+  birdies: number;
+  bogeys: number;
+  hot: number;
+  bogeyFree: number;
+  ace: number;
+  eagle: number;
+  isNew: boolean;
+};
+
+/** Feed headline priority: rarest/most exciting stat wins the row's kind. */
+function feedKindFor(d: LiveDelta): string {
+  if (d.ace > 0) return "ace";
+  if (d.hot > 0) return "hot_round";
+  if (d.eagle > 0) return "eagle";
+  if (d.bogeyFree > 0) return "bogey_free";
+  if (d.birdies > 0) return "birdies";
+  if (d.posFrom !== d.posTo && d.posTo != null) return "position";
+  return "score";
+}
 
 /**
  * Refreshes tournament_results by scraping every tournament whose
@@ -335,7 +363,7 @@ export type ImportResult = {
 export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportResult> {
   const { data: tournaments } = await supabase
     .from("tournaments")
-    .select("id, name, pdga_event_id, start_date")
+    .select("id, name, pdga_event_id, start_date, end_date")
     .not("pdga_event_id", "is", null);
 
   const events = (tournaments ?? []).map((t: any) => ({
@@ -343,6 +371,7 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
     pdgaId: t.pdga_event_id as number,
     name: t.name as string,
     startDate: t.start_date as string | null,
+    endDate: t.end_date as string | null,
   }));
 
   const { data: players } = await supabase
@@ -461,13 +490,19 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
   //   - a fuller scrape (more rounds fetched) always wins.
   // New events with no stored bonus data always import (existing total = 0).
   const scrapedEventIds = new Set<number>(rowsToInsert.map((r) => r.tournament_id as number));
+  const liveDeltas: LiveDelta[] = [];
+  const today = new Date().toISOString().slice(0, 10);
+  // Rostered players (any league) — the live feed only records players someone
+  // actually owns, keeping the table small and the feed relevant.
+  let rosteredIds: Set<number> | null = null;
+
   for (const tid of scrapedEventIds) {
     const evRows = rowsToInsert.filter((r) => (r.tournament_id as number) === tid);
     const newBirdie = evRows.reduce((s, r) => s + Number(r.under_par_strokes ?? 0), 0);
 
     const { data: existing } = await supabase
       .from("tournament_results")
-      .select("under_par_strokes")
+      .select("player_id, finishing_position, hot_round_count, bogey_free_count, ace_count, under_par_strokes, over_par_strokes, eagle_count")
       .eq("tournament_id", tid);
     const existingBirdie = (existing ?? []).reduce((s, r: any) => s + Number(r.under_par_strokes ?? 0), 0);
     if (existingBirdie > 0 && newBirdie < existingBirdie) continue; // keep the fuller data
@@ -484,6 +519,65 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
         .upsert(evRows.slice(i, i + 500), { onConflict: "tournament_id,player_id" });
       if (error) throw error;
     }
+
+    // Live feed: while this event is in progress, record what changed for each
+    // rostered player since the previous import. Best-effort — a failure here
+    // (e.g. the live_feed_events table not migrated yet) never blocks scoring.
+    try {
+      const meta = events.find((e) => e.dbId === tid);
+      const isLive =
+        meta?.startDate != null && meta.endDate != null &&
+        meta.startDate <= today && today <= meta.endDate;
+      if (!isLive) continue;
+
+      if (rosteredIds == null) {
+        const { data: rosterRows } = await supabase.from("rosters").select("player_id");
+        rosteredIds = new Set((rosterRows ?? []).map((r: any) => r.player_id as number));
+      }
+
+      const prevByPlayer = new Map<number, any>(
+        (existing ?? []).map((r: any) => [r.player_id as number, r]),
+      );
+      const feedRows: any[] = [];
+      for (const row of evRows) {
+        if (!rosteredIds.has(row.player_id)) continue;
+        const prev = prevByPlayer.get(row.player_id);
+        const d: LiveDelta = {
+          tournamentId: tid,
+          playerId: row.player_id,
+          posFrom: prev?.finishing_position ?? null,
+          posTo: row.finishing_position ?? null,
+          birdies: Number(row.under_par_strokes ?? 0) - Number(prev?.under_par_strokes ?? 0),
+          bogeys: Number(row.over_par_strokes ?? 0) - Number(prev?.over_par_strokes ?? 0),
+          hot: Number(row.hot_round_count ?? 0) - Number(prev?.hot_round_count ?? 0),
+          bogeyFree: Number(row.bogey_free_count ?? 0) - Number(prev?.bogey_free_count ?? 0),
+          ace: Number(row.ace_count ?? 0) - Number(prev?.ace_count ?? 0),
+          eagle: Number(row.eagle_count ?? 0) - Number(prev?.eagle_count ?? 0),
+          isNew: !prev,
+        };
+        const changed =
+          d.isNew || d.posFrom !== d.posTo || d.birdies > 0 || d.bogeys > 0 ||
+          d.hot > 0 || d.bogeyFree > 0 || d.ace > 0 || d.eagle > 0;
+        if (!changed) continue;
+        liveDeltas.push(d);
+        feedRows.push({
+          tournament_id: tid,
+          player_id: d.playerId,
+          kind: feedKindFor(d),
+          detail: {
+            pos_from: d.posFrom, pos_to: d.posTo,
+            birdies: d.birdies, bogeys: d.bogeys, hot: d.hot,
+            bogey_free: d.bogeyFree, ace: d.ace, eagle: d.eagle,
+            is_new: d.isNew,
+          },
+        });
+      }
+      if (feedRows.length > 0) {
+        await supabase.from("live_feed_events").insert(feedRows);
+      }
+    } catch (e) {
+      console.warn("live feed recording failed", e);
+    }
   }
 
   return {
@@ -491,5 +585,6 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
     unmatchedRows: unmatched.length,
     unmatchedSample: unmatched.slice(0, 20),
     events: eventSummaries,
+    liveDeltas,
   };
 }

@@ -5,6 +5,10 @@ import { applyProjectionVariance, winProbability } from "@/lib/projections";
 import { getActiveTournament } from "@/lib/lineup-lock";
 import { getLeagueNextTournamentId } from "@/lib/league-schedule";
 import { fantasyPointsFromResult, resolveScoringRules, describeScoreContributions } from "@/lib/scoring-rules";
+import { LiveScoreRefresher } from "@/components/live-score-refresher";
+import { WinProbChart } from "@/components/win-prob-chart";
+import { LiveEventFeed, type LiveFeedRow } from "@/components/live-event-feed";
+import { MatchupWrapup } from "@/components/matchup-wrapup";
 
 type StarterRow = {
   rosterId: number;
@@ -313,6 +317,56 @@ export default async function MyMatchupPage({
   const t2WinPct = 100 - t1WinPct;
   const isMine = (id: number) => id === myMember.id;
 
+  // Win-probability history (snapshotted by the gameday pass on each refresh).
+  const { data: snapshots } = await supabase
+    .from("matchup_prob_snapshots")
+    .select("t1_win_pct, created_at")
+    .eq("matchup_id", (matchup as any).id)
+    .order("created_at", { ascending: true })
+    .limit(500);
+  const probPoints = (snapshots ?? []).map((s: any) => ({
+    pct: s.t1_win_pct as number,
+    ts: s.created_at as string,
+  }));
+
+  // Live play-by-play for the players in this matchup.
+  let feedRows: LiveFeedRow[] = [];
+  if (inProgress && weekTournamentId != null && playerIds.length > 0) {
+    const { data: feed } = await supabase
+      .from("live_feed_events")
+      .select("id, player_id, kind, detail, created_at, players(name)")
+      .eq("tournament_id", weekTournamentId)
+      .in("player_id", playerIds)
+      .order("created_at", { ascending: false })
+      .limit(30);
+    const teamNameByPlayer = new Map<number, string>(
+      allRoster.map((r) => [
+        r.player_id as number,
+        r.team_id === t1Id ? (t1?.team_name as string) : (t2?.team_name as string),
+      ]),
+    );
+    feedRows = (feed ?? []).map((f: any) => ({
+      id: f.id,
+      playerName: f.players?.name ?? "Unknown",
+      teamName: teamNameByPlayer.get(f.player_id) ?? null,
+      kind: f.kind,
+      detail: (f.detail ?? {}) as Record<string, unknown>,
+      createdAt: f.created_at,
+    }));
+  }
+
+  const wrapupTeam = (teamName: string, team: { starterRows: (StarterRow | null)[]; benchRows: StarterRow[] }) => ({
+    teamName,
+    starters: team.starterRows.map((r) =>
+      r ? { name: r.name, division: r.division, actual: r.actual, projected: r.projected } : null,
+    ),
+    bench: team.benchRows.map((r) => ({
+      name: r.name, division: r.division, actual: r.actual, projected: r.projected,
+    })),
+    mpoSlots,
+    fpoSlots,
+  });
+
   // Pad the two teams' bench lists to the same length for paired rendering.
   const benchPairCount = Math.max(t1Team.benchRows.length, t2Team.benchRows.length);
 
@@ -326,6 +380,10 @@ export default async function MyMatchupPage({
           {isFinal ? " · Final" : " · live projection"}
         </p>
       </div>
+
+      {inProgress && weekTournamentName && (
+        <LiveScoreRefresher tournamentName={weekTournamentName} />
+      )}
 
       <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
         <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-end">
@@ -365,7 +423,22 @@ export default async function MyMatchupPage({
             </div>
           </div>
         )}
+
+        <WinProbChart
+          points={probPoints}
+          t1Name={t1?.team_name ?? "Team 1"}
+          t2Name={t2?.team_name ?? "Team 2"}
+        />
       </div>
+
+      {isFinal && (
+        <MatchupWrapup
+          t1={wrapupTeam(t1?.team_name ?? "Team 1", t1Team)}
+          t2={wrapupTeam(t2?.team_name ?? "Team 2", t2Team)}
+        />
+      )}
+
+      <LiveEventFeed rows={feedRows} />
 
       <div className="bg-[#1a1d23] rounded-2xl border border-white/5 overflow-hidden">
         <SectionHeader t1Name={t1?.team_name} t2Name={t2?.team_name} label="Starters" />

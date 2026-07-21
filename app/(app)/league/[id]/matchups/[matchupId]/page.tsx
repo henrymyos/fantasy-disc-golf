@@ -4,6 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { applyProjectionVariance, winProbability } from "@/lib/projections";
 import { getLeagueSchedule } from "@/lib/league-schedule";
 import { fantasyPointsFromResult, resolveScoringRules, describeScoreContributions } from "@/lib/scoring-rules";
+import { LiveScoreRefresher } from "@/components/live-score-refresher";
+import { WinProbChart } from "@/components/win-prob-chart";
+import { LiveEventFeed, type LiveFeedRow } from "@/components/live-event-feed";
+import { MatchupWrapup } from "@/components/matchup-wrapup";
 
 type PlayerRow = {
   rosterId: number;
@@ -285,6 +289,56 @@ export default async function MatchupDetailPage({
 
   const benchPairCount = Math.max(t1Team.benchRows.length, t2Team.benchRows.length);
 
+  // Win-probability history (snapshotted by the gameday pass on each refresh).
+  const { data: snapshots } = await supabase
+    .from("matchup_prob_snapshots")
+    .select("t1_win_pct, created_at")
+    .eq("matchup_id", matchup.id)
+    .order("created_at", { ascending: true })
+    .limit(500);
+  const probPoints = (snapshots ?? []).map((s: any) => ({
+    pct: s.t1_win_pct as number,
+    ts: s.created_at as string,
+  }));
+
+  // Live play-by-play for the players in this matchup.
+  let feedRows: LiveFeedRow[] = [];
+  if (inProgress && weekIds.length > 0 && playerIds.length > 0) {
+    const { data: feed } = await supabase
+      .from("live_feed_events")
+      .select("id, player_id, kind, detail, created_at, players(name)")
+      .in("tournament_id", weekIds)
+      .in("player_id", playerIds)
+      .order("created_at", { ascending: false })
+      .limit(30);
+    const teamNameByPlayer = new Map<number, string>(
+      allRoster.map((r) => [
+        r.player_id as number,
+        r.team_id === matchup.team1_id ? (team1?.team_name as string) : (team2?.team_name as string),
+      ]),
+    );
+    feedRows = (feed ?? []).map((f: any) => ({
+      id: f.id,
+      playerName: f.players?.name ?? "Unknown",
+      teamName: teamNameByPlayer.get(f.player_id) ?? null,
+      kind: f.kind,
+      detail: (f.detail ?? {}) as Record<string, unknown>,
+      createdAt: f.created_at,
+    }));
+  }
+
+  const wrapupTeam = (teamName: string, team: { starterRows: (PlayerRow | null)[]; benchRows: PlayerRow[] }) => ({
+    teamName,
+    starters: team.starterRows.map((r) =>
+      r ? { name: r.name, division: r.division, actual: r.actual, projected: r.projected } : null,
+    ),
+    bench: team.benchRows.map((r) => ({
+      name: r.name, division: r.division, actual: r.actual, projected: r.projected,
+    })),
+    mpoSlots,
+    fpoSlots,
+  });
+
   return (
     <div className="max-w-3xl space-y-5">
       <Link
@@ -293,6 +347,10 @@ export default async function MatchupDetailPage({
       >
         ← League
       </Link>
+
+      {inProgress && weekTournamentName && (
+        <LiveScoreRefresher tournamentName={weekTournamentName} />
+      )}
 
       <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
         <div className="flex items-center justify-between gap-4">
@@ -338,7 +396,22 @@ export default async function MatchupDetailPage({
             </div>
           </div>
         )}
+
+        <WinProbChart
+          points={probPoints}
+          t1Name={team1.team_name}
+          t2Name={team2.team_name}
+        />
       </div>
+
+      {isFinal && (
+        <MatchupWrapup
+          t1={wrapupTeam(team1.team_name, t1Team)}
+          t2={wrapupTeam(team2.team_name, t2Team)}
+        />
+      )}
+
+      <LiveEventFeed rows={feedRows} />
 
       <div className="bg-[#1a1d23] rounded-2xl border border-white/5 overflow-hidden">
         <SectionHeader

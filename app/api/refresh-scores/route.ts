@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runPdgaImport } from "@/lib/pdga-import";
+import { runGamedayPass } from "@/lib/gameday";
 
 // Logged-in users can trigger a PDGA re-import (the same logic the cron runs).
 // Used by the client-side live-scoring poller during active tournaments so
@@ -76,10 +77,15 @@ export async function POST() {
 
   try {
     const result = await runPdgaImport(admin);
-    await admin.from("pdga_import_state").update({ last_result: result as any }).eq("id", 1);
+    // Snapshots, lead-change + hot-round alerts (best-effort, never throws).
+    await runGamedayPass(admin, result.liveDeltas);
+    // Deltas are one-refresh-only data — keep them out of the cached result.
+    const cacheable: Partial<typeof result> = { ...result };
+    delete cacheable.liveDeltas;
+    await admin.from("pdga_import_state").update({ last_result: cacheable as any }).eq("id", 1);
     localLastAttempt = now;
-    localCached = result;
-    return NextResponse.json({ ok: true, cached: false, ...result });
+    localCached = cacheable;
+    return NextResponse.json({ ok: true, cached: false, ...cacheable });
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : String(err) },

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runPdgaImport } from "@/lib/pdga-import";
+import { runGamedayPass } from "@/lib/gameday";
 import { runRankingsSync } from "@/lib/rankings-sync";
 import { runRatingsSync } from "@/lib/ratings-sync";
 
@@ -34,6 +35,9 @@ export async function GET(request: Request) {
   try {
     const supabase = createAdminClient();
     const result = await runPdgaImport(supabase);
+
+    // Live-weekend pass: win-prob snapshots + lead-change/hot-round alerts.
+    await runGamedayPass(supabase, result.liveDeltas);
 
     let rankings: unknown;
     try {

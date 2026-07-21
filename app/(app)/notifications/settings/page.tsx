@@ -37,6 +37,16 @@ const KINDS = [
     label: "Draft updates",
     description: "When the draft is scheduled or starts.",
   },
+  {
+    kind: "lead_change" as const,
+    label: "Matchup lead changes",
+    description: "When the lead flips in your matchup during a live tournament.",
+  },
+  {
+    kind: "hot_round" as const,
+    label: "Hot rounds",
+    description: "When one of your players cards the hot round during a live tournament.",
+  },
 ];
 
 export default async function NotificationSettingsPage() {

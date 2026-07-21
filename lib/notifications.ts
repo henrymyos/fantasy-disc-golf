@@ -7,7 +7,9 @@ export type NotificationKind =
   | "lineup_unset"
   | "waiver_result"
   | "member_joined"
-  | "draft_status";
+  | "draft_status"
+  | "lead_change"
+  | "hot_round";
 
 type EnqueueArgs = {
   userId: string;
@@ -36,13 +38,20 @@ export async function enqueueNotification(
     .maybeSingle();
   if (pref && (pref as any).enabled === false) return;
 
-  await admin.from("notifications").insert({
+  // If the row can't be stored (e.g. the kind isn't in the DB CHECK constraint
+  // yet), skip the push/email side-channels too — never alert without a backing
+  // in-app notification.
+  const { error } = await admin.from("notifications").insert({
     user_id: args.userId,
     league_id: args.leagueId,
     kind: args.kind,
     body: args.body,
     link: args.link ?? null,
   });
+  if (error) {
+    console.warn(`notification insert failed (kind=${args.kind})`, error.message);
+    return;
+  }
 
   // Web push — no-ops silently if VAPID keys aren't configured.
   try {
@@ -75,6 +84,8 @@ function titleFor(kind: NotificationKind): string {
     case "waiver_result": return "Waiver result";
     case "member_joined": return "New member";
     case "draft_status": return "Draft update";
+    case "lead_change": return "Lead change";
+    case "hot_round": return "Hot round";
   }
 }
 
