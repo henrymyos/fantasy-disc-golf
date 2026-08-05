@@ -45,7 +45,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
 
   const { data: myRoster } = await supabase
     .from("rosters")
-    .select("id, is_starter, player_id, lineup_order, players(id, name, division)")
+    .select("id, is_starter, player_id, lineup_order, players(id, name, division, avatar_url)")
     .eq("league_id", id)
     .eq("team_id", myMember.id)
     .order("lineup_order", { ascending: true, nullsFirst: false })
@@ -153,7 +153,17 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
   const fpoSlotArray = buildSlotArray(allFpoStarters, fpoSlots);
 
   const starterIds = new Set([...mpoSlotArray, ...fpoSlotArray].filter(Boolean).map((r: any) => r.id));
-  const bench = roster.filter((r) => !starterIds.has(r.id));
+  // Bench order: MPO above FPO, then projected points (best first) within each
+  // division; no-projection players sink to the bottom of their division.
+  const benchProj = (r: any) => weekPointsByPlayer.get(r.player_id)?.projected ?? -1;
+  const bench = roster
+    .filter((r) => !starterIds.has(r.id))
+    .sort((a: any, b: any) => {
+      const aFpo = (a.players as any)?.division === "FPO" ? 1 : 0;
+      const bFpo = (b.players as any)?.division === "FPO" ? 1 : 0;
+      if (aFpo !== bFpo) return aFpo - bFpo;
+      return benchProj(b) - benchProj(a);
+    });
 
   const mpoBench = bench.filter((r) => (r.players as any)?.division === "MPO");
   const fpoBench = bench.filter((r) => (r.players as any)?.division === "FPO");

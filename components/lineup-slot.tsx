@@ -7,9 +7,28 @@ import { swapStarter, swapStarterPositions, moveStarterToSlot, toggleStarter } f
 type RosterSpot = {
   id: number;
   player_id: number;
-  players: { name: string; division: string } | null;
+  players: { name: string; division: string; avatar_url?: string | null } | null;
   nickname?: string | null;
 };
+
+/** Player headshot, or an initial circle when they have no photo. */
+function PlayerPhoto({ player }: { player: { name?: string | null; avatar_url?: string | null } | null }) {
+  if (player?.avatar_url) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={player.avatar_url}
+        alt=""
+        className="w-8 h-8 rounded-full object-cover shrink-0 bg-white/10"
+      />
+    );
+  }
+  return (
+    <div className="w-8 h-8 rounded-full shrink-0 bg-white/10 flex items-center justify-center text-[11px] font-bold text-gray-300">
+      {player?.name?.[0]?.toUpperCase() ?? "?"}
+    </div>
+  );
+}
 
 // spot is null when the slot is empty
 type SlotEntry = { spot: RosterSpot | null; slotIndex: number };
@@ -101,18 +120,21 @@ export function LineupSlot({
         </button>
 
         {occupant?.players ? (
-          <div className="flex-1 min-w-0">
-            <Link
-              href={`/league/${leagueId}/player/${occupant.player_id}`}
-              className="block text-white text-sm font-medium truncate hover:underline"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {occupant.players.name}
-            </Link>
-            {occupant.nickname && (
-              <p className="text-gray-400 text-xs truncate">({occupant.nickname})</p>
-            )}
-          </div>
+          <>
+            <PlayerPhoto player={occupant.players} />
+            <div className="flex-1 min-w-0">
+              <Link
+                href={`/league/${leagueId}/player/${occupant.player_id}`}
+                className="block text-white text-sm font-medium truncate hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {occupant.players.name}
+              </Link>
+              {occupant.nickname && (
+                <p className="text-gray-400 text-xs truncate">({occupant.nickname})</p>
+              )}
+            </div>
+          </>
         ) : (
           <p className="flex-1 text-gray-400 text-sm italic">Empty</p>
         )}
@@ -253,6 +275,7 @@ function StarterPickerModal({
                     <span className="text-xs font-bold uppercase w-10 shrink-0 text-center py-0.5 rounded" style={{ color, background: `${color}20` }}>
                       {division}
                     </span>
+                    <PlayerPhoto player={spot.players} />
                     <span className="flex-1 text-sm font-medium text-white truncate">
                       {loadingKey === `s-${spot.id}` ? "Moving..." : spot.players?.name}
                     </span>
@@ -311,6 +334,7 @@ function StarterPickerModal({
                     <span className="text-xs font-bold uppercase w-10 shrink-0 text-center py-0.5 rounded" style={{ color, background: `${color}20` }}>
                       {division}
                     </span>
+                    <PlayerPhoto player={spot.players} />
                     <span className="flex-1 text-sm font-medium text-white truncate">
                       {loadingKey === `b-${spot.id}` ? "Moving..." : spot.players?.name}
                     </span>
@@ -390,6 +414,7 @@ export function BenchSlot({
         >
           {div}
         </button>
+        <PlayerPhoto player={player} />
         <div className="flex-1 min-w-0">
           <Link
             href={`/league/${leagueId}/player/${benchSpot.player_id}`}
@@ -508,6 +533,7 @@ function BenchPickerModal({
                 >
                   {div}
                 </span>
+                {occupant && <PlayerPhoto player={occupant.players} />}
                 <span className="flex-1 text-sm font-medium truncate" style={{ color: occupant ? undefined : color }}>
                   {isLoading ? "Moving..." : occupant ? (occupant as any).players?.name : "Empty slot"}
                 </span>
