@@ -31,7 +31,7 @@ export default async function PlayerPage({
 
   const { data: player } = await supabase
     .from("players")
-    .select("id, name, division, world_ranking, overall_rank, pdga_rating")
+    .select("id, name, division, world_ranking, overall_rank, pdga_rating, avatar_url")
     .eq("id", playerId)
     .single();
   if (!player) notFound();
@@ -278,12 +278,22 @@ export default async function PlayerPage({
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
           <div className="flex items-center gap-4 min-w-0">
-            <div
-              className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-black text-lg shrink-0"
-              style={{ background: `${accentColor}25`, border: `1.5px solid ${accentColor}40` }}
-            >
-              {player.name[0]?.toUpperCase()}
-            </div>
+            {(player as any).avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={(player as any).avatar_url}
+                alt={player.name}
+                className="w-14 h-14 rounded-xl object-cover shrink-0 bg-white/10"
+                style={{ border: `1.5px solid ${accentColor}40` }}
+              />
+            ) : (
+              <div
+                className="w-14 h-14 rounded-xl flex items-center justify-center text-white font-black text-lg shrink-0"
+                style={{ background: `${accentColor}25`, border: `1.5px solid ${accentColor}40` }}
+              >
+                {player.name[0]?.toUpperCase()}
+              </div>
+            )}
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h1 className="text-white font-bold text-xl truncate">{player.name}</h1>
