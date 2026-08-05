@@ -11,7 +11,6 @@ import { getScheduleEvents, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
 import { isSeasonOver } from "@/lib/season-status";
 import { getPlayoffOutcome } from "@/lib/playoff-outcome";
 import { SeasonReview } from "@/components/season-review";
-import { WeeklyRecapCard } from "@/components/weekly-recap-card";
 import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
 import { rankTeams } from "@/lib/standings";
 import { applyProjectionVariance } from "@/lib/projections";
@@ -221,10 +220,11 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   const activity = await getActivityFeed(supabase, Number(id), 15);
   const news = await fetchDiscGolfNews(6);
 
-  // Most recent finalized recap, surfaced on the dashboard.
+  // Most recent finalized recap week — the dashboard only links to the
+  // recaps page, which renders the bodies.
   const { data: latestRecap } = await supabase
     .from("weekly_recaps")
-    .select("week, body, created_at")
+    .select("week")
     .eq("league_id", id)
     .order("week", { ascending: false })
     .limit(1)
@@ -590,11 +590,22 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
         ) : null}
 
         {latestRecap && (
-          <WeeklyRecapCard
-            week={(latestRecap as any).week}
-            body={(latestRecap as any).body}
-            createdAt={(latestRecap as any).created_at ?? null}
-          />
+          <Link href={`/league/${id}/recaps`} className="block">
+            <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5 hover:border-white/15 transition flex items-center justify-between">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-[#4B3DFF]/20 border border-[#4B3DFF]/30 flex items-center justify-center text-xl shrink-0">
+                  📰
+                </div>
+                <div className="min-w-0">
+                  <p className="text-white font-bold text-sm">Week {(latestRecap as any).week} Recap</p>
+                  <p className="text-gray-400 text-xs mt-0.5">
+                    Matchup results &amp; weekly awards
+                  </p>
+                </div>
+              </div>
+              <span className="text-gray-400 text-lg shrink-0">→</span>
+            </div>
+          </Link>
         )}
 
         <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
