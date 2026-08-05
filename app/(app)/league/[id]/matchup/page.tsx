@@ -163,6 +163,7 @@ export default async function MyMatchupPage({
   // player's final score. `lock_at` is round-1 tee time; `end_date` is the
   // last competition day.
   let inProgress = false;
+  let ended = false;
   let progressFrac = 0;
   if (weekTournament) {
     const startMs = weekTournament.lock_at
@@ -172,6 +173,7 @@ export default async function MyMatchupPage({
     const endMs = Date.parse(`${weekTournament.end_date}T23:59:59Z`);
     const now = Date.now();
     inProgress = Number.isFinite(startMs) && Number.isFinite(endMs) && now >= startMs && now <= endMs;
+    ended = Number.isFinite(endMs) && now > endMs;
     const span = endMs - startMs;
     if (inProgress && span > 0) {
       progressFrac = Math.min(1, Math.max(0, (now - startMs) / span));
@@ -317,8 +319,12 @@ export default async function MyMatchupPage({
   const t1Actual = starterTotal(t1Team.starterRows, (r) => r.actual);
   const t2Actual = starterTotal(t2Team.starterRows, (r) => r.actual);
   // Each player's expected finishing total: their live pace if scored,
-  // otherwise the pre-event season projection.
-  const finishingFor = (r: StarterRow) => r.paceProjected ?? r.projected ?? 0;
+  // otherwise the pre-event season projection. Once the event has ended with
+  // scores on the board (but before the Wednesday finalize), the finishing
+  // total IS the actual — the win bar must track the real result.
+  const settled = ended && actuals.size > 0;
+  const finishingFor = (r: StarterRow) =>
+    r.paceProjected ?? (settled ? (r.actual ?? 0) : (r.projected ?? 0));
   const t1Finishing = starterTotal(t1Team.starterRows, finishingFor);
   const t2Finishing = starterTotal(t2Team.starterRows, finishingFor);
   const isFinal = !!(matchup as any).is_final;
@@ -329,7 +335,7 @@ export default async function MyMatchupPage({
 
   // Win % uses each team's *finishing* estimate (pace where available),
   // and the residual variance shrinks as the tournament progresses.
-  const t1WinPct = winProbability(t1Finishing, t2Finishing, progressFrac);
+  const t1WinPct = winProbability(t1Finishing, t2Finishing, settled ? 1 : progressFrac);
   const t2WinPct = 100 - t1WinPct;
   const isMine = (id: number) => id === myMember.id;
 
@@ -393,7 +399,7 @@ export default async function MyMatchupPage({
         <p className="text-gray-400 text-sm mt-1">
           Week {(matchup as any).week}
           {weekTournamentName && <> · <span className="text-gray-300">{weekTournamentName}</span></>}
-          {isFinal ? " · Final" : " · live projection"}
+          {isFinal ? " · Final" : settled ? " · unofficial result" : " · live projection"}
         </p>
       </div>
 
@@ -407,20 +413,20 @@ export default async function MyMatchupPage({
             name={t1?.team_name ?? "TBD"}
             score={t1Display}
             projected={t1Finishing}
-            isFinal={isFinal}
+            isFinal={isFinal || settled}
             inProgress={inProgress}
             isMine={isMine(t1Id)}
           />
           <div className="text-center pb-3">
             <span className="text-gray-400 text-xs font-bold uppercase tracking-widest">
-              {isFinal ? "Final" : inProgress ? "Live" : "vs"}
+              {isFinal ? "Final" : inProgress ? "Live" : settled ? "Unofficial" : "vs"}
             </span>
           </div>
           <TeamHeader
             name={t2?.team_name ?? "TBD"}
             score={t2Display}
             projected={t2Finishing}
-            isFinal={isFinal}
+            isFinal={isFinal || settled}
             inProgress={inProgress}
             isMine={isMine(t2Id)}
             right

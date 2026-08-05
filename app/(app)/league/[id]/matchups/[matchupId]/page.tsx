@@ -116,6 +116,7 @@ export default async function MatchupDetailPage({
 
   // The week's event is "in progress" when now is between its lock/start and end.
   let inProgress = false;
+  let ended = false;
   let progressFrac = 0;
   if (primaryTournament) {
     const startMs = primaryTournament.lock_at
@@ -124,6 +125,7 @@ export default async function MatchupDetailPage({
     const endMs = Date.parse(`${primaryTournament.end_date}T23:59:59Z`);
     const now = Date.now();
     inProgress = now >= startMs && now <= endMs;
+    ended = Number.isFinite(endMs) && now > endMs;
     const span = endMs - startMs;
     if (inProgress && span > 0) {
       progressFrac = Math.min(1, Math.max(0, (now - startMs) / span));
@@ -274,7 +276,12 @@ export default async function MatchupDetailPage({
 
   const team1Actual = starterTotal(t1Team.starterRows, (r) => r.actual);
   const team2Actual = starterTotal(t2Team.starterRows, (r) => r.actual);
-  const finishingFor = (r: PlayerRow) => r.paceProjected ?? r.projected ?? 0;
+  // Once the event has ended with scores on the board (but before the
+  // Wednesday finalize), each player's "finishing" total IS their actual —
+  // the win bar must track the real result, not the pre-event projections.
+  const settled = ended && actuals.size > 0;
+  const finishingFor = (r: PlayerRow) =>
+    r.paceProjected ?? (settled ? (r.actual ?? 0) : (r.projected ?? 0));
   const team1Finishing = starterTotal(t1Team.starterRows, finishingFor);
   const team2Finishing = starterTotal(t2Team.starterRows, finishingFor);
   const isFinal = !!matchup.is_final;
@@ -284,7 +291,7 @@ export default async function MatchupDetailPage({
   const team2Display = isFinal ? matchup.team2_score : team2Actual;
 
   // Win %: residual variance shrinks as the tournament progresses.
-  const t1WinPct = winProbability(team1Finishing, team2Finishing, progressFrac);
+  const t1WinPct = winProbability(team1Finishing, team2Finishing, settled ? 1 : progressFrac);
   const t2WinPct = 100 - t1WinPct;
 
   const benchPairCount = Math.max(t1Team.benchRows.length, t2Team.benchRows.length);
@@ -359,12 +366,12 @@ export default async function MatchupDetailPage({
             division={team1.division_name}
             score={team1Display}
             projected={team1Finishing}
-            isFinal={isFinal}
+            isFinal={isFinal || settled}
             inProgress={inProgress}
           />
           <div className="text-center shrink-0">
             <span className="text-gray-400 text-xs font-bold uppercase tracking-widest">
-              {isFinal ? "Final" : inProgress ? "Live" : "vs"}
+              {isFinal ? "Final" : inProgress ? "Live" : settled ? "Unofficial" : "vs"}
             </span>
           </div>
           <TeamHeader
@@ -372,7 +379,7 @@ export default async function MatchupDetailPage({
             division={team2.division_name}
             score={team2Display}
             projected={team2Finishing}
-            isFinal={isFinal}
+            isFinal={isFinal || settled}
             inProgress={inProgress}
             right
           />

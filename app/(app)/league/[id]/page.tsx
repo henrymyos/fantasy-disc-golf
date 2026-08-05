@@ -15,6 +15,7 @@ import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
 import { rankTeams } from "@/lib/standings";
 import { applyProjectionVariance } from "@/lib/projections";
 import { getActiveTournament } from "@/lib/lineup-lock";
+import { getLeagueNextTournamentId, getLeagueSchedule } from "@/lib/league-schedule";
 import { CopyButton } from "@/components/copy-button";
 import { InviteLink } from "@/components/invite-link";
 import { getActivityFeed } from "@/lib/activity-feed";
@@ -226,44 +227,47 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   // along with a win-percentage gauge.
   let projectedByTeam = new Map<number, number>();
   let finishingByTeam = new Map<number, number>();
+  let actualScoreByTeam = new Map<number, number>();
   let inProgress = false;
+  let ended = false;
+  let settled = false;
   let progressFrac = 0;
   if ((matchups ?? []).length > 0) {
-    const { data: nextTournament } = activeTournament
-      ? { data: activeTournament }
-      : await supabase
-          .from("tournaments")
-          .select("id, start_date, end_date, lock_at")
-          .gte("start_date", today)
-          .order("start_date", { ascending: true })
-          .limit(1)
-          .maybeSingle();
-    const nextTournamentId = (nextTournament as any)?.id ?? null;
+    // Resolve the CURRENT league week's event through the league schedule —
+    // the same source the matchup pages use. The globally active/next
+    // tournament points at the wrong event between an event's Sunday finish
+    // and the Wednesday finalize.
+    const schedule = await getLeagueSchedule(supabase, Number(id));
+    const targetTournamentId: number | null =
+      schedule?.weekToTournamentIds.get(league.current_week)?.[0]
+      ?? (await getLeagueNextTournamentId(supabase, Number(id)));
 
-    inProgress = activeTournament !== null;
-    if (inProgress && activeTournament) {
-      const startMs = activeTournament.lock_at
-        ? Date.parse(activeTournament.lock_at)
-        : Date.parse(`${activeTournament.start_date}T00:00:00Z`);
-      const endMs = Date.parse(`${activeTournament.end_date}T23:59:59Z`);
-      const span = endMs - startMs;
-      if (Number.isFinite(span) && span > 0) {
-        progressFrac = Math.min(1, Math.max(0, (Date.now() - startMs) / span));
+    // Registered players for the target tournament (non-registered = OUT) +
+    // its start/end window for the live/ended state.
+    let registeredSet: Set<number> | null = null;
+    if (targetTournamentId != null) {
+      const { data: tRow } = await supabase
+        .from("tournaments")
+        .select("start_date, end_date, lock_at, registered_player_ids")
+        .eq("id", targetTournamentId)
+        .maybeSingle();
+      const ids = (tRow as any)?.registered_player_ids as number[] | null;
+      if (ids && ids.length > 0) registeredSet = new Set(ids);
+      if (tRow) {
+        const startMs = (tRow as any).lock_at
+          ? Date.parse((tRow as any).lock_at)
+          : Date.parse(`${(tRow as any).start_date}T00:00:00Z`);
+        const endMs = Date.parse(`${(tRow as any).end_date}T23:59:59Z`);
+        const now = Date.now();
+        inProgress = Number.isFinite(startMs) && Number.isFinite(endMs) && now >= startMs && now <= endMs;
+        ended = Number.isFinite(endMs) && now > endMs;
+        const span = endMs - startMs;
+        if (inProgress && span > 0) {
+          progressFrac = Math.min(1, Math.max(0, (now - startMs) / span));
+        }
       }
     }
     const paceDivisor = Math.max(progressFrac, 0.1);
-
-    // Registered players for the target tournament; non-registered = OUT.
-    let registeredSet: Set<number> | null = null;
-    if (nextTournamentId != null) {
-      const { data: regRow } = await supabase
-        .from("tournaments")
-        .select("registered_player_ids")
-        .eq("id", nextTournamentId)
-        .maybeSingle();
-      const ids = (regRow as any)?.registered_player_ids as number[] | null;
-      if (ids && ids.length > 0) registeredSet = new Set(ids);
-    }
 
     const { data: starters } = await supabase
       .from("rosters")
@@ -280,10 +284,15 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
       cur.sum += Number(r.fantasy_points ?? 0);
       cur.count += 1;
       totalByPlayer.set(r.player_id, cur);
-      if (nextTournamentId != null && r.tournament_id === nextTournamentId) {
+      if (targetTournamentId != null && r.tournament_id === targetTournamentId) {
         weekActualByPlayer.set(r.player_id, (weekActualByPlayer.get(r.player_id) ?? 0) + Number(r.fantasy_points ?? 0));
       }
     });
+    // Event over with scores on the board (awaiting the Wednesday finalize):
+    // the win % must track the real result, not projections.
+    settled = ended && weekActualByPlayer.size > 0;
+    if (settled) progressFrac = 1;
+
     for (const s of starters ?? []) {
       const pid = (s as any).player_id;
       const tid = (s as any).team_id;
@@ -300,15 +309,22 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
       // For the matchup row display: actual when in-progress, else projection.
       const displayPts = actual != null ? actual : effectiveProj;
       projectedByTeam.set(tid, (projectedByTeam.get(tid) ?? 0) + displayPts);
+      if (actual != null) {
+        actualScoreByTeam.set(tid, (actualScoreByTeam.get(tid) ?? 0) + actual);
+      }
 
-      // For win %: pace extrapolation if the player has already scored,
-      // otherwise the pre-event projection (0 when OUT).
-      const finishingPts = inProgress && actual != null
-        ? actual / paceDivisor
-        : effectiveProj;
+      // For win %: the real result once the event has ended, pace
+      // extrapolation while live, otherwise the pre-event projection (0 when
+      // OUT).
+      const finishingPts = settled
+        ? (actual ?? 0)
+        : inProgress && actual != null
+          ? actual / paceDivisor
+          : effectiveProj;
       finishingByTeam.set(tid, (finishingByTeam.get(tid) ?? 0) + finishingPts);
     }
   }
+  const showActuals = inProgress || settled;
 
   // Residual variance shrinks as the active tournament progresses.
   const baseSigma = 28;
@@ -596,6 +612,17 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                     leagueId={id}
                     matchup={m}
                     myTeamId={myMembership?.id}
+                    team1Score={
+                      m.is_final || !showActuals
+                        ? m.team1_score
+                        : Math.round((actualScoreByTeam.get(m.team1_id) ?? 0) * 10) / 10
+                    }
+                    team2Score={
+                      m.is_final || !showActuals
+                        ? m.team2_score
+                        : Math.round((actualScoreByTeam.get(m.team2_id) ?? 0) * 10) / 10
+                    }
+                    settled={settled}
                     team1Projected={projectedByTeam.get(m.team1_id) ?? null}
                     team2Projected={projectedByTeam.get(m.team2_id) ?? null}
                     team1WinPct={t1WinPct}
@@ -734,6 +761,9 @@ function MatchupRow({
   leagueId,
   matchup,
   myTeamId,
+  team1Score,
+  team2Score,
+  settled,
   team1Projected,
   team2Projected,
   team1WinPct,
@@ -742,6 +772,9 @@ function MatchupRow({
   leagueId: string;
   matchup: Matchup;
   myTeamId?: number;
+  team1Score: number;
+  team2Score: number;
+  settled: boolean;
   team1Projected: number | null;
   team2Projected: number | null;
   team1WinPct: number;
@@ -758,19 +791,21 @@ function MatchupRow({
       <div className="flex items-center justify-between">
         <TeamScore
           name={(matchup.team1 as any)?.team_name ?? "TBD"}
-          score={matchup.team1_score}
+          score={team1Score}
           projected={team1Projected}
-          isFinal={matchup.is_final}
+          isFinal={matchup.is_final || settled}
           isWinner={matchup.is_final && matchup.team1_score > matchup.team2_score}
         />
         <div className="text-center">
-          <span className="text-gray-400 text-xs font-medium">{matchup.is_final ? "FINAL" : "vs"}</span>
+          <span className="text-gray-400 text-xs font-medium">
+            {matchup.is_final ? "FINAL" : settled ? "UNOFFICIAL" : "vs"}
+          </span>
         </div>
         <TeamScore
           name={(matchup.team2 as any)?.team_name ?? "TBD"}
-          score={matchup.team2_score}
+          score={team2Score}
           projected={team2Projected}
-          isFinal={matchup.is_final}
+          isFinal={matchup.is_final || settled}
           isWinner={matchup.is_final && matchup.team2_score > matchup.team1_score}
           right
         />
