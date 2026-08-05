@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getLeagueSchedule } from "@/lib/league-schedule";
+import { getPlayoffOutcome } from "@/lib/playoff-outcome";
 
 /**
  * Structured league activity (trades + roster moves) rendered as Sleeper-style
@@ -7,7 +9,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  */
 
 export type FeedAsset =
-  | { type: "player"; name: string; nickname: string | null; division: string | null; avatarUrl: string | null }
+  | { type: "player"; playerId: number | null; name: string; nickname: string | null; division: string | null; avatarUrl: string | null }
   | { type: "pick"; label: string };
 
 export type TradeEvent = {
@@ -31,12 +33,13 @@ export type MoveEvent = {
   via?: "waiver";
 };
 
-// A plain text notice: member joins, weekly results, draft scheduled.
+// A plain text notice: member joins, weekly results, draft scheduled/finished,
+// playoffs set, champion crowned.
 export type NoticeEvent = {
   id: string;
   kind: "notice";
   ts: string;
-  variant: "join" | "result" | "draft";
+  variant: "join" | "result" | "draft" | "draft_done" | "playoffs" | "champion";
   title: string;
   lines?: string[];
   // Result notices carry the finalized week — the chat renders them as a
@@ -58,9 +61,11 @@ function roundOrdinal(n: number): string {
 function playerAsset(
   p: { name?: string | null; division?: string | null; avatar_url?: string | null } | null,
   nickname: string | null = null,
+  playerId: number | null = null,
 ): FeedAsset {
   return {
     type: "player",
+    playerId,
     name: p?.name ?? "A player",
     nickname,
     division: p?.division ?? null,
@@ -128,9 +133,9 @@ export async function buildLeagueSystemFeed(
   for (const t of txs ?? []) {
     const teamId = (t as any).team_id;
     const actor = (t as any).team?.team_name ?? "A team";
-    const player = playerAsset((t as any).player, nickOf(teamId, (t as any).player_id));
+    const player = playerAsset((t as any).player, nickOf(teamId, (t as any).player_id), (t as any).player_id ?? null);
     const dropped = (t as any).dropped
-      ? playerAsset((t as any).dropped, nickOf(teamId, (t as any).dropped_player_id))
+      ? playerAsset((t as any).dropped, nickOf(teamId, (t as any).dropped_player_id), (t as any).dropped_player_id ?? null)
       : null;
     if (t.action === "add") {
       events.push({
@@ -179,9 +184,9 @@ export async function buildLeagueSystemFeed(
 
     for (const tp of tps) {
       if (tp.to_team_id != null)
-        ensure(tp.to_team_id).gains.push(playerAsset(tp.players, nickOf(tp.to_team_id, tp.player_id)));
+        ensure(tp.to_team_id).gains.push(playerAsset(tp.players, nickOf(tp.to_team_id, tp.player_id), tp.player_id ?? null));
       if (tp.from_team_id != null)
-        ensure(tp.from_team_id).losses.push(playerAsset(tp.players, nickOf(tp.from_team_id, tp.player_id)));
+        ensure(tp.from_team_id).losses.push(playerAsset(tp.players, nickOf(tp.from_team_id, tp.player_id), tp.player_id ?? null));
     }
     for (const pk of tpicks) {
       const orig = pk.original_team_id != null ? teamName.get(pk.original_team_id) : null;
@@ -246,7 +251,7 @@ export async function buildLeagueSystemFeed(
   // Draft scheduled (only the current time; rescheduling moves the notice).
   const { data: draftRow } = await supabase
     .from("drafts")
-    .select("id, scheduled_at, scheduled_set_at")
+    .select("id, status, scheduled_at, scheduled_set_at")
     .eq("league_id", leagueId)
     .maybeSingle();
   if ((draftRow as any)?.scheduled_set_at && (draftRow as any)?.scheduled_at) {
@@ -258,6 +263,62 @@ export async function buildLeagueSystemFeed(
       title: "Draft scheduled",
       scheduledAt: (draftRow as any).scheduled_at,
     });
+  }
+
+  // Draft complete, anchored at the final pick's timestamp.
+  if ((draftRow as any)?.status === "complete") {
+    const { data: lastPick } = await supabase
+      .from("draft_picks")
+      .select("created_at")
+      .eq("draft_id", (draftRow as any).id)
+      .order("pick_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if ((lastPick as any)?.created_at) {
+      events.push({
+        id: `draft-done-${(draftRow as any).id}`,
+        kind: "notice",
+        ts: (lastPick as any).created_at,
+        variant: "draft_done",
+        title: "The draft is complete",
+      });
+    }
+  }
+
+  // Playoff bracket set once every regular-season week is finalized; champion
+  // crowned once the playoff events all complete. Both derive from the same
+  // playoff outcome the playoffs page uses, and only run at season's end.
+  try {
+    const schedule = await getLeagueSchedule(supabase, leagueId);
+    const regularWeeks = schedule?.regularWeeks ?? 0;
+    const hasPlayoffs = (schedule?.weeks ?? []).some((w) => w.isPlayoff);
+    const regularDone =
+      regularWeeks > 0 &&
+      hasPlayoffs &&
+      Array.from({ length: regularWeeks }, (_, i) => i + 1).every((w) => weekFinalizedAt.has(w));
+    if (regularDone) {
+      const outcome = await getPlayoffOutcome(supabase, leagueId);
+      events.push({
+        id: "playoffs-set",
+        kind: "notice",
+        ts: weekFinalizedAt.get(regularWeeks)!,
+        variant: "playoffs",
+        title: "The playoff bracket is set",
+        lines: outcome.seeds.map((s) => `#${s.seed} ${s.teamName}`),
+      });
+      if (outcome.championTeamId != null && outcome.playoffEvents.every((e) => e.complete)) {
+        const lastTs = [...weekFinalizedAt.values()].sort().at(-1)!;
+        events.push({
+          id: "champion",
+          kind: "notice",
+          ts: lastTs,
+          variant: "champion",
+          title: `${teamName.get(outcome.championTeamId) ?? "A team"} won the championship!`,
+        });
+      }
+    }
+  } catch {
+    // Schedule not configured yet — no playoff notices.
   }
 
   // Oldest first so they slot into the bottom-anchored chat timeline.

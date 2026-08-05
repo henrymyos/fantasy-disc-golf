@@ -637,11 +637,7 @@ function SystemMessage({ event, ts, now, leagueId, memberById }: { event: System
   const time = formatRelativeTime(ts, now);
   const emoji =
     event.kind === "notice"
-      ? event.variant === "result"
-        ? "🏆"
-        : event.variant === "draft"
-          ? "📅"
-          : "👋"
+      ? { result: "🏆", draft: "📅", draft_done: "🏁", playoffs: "🎟️", champion: "👑", join: "👋" }[event.variant]
       : null;
   return (
     <div className="flex items-start gap-2.5 py-1">
@@ -678,8 +674,13 @@ function SystemMessage({ event, ts, now, leagueId, memberById }: { event: System
             <div className="space-y-2.5">
               {event.teams.map((t, i) => (
                 <div key={i} className="border-l-2 border-white/15 pl-3">
-                  <p className="text-white text-sm font-semibold mb-1">{t.teamName}&rsquo;s Roster</p>
-                  <AssetList gains={t.gains} losses={t.losses} />
+                  <p className="text-white text-sm font-semibold mb-1">
+                    <Link href={`/league/${leagueId}/team/${t.memberId}`} className="hover:underline">
+                      {t.teamName}
+                    </Link>
+                    &rsquo;s Roster
+                  </p>
+                  <AssetList gains={t.gains} losses={t.losses} leagueId={leagueId} />
                 </div>
               ))}
             </div>
@@ -687,11 +688,20 @@ function SystemMessage({ event, ts, now, leagueId, memberById }: { event: System
         ) : event.kind === "move" ? (
           <>
             <p className="text-sm text-gray-200 font-medium mb-1">
-              <span className="font-semibold text-white">{event.actor}</span>{" "}
+              {event.actorMemberId != null ? (
+                <Link
+                  href={`/league/${leagueId}/team/${event.actorMemberId}`}
+                  className="font-semibold text-white hover:underline"
+                >
+                  {event.actor}
+                </Link>
+              ) : (
+                <span className="font-semibold text-white">{event.actor}</span>
+              )}{" "}
               {event.via === "waiver" ? "won a player on waivers." : "made a roster move."}
             </p>
             <div className="border-l-2 border-white/15 pl-3">
-              <AssetList gains={event.gains} losses={event.losses} />
+              <AssetList gains={event.gains} losses={event.losses} leagueId={leagueId} />
             </div>
           </>
         ) : (
@@ -720,6 +730,12 @@ function NoticeBody({ event, leagueId }: { event: NoticeEvent; leagueId: number 
     event.variant === "draft"
       ? `The draft is scheduled for ${formatDraftTime(event.scheduledAt)}`
       : event.title;
+  const link =
+    event.variant === "draft_done"
+      ? { href: `/league/${leagueId}/draft`, label: "View draft results" }
+      : event.variant === "playoffs"
+        ? { href: `/league/${leagueId}/playoffs`, label: "View bracket" }
+        : null;
   return (
     <>
       <p className="text-sm text-gray-200 font-medium">
@@ -733,6 +749,15 @@ function NoticeBody({ event, leagueId }: { event: NoticeEvent; leagueId: number 
             </p>
           ))}
         </div>
+      )}
+      {link && (
+        <Link
+          href={link.href}
+          className="inline-flex items-center gap-1.5 mt-2 text-[#a9a1ff] hover:text-white text-xs font-semibold transition"
+        >
+          {link.label}
+          <span aria-hidden>→</span>
+        </Link>
       )}
     </>
   );
@@ -752,20 +777,43 @@ function formatDraftTime(iso: string | null | undefined): string {
   });
 }
 
-function AssetList({ gains, losses }: { gains: FeedAsset[]; losses: FeedAsset[] }) {
+function AssetList({ gains, losses, leagueId }: { gains: FeedAsset[]; losses: FeedAsset[]; leagueId: number }) {
   return (
     <div className="space-y-1">
       {gains.map((a, i) => (
-        <AssetRow key={`g-${i}`} asset={a} sign="+" />
+        <AssetRow key={`g-${i}`} asset={a} sign="+" leagueId={leagueId} />
       ))}
       {losses.map((a, i) => (
-        <AssetRow key={`l-${i}`} asset={a} sign="-" />
+        <AssetRow key={`l-${i}`} asset={a} sign="-" leagueId={leagueId} />
       ))}
     </div>
   );
 }
 
-function AssetRow({ asset, sign }: { asset: FeedAsset; sign: "+" | "-" }) {
+function AssetRow({ asset, sign, leagueId }: { asset: FeedAsset; sign: "+" | "-"; leagueId: number }) {
+  const playerBody = asset.type === "player" && (
+    <>
+      {asset.avatarUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={asset.avatarUrl}
+          alt=""
+          className="shrink-0 w-7 h-7 rounded-full object-cover bg-white/10"
+        />
+      ) : (
+        <div className="shrink-0 w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-[11px] font-bold text-gray-300">
+          {asset.name[0]?.toUpperCase()}
+        </div>
+      )}
+      <div className="min-w-0 leading-tight">
+        <p className="text-white text-sm font-semibold truncate">{asset.name}</p>
+        {asset.nickname && (
+          <p className="text-gray-400 text-[11px] truncate">({asset.nickname})</p>
+        )}
+        {asset.division && <p className="text-gray-500 text-[11px]">{asset.division}</p>}
+      </div>
+    </>
+  );
   return (
     <div className="flex items-center gap-2">
       <span
@@ -776,27 +824,16 @@ function AssetRow({ asset, sign }: { asset: FeedAsset; sign: "+" | "-" }) {
         {sign === "+" ? "+" : "–"}
       </span>
       {asset.type === "player" ? (
-        <div className="flex items-center gap-2 min-w-0">
-          {asset.avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={asset.avatarUrl}
-              alt=""
-              className="shrink-0 w-7 h-7 rounded-full object-cover bg-white/10"
-            />
-          ) : (
-            <div className="shrink-0 w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-[11px] font-bold text-gray-300">
-              {asset.name[0]?.toUpperCase()}
-            </div>
-          )}
-          <div className="min-w-0 leading-tight">
-            <p className="text-white text-sm font-semibold truncate">{asset.name}</p>
-            {asset.nickname && (
-              <p className="text-gray-400 text-[11px] truncate">({asset.nickname})</p>
-            )}
-            {asset.division && <p className="text-gray-500 text-[11px]">{asset.division}</p>}
-          </div>
-        </div>
+        asset.playerId != null ? (
+          <Link
+            href={`/league/${leagueId}/player/${asset.playerId}`}
+            className="flex items-center gap-2 min-w-0 rounded-lg -mx-1 px-1 hover:bg-white/5 transition"
+          >
+            {playerBody}
+          </Link>
+        ) : (
+          <div className="flex items-center gap-2 min-w-0">{playerBody}</div>
+        )
       ) : (
         <p className="text-white text-sm font-semibold truncate">{asset.label}</p>
       )}
