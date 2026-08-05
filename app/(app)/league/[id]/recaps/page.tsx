@@ -1,6 +1,9 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getLeagueSchedule } from "@/lib/league-schedule";
+import { generateWeeklyRecap } from "@/lib/weekly-recap";
 import { WeeklyRecapCard } from "@/components/weekly-recap-card";
 
 export default async function RecapsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -29,6 +32,20 @@ export default async function RecapsPage({ params }: { params: Promise<{ id: str
     .select("week, body, created_at")
     .eq("league_id", id)
     .order("week", { ascending: false });
+
+  // Recaps written before the awards format are a single paragraph (no
+  // newlines). Regenerate those in place — generateWeeklyRecap upserts the
+  // fresh body, so each one self-heals exactly once.
+  const legacy = (recaps ?? []).filter((r: any) => !String(r.body ?? "").includes("\n"));
+  if (legacy.length > 0) {
+    const admin = createAdminClient();
+    const schedule = await getLeagueSchedule(admin, Number(id)).catch(() => null);
+    for (const r of legacy) {
+      const tournamentIds = schedule?.weekToTournamentIds.get((r as any).week) ?? [];
+      const fresh = await generateWeeklyRecap(admin, Number(id), (r as any).week, tournamentIds).catch(() => null);
+      if (fresh) (r as any).body = fresh;
+    }
+  }
 
   return (
     <div className="max-w-3xl space-y-5">

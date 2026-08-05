@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { sendChatMessage, getLeagueSystemFeed, getVisibleChatMessages } from "@/actions/chat";
@@ -502,7 +503,7 @@ export function LeagueChat({
           ) : (
             timeline.map((item, idx) => {
               if (item.type === "sys") {
-                return <SystemMessage key={item.key} event={item.event} ts={item.ts} now={now} />;
+                return <SystemMessage key={item.key} event={item.event} ts={item.ts} now={now} leagueId={leagueId} />;
               }
               const m = item.message;
               const sender = memberById.get(m.sender_member_id);
@@ -632,7 +633,7 @@ function previewFor(
 
 /** Sleeper-style system message: a trade, roster move, or a plain notice
  *  (member join, weekly result, draft scheduled). */
-function SystemMessage({ event, ts, now }: { event: SystemEvent; ts: string; now: number }) {
+function SystemMessage({ event, ts, now, leagueId }: { event: SystemEvent; ts: string; now: number; leagueId: number }) {
   const time = formatRelativeTime(ts, now);
   const emoji =
     event.kind === "notice"
@@ -679,7 +680,7 @@ function SystemMessage({ event, ts, now }: { event: SystemEvent; ts: string; now
             </div>
           </>
         ) : (
-          <NoticeBody event={event} />
+          <NoticeBody event={event} leagueId={leagueId} />
         )}
       </div>
     </div>
@@ -687,7 +688,7 @@ function SystemMessage({ event, ts, now }: { event: SystemEvent; ts: string; now
 }
 
 /** Body for a notice event (join / weekly result / draft scheduled). */
-function NoticeBody({ event }: { event: NoticeEvent }) {
+function NoticeBody({ event, leagueId }: { event: NoticeEvent; leagueId: number }) {
   const heading =
     event.variant === "draft"
       ? `The draft is scheduled for ${formatDraftTime(event.scheduledAt)}`
@@ -705,6 +706,15 @@ function NoticeBody({ event }: { event: NoticeEvent }) {
             </p>
           ))}
         </div>
+      )}
+      {event.variant === "result" && (
+        <Link
+          href={`/league/${leagueId}/recaps`}
+          className="inline-flex items-center gap-1.5 mt-2 bg-[#4B3DFF]/15 hover:bg-[#4B3DFF]/25 border border-[#4B3DFF]/30 text-[#a9a1ff] text-xs font-semibold px-3 py-1.5 rounded-lg transition"
+        >
+          📰 View weekly recap &amp; awards
+          <span aria-hidden>→</span>
+        </Link>
       )}
     </>
   );
