@@ -2,8 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { applyProjectionVariance, winProbability } from "@/lib/projections";
-import { getActiveTournament } from "@/lib/lineup-lock";
-import { getLeagueNextTournamentId } from "@/lib/league-schedule";
+import { getLeagueNextTournamentId, getLeagueSchedule } from "@/lib/league-schedule";
 import { fantasyPointsFromResult, resolveScoringRules, describeScoreContributions } from "@/lib/scoring-rules";
 import { LiveScoreRefresher } from "@/components/live-score-refresher";
 import { WinProbChart } from "@/components/win-prob-chart";
@@ -126,39 +125,56 @@ export default async function MyMatchupPage({
   const t1Id = (matchup as any).team1_id;
   const t2Id = (matchup as any).team2_id;
 
-  // Active/upcoming tournament for the actual-vs-projected split + registration.
-  const activeTournament = await getActiveTournament(supabase, Number(id));
+  // This matchup belongs to a specific LEAGUE week → resolve that week's event
+  // through the league schedule, exactly like the matchup detail page. Keying
+  // off the globally active/next tournament instead points at the WRONG event
+  // between an event's finish (Sunday) and the Wednesday auto-finalize — the
+  // week's actual scores vanish and everything reads 0.0.
+  const schedule = await getLeagueSchedule(supabase, Number(id));
+  const scheduleWeek = schedule?.weeks.find((w) => w.week === (matchup as any).week) ?? null;
   const weekTournamentId: number | null =
-    activeTournament?.id ?? (await getLeagueNextTournamentId(supabase, Number(id)));
+    scheduleWeek?.tournamentIds[0]
+    ?? (await getLeagueNextTournamentId(supabase, Number(id)));
 
   // Registered-player set + the event name/dates for this week's matchup.
   let registeredSet: Set<number> | null = null;
-  let weekTournamentName: string | null = activeTournament?.name ?? null;
+  let weekTournamentName: string | null = scheduleWeek?.event.name ?? null;
+  let weekTournament: { start_date: string; end_date: string; lock_at: string | null } | null = null;
   if (weekTournamentId != null) {
     const { data: regRow } = await supabase
       .from("tournaments")
-      .select("name, registered_player_ids")
+      .select("name, start_date, end_date, lock_at, registered_player_ids")
       .eq("id", weekTournamentId)
       .maybeSingle();
     const ids = (regRow as any)?.registered_player_ids as number[] | null;
     if (ids && ids.length > 0) registeredSet = new Set(ids);
     weekTournamentName = (regRow as any)?.name ?? weekTournamentName;
+    if (regRow) {
+      weekTournament = {
+        start_date: (regRow as any).start_date,
+        end_date: (regRow as any).end_date,
+        lock_at: (regRow as any).lock_at,
+      };
+    }
   }
 
-  // When a tournament is active, estimate how far through it we are so we
-  // can pace-project each player's final score. `lock_at` is round-1 tee
-  // time; `end_date` is the last competition day.
-  const inProgress = activeTournament !== null;
+  // The week's event is in progress when now is between its lock/start and
+  // end; estimate how far through it we are so we can pace-project each
+  // player's final score. `lock_at` is round-1 tee time; `end_date` is the
+  // last competition day.
+  let inProgress = false;
   let progressFrac = 0;
-  if (inProgress && activeTournament) {
-    const startMs = activeTournament.lock_at
-      ? Date.parse(activeTournament.lock_at)
-      : Date.parse(`${activeTournament.start_date}T00:00:00Z`);
+  if (weekTournament) {
+    const startMs = weekTournament.lock_at
+      ? Date.parse(weekTournament.lock_at)
+      : Date.parse(`${weekTournament.start_date}T00:00:00Z`);
     // Treat the end-date day as ending at 23:59:59 UTC.
-    const endMs = Date.parse(`${activeTournament.end_date}T23:59:59Z`);
+    const endMs = Date.parse(`${weekTournament.end_date}T23:59:59Z`);
+    const now = Date.now();
+    inProgress = Number.isFinite(startMs) && Number.isFinite(endMs) && now >= startMs && now <= endMs;
     const span = endMs - startMs;
-    if (Number.isFinite(span) && span > 0) {
-      progressFrac = Math.min(1, Math.max(0, (Date.now() - startMs) / span));
+    if (inProgress && span > 0) {
+      progressFrac = Math.min(1, Math.max(0, (now - startMs) / span));
     }
   }
   // Clamp the pace divisor so a player with a real-but-small actual at hour
