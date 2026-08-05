@@ -67,7 +67,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
 
   const { data: allPlayers } = await supabase
     .from("players")
-    .select("id, name, division, world_ranking, overall_rank, pdga_rating");
+    .select("id, name, division, world_ranking, overall_rank, pdga_rating, avatar_url");
 
   const { data: resultRows } = await supabase
     .from("tournament_results")
@@ -131,6 +131,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
       worldRanking: p.world_ranking as number | null,
       overallRank: (p as any).overall_rank as number | null,
       pdgaRating: (p as any).pdga_rating as number | null,
+      avatarUrl: (p as any).avatar_url as string | null,
       totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
       nextWeekPoints: nextProjectionFor(p.id),
     }));
@@ -145,6 +146,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
         worldRanking: p.world_ranking as number | null,
         overallRank: (p as any).overall_rank as number | null,
         pdgaRating: (p as any).pdga_rating as number | null,
+        avatarUrl: (p as any).avatar_url as string | null,
         totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
         projectedPoints: projectionFor(p.id),
         nextWeekPoints: nextProjectionFor(p.id),

@@ -13,6 +13,7 @@ type Player = {
   worldRanking: number | null;
   overallRank: number | null;
   pdgaRating: number | null;
+  avatarUrl?: string | null;
 };
 
 type FreeAgent = Player & { totalPoints: number; nextWeekPoints: number | null };
@@ -350,6 +351,19 @@ function PlayerRow({
         <span className="text-white font-bold text-sm font-mono w-10 sm:w-12 shrink-0 text-right">
           {rank}
         </span>
+      )}
+
+      {player.avatarUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={player.avatarUrl}
+          alt=""
+          className="w-8 h-8 rounded-full object-cover shrink-0 bg-white/10"
+        />
+      ) : (
+        <div className="w-8 h-8 rounded-full shrink-0 bg-white/10 flex items-center justify-center text-[11px] font-bold text-gray-300">
+          {player.name[0]?.toUpperCase()}
+        </div>
       )}
 
       <div className="flex-1 min-w-0 flex items-baseline gap-1.5 overflow-hidden">
