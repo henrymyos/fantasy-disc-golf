@@ -11,6 +11,7 @@ import { getScheduleEvents, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
 import { isSeasonOver } from "@/lib/season-status";
 import { getPlayoffOutcome } from "@/lib/playoff-outcome";
 import { SeasonReview } from "@/components/season-review";
+import { WeeklyRecapCard } from "@/components/weekly-recap-card";
 import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
 import { rankTeams } from "@/lib/standings";
 import { applyProjectionVariance } from "@/lib/projections";
@@ -589,17 +590,11 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
         ) : null}
 
         {latestRecap && (
-          <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="font-bold text-white">Week {(latestRecap as any).week} Recap</h2>
-              <span className="text-gray-400 text-xs">
-                {new Date((latestRecap as any).created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-              </span>
-            </div>
-            <p className="text-gray-200 text-sm leading-relaxed">
-              {(latestRecap as any).body}
-            </p>
-          </div>
+          <WeeklyRecapCard
+            week={(latestRecap as any).week}
+            body={(latestRecap as any).body}
+            createdAt={(latestRecap as any).created_at ?? null}
+          />
         )}
 
         <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">

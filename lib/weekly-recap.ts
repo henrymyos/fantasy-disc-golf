@@ -8,10 +8,17 @@ function verbForMargin(margin: number): string {
   return "demolished";
 }
 
+function fmt(n: number): string {
+  return Number.isInteger(n) ? n.toFixed(0) : n.toFixed(1);
+}
+
 /**
- * Builds (and persists) a templated paragraph summarizing every finalized
- * matchup for `week`. Idempotent: re-running on the same week refreshes the
- * body in place via the unique (league_id, week) constraint.
+ * Builds (and persists) the weekly recap for every finalized matchup in
+ * `week`. The body is stored as light markdown the WeeklyRecapCard knows how
+ * to render: one `- ` bullet per matchup with `**bold**` team names/scores,
+ * then a blank line, then one award per line ("emoji **Name:** value").
+ * Idempotent: re-running on the same week refreshes the body in place via the
+ * unique (league_id, week) constraint.
  */
 export async function generateWeeklyRecap(
   supabase: SupabaseClient,
@@ -29,10 +36,8 @@ export async function generateWeeklyRecap(
     .eq("is_final", true);
   if (!matchups || matchups.length === 0) return null;
 
-  // Top starter for each team in this week's event(s) — used to season the
-  // sentences with a "on the back of X's win at Tournament" clause. The event(s)
-  // for this league week are passed in by the finalizer (resolved via the
-  // league's selected-event order, not the global tournaments.week).
+  // The event(s) for this league week are passed in by the finalizer
+  // (resolved via the league's selected-event order, not tournaments.week).
   const { data: tournaments } = tournamentIds.length > 0
     ? await supabase.from("tournaments").select("id, name").in("id", tournamentIds)
     : { data: [] as any[] };
@@ -41,19 +46,22 @@ export async function generateWeeklyRecap(
   );
 
   const teamIds = new Set<number>();
+  const teamNameById = new Map<number, string>();
   (matchups ?? []).forEach((m: any) => {
     teamIds.add(m.team1_id);
     teamIds.add(m.team2_id);
+    if (m.team1?.team_name) teamNameById.set(m.team1_id, m.team1.team_name);
+    if (m.team2?.team_name) teamNameById.set(m.team2_id, m.team2.team_name);
   });
 
-  const { data: starters } = await supabase
+  // Full rosters (starters AND bench) — bench feeds the Bench MVP award.
+  const { data: rosterRows } = await supabase
     .from("rosters")
-    .select("team_id, player_id, players(name)")
+    .select("team_id, player_id, is_starter, players(name)")
     .eq("league_id", leagueId)
-    .eq("is_starter", true)
     .in("team_id", Array.from(teamIds));
 
-  const playerIds = (starters ?? []).map((s: any) => s.player_id);
+  const playerIds = (rosterRows ?? []).map((s: any) => s.player_id);
   const { data: results } = playerIds.length > 0 && tournamentIds.length > 0
     ? await supabase
         .from("tournament_results")
@@ -62,28 +70,47 @@ export async function generateWeeklyRecap(
         .in("tournament_id", tournamentIds)
     : { data: [] };
 
-  // Pick each team's top scoring starter.
-  const topByTeam = new Map<number, { name: string; position: number; tournamentName: string; points: number }>();
-  for (const team_id of teamIds) {
-    const teamStarters = (starters ?? []).filter((s: any) => s.team_id === team_id);
-    let best: { name: string; position: number; tournamentName: string; points: number } | null = null;
-    for (const s of teamStarters) {
-      const r = (results ?? []).find((rr: any) => rr.player_id === s.player_id);
-      if (!r) continue;
-      const points = Number((r as any).fantasy_points ?? 0);
-      if (!best || points > best.points) {
-        best = {
-          name: (s as any).players?.name ?? "Unknown",
-          position: Number((r as any).finishing_position ?? 0),
-          tournamentName: tournamentNameById.get((r as any).tournament_id) ?? "the event",
-          points,
-        };
-      }
-    }
-    if (best) topByTeam.set(team_id, best);
+  type Performance = {
+    name: string;
+    teamId: number;
+    position: number;
+    tournamentName: string;
+    points: number;
+    isStarter: boolean;
+  };
+  const performances: Performance[] = [];
+  for (const s of rosterRows ?? []) {
+    const r = (results ?? []).find((rr: any) => rr.player_id === (s as any).player_id);
+    if (!r) continue;
+    performances.push({
+      name: (s as any).players?.name ?? "Unknown",
+      teamId: (s as any).team_id,
+      position: Number((r as any).finishing_position ?? 0),
+      tournamentName: tournamentNameById.get((r as any).tournament_id) ?? "the event",
+      points: Number((r as any).fantasy_points ?? 0),
+      isStarter: !!(s as any).is_starter,
+    });
   }
 
-  const sentences: string[] = [];
+  // Each team's top scoring starter, for the matchup-bullet color commentary.
+  const topByTeam = new Map<number, Performance>();
+  for (const p of performances) {
+    if (!p.isStarter) continue;
+    const cur = topByTeam.get(p.teamId);
+    if (!cur || p.points > cur.points) topByTeam.set(p.teamId, p);
+  }
+
+  const finishPhrase = (p: Performance) =>
+    p.position === 1 ? `win at ${p.tournamentName}` : `#${p.position} finish at ${p.tournamentName}`;
+
+  // ---- Matchup bullets -----------------------------------------------------
+  type Line = {
+    winnerId: number | null;
+    loserId: number | null;
+    margin: number;
+    text: string;
+  };
+  const lines: Line[] = [];
   for (const m of matchups as any[]) {
     const t1 = m.team1?.team_name ?? "Team 1";
     const t2 = m.team2?.team_name ?? "Team 2";
@@ -91,7 +118,12 @@ export async function generateWeeklyRecap(
     const s2 = Number(m.team2_score);
 
     if (s1 === s2) {
-      sentences.push(`${t1} and ${t2} tied ${s1.toFixed(1)}-${s2.toFixed(1)}.`);
+      lines.push({
+        winnerId: null,
+        loserId: null,
+        margin: 0,
+        text: `**${t1}** and **${t2}** tied **${fmt(s1)}-${fmt(s2)}**.`,
+      });
       continue;
     }
     const t1Wins = s1 > s2;
@@ -99,24 +131,88 @@ export async function generateWeeklyRecap(
     const loser = t1Wins ? t2 : t1;
     const winScore = t1Wins ? s1 : s2;
     const loseScore = t1Wins ? s2 : s1;
+    const winnerId = t1Wins ? m.team1_id : m.team2_id;
+    const loserId = t1Wins ? m.team2_id : m.team1_id;
     const verb = verbForMargin(Math.abs(s1 - s2));
-    const winnerTeamId = t1Wins ? m.team1_id : m.team2_id;
-    const winnerTop = topByTeam.get(winnerTeamId);
+    const winnerTop = topByTeam.get(winnerId);
 
-    const winFmt = Number.isInteger(winScore) ? winScore.toFixed(0) : winScore.toFixed(1);
-    const loseFmt = Number.isInteger(loseScore) ? loseScore.toFixed(0) : loseScore.toFixed(1);
-    let sentence = `${winner} ${verb} ${loser} ${winFmt}-${loseFmt}`;
+    let text = `**${winner}** ${verb} **${loser}** **${fmt(winScore)}-${fmt(loseScore)}**`;
     if (winnerTop && winnerTop.position > 0) {
-      const finishWord = winnerTop.position === 1
-        ? "win"
-        : `#${winnerTop.position} finish`;
-      sentence += ` on the back of ${winnerTop.name}'s ${finishWord} at ${winnerTop.tournamentName}`;
+      text += ` behind ${winnerTop.name}'s ${finishPhrase(winnerTop)}`;
     }
-    sentence += ".";
-    sentences.push(sentence);
+    text += ".";
+    lines.push({ winnerId, loserId, margin: Math.abs(s1 - s2), text });
   }
 
-  const body = sentences.join(" ");
+  // ---- Awards (Sleeper-style weekly report) --------------------------------
+  const teamName = (id: number) => teamNameById.get(id) ?? "Unknown";
+  const awards: string[] = [];
+
+  // Team of the Week: highest score anywhere in the round.
+  const scored: { teamId: number; score: number; won: boolean }[] = [];
+  for (const m of matchups as any[]) {
+    const s1 = Number(m.team1_score);
+    const s2 = Number(m.team2_score);
+    scored.push({ teamId: m.team1_id, score: s1, won: s1 > s2 });
+    scored.push({ teamId: m.team2_id, score: s2, won: s2 > s1 });
+  }
+  const topTeam = [...scored].sort((a, b) => b.score - a.score)[0];
+  if (topTeam) {
+    awards.push(`🏆 **Team of the Week:** **${teamName(topTeam.teamId)}** — ${fmt(topTeam.score)} pts`);
+  }
+
+  // MVP: top-scoring starter league-wide.
+  const mvp = [...performances]
+    .filter((p) => p.isStarter && p.points > 0)
+    .sort((a, b) => b.points - a.points)[0];
+  if (mvp) {
+    const finish = mvp.position > 0 ? `, ${mvp.position === 1 ? "won" : `#${mvp.position} at`} ${mvp.tournamentName}` : "";
+    awards.push(`⭐ **MVP:** ${mvp.name} (${teamName(mvp.teamId)}) — ${fmt(mvp.points)} pts${finish}`);
+  }
+
+  // Blowout + Closest Call only mean something with 2+ decided matchups.
+  const decided = lines.filter((l) => l.winnerId != null);
+  if (decided.length >= 2) {
+    const blowout = [...decided].sort((a, b) => b.margin - a.margin)[0];
+    const closest = [...decided].sort((a, b) => a.margin - b.margin)[0];
+    if (blowout !== closest) {
+      awards.push(
+        `💥 **Biggest Blowout:** **${teamName(blowout.winnerId!)}** over **${teamName(blowout.loserId!)}** by ${fmt(blowout.margin)}`,
+      );
+      awards.push(
+        `😅 **Closest Call:** **${teamName(closest.winnerId!)}** past **${teamName(closest.loserId!)}** by ${fmt(closest.margin)}`,
+      );
+    }
+  }
+
+  // Tough Luck: the highest-scoring loser.
+  const losers = scored.filter((s) => !s.won && decided.some((l) => l.loserId === s.teamId));
+  const toughLuck = [...losers].sort((a, b) => b.score - a.score)[0];
+  if (toughLuck && decided.length >= 2) {
+    awards.push(`🥶 **Tough Luck:** **${teamName(toughLuck.teamId)}** — ${fmt(toughLuck.score)} pts and still lost`);
+  }
+
+  // Bench MVP: best performance left on the bench.
+  const benchStar = [...performances]
+    .filter((p) => !p.isStarter && p.points > 0)
+    .sort((a, b) => b.points - a.points)[0];
+  if (benchStar) {
+    awards.push(
+      `🛋️ **Bench MVP:** ${benchStar.name} (${teamName(benchStar.teamId)}) — ${fmt(benchStar.points)} pts on the bench`,
+    );
+  }
+
+  // Low Point: lowest score of the round (gentle shaming, Sleeper-style).
+  const lowTeam = [...scored].sort((a, b) => a.score - b.score)[0];
+  if (lowTeam && scored.length >= 4) {
+    awards.push(`🐢 **Low Point:** **${teamName(lowTeam.teamId)}** — ${fmt(lowTeam.score)} pts`);
+  }
+
+  const body = [
+    ...lines.map((l) => `- ${l.text}`),
+    "",
+    ...awards,
+  ].join("\n");
 
   await supabase
     .from("weekly_recaps")
