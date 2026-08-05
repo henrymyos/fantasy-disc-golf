@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import Link from "next/link";
 import { addFreeAgent, placeWaiverClaim } from "@/actions/rosters";
 
 type RosterPlayer = {
   player_id: number;
+  /** Projected points for the upcoming event (0 = not registered/playing). */
+  projection?: number | null;
   players: { id: number; name: string; division: string } | null;
 };
 
@@ -133,12 +136,22 @@ export function AddWithDropModal({
                 const isSelected = selected === spot.player_id;
                 const div = p.division;
                 const color = div === "MPO" ? "#4B3DFF" : "#36D7B7";
+                const toggle = () => setSelected(isSelected ? null : spot.player_id);
                 return (
-                  <button
+                  // A div (not a button) so the player-name link can nest
+                  // inside; clicking anywhere else still toggles selection.
+                  <div
                     key={spot.player_id}
-                    type="button"
-                    onClick={() => setSelected(isSelected ? null : spot.player_id)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition text-left ${
+                    role="button"
+                    tabIndex={0}
+                    onClick={toggle}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggle();
+                      }
+                    }}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition text-left cursor-pointer select-none ${
                       isSelected
                         ? "bg-red-500/10 border-red-500/40"
                         : "bg-[#0f1117] border-white/5 hover:border-white/15"
@@ -150,13 +163,26 @@ export function AddWithDropModal({
                     >
                       {div}
                     </span>
-                    <span className={`flex-1 text-sm font-medium ${isSelected ? "text-red-300" : "text-white"}`}>
-                      {p.name}
+                    <span className="flex-1 min-w-0">
+                      <Link
+                        href={`/league/${leagueId}/player/${p.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className={`text-sm font-medium hover:underline ${isSelected ? "text-red-300" : "text-white"}`}
+                      >
+                        {p.name}
+                      </Link>
                     </span>
-                    {isSelected && (
+                    {isSelected ? (
                       <span className="text-red-400 text-xs font-semibold shrink-0">Drop</span>
+                    ) : (
+                      <span className="text-right shrink-0 leading-tight">
+                        <span className="block text-sm text-gray-200 font-semibold">
+                          {spot.projection != null ? spot.projection.toFixed(1) : "—"}
+                        </span>
+                        <span className="block text-[10px] text-gray-500">proj</span>
+                      </span>
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </div>

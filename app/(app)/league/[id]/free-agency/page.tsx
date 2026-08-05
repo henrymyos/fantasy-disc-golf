@@ -154,12 +154,18 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
     })
     .sort((a, b) => b.totalPoints - a.totalPoints);
 
-  const { data: myRoster } = await supabase
+  const { data: myRosterRows } = await supabase
     .from("rosters")
     .select("player_id, players(id, name, division)")
     .eq("league_id", id)
     .eq("team_id", myMember.id)
     .order("player_id");
+  // Upcoming-event projection per roster player, shown in the add-with-drop
+  // popup to inform who to let go.
+  const myRoster = (myRosterRows ?? []).map((r: any) => ({
+    ...r,
+    projection: nextProjectionFor(r.player_id),
+  }));
 
   const rosterCount = (myRoster ?? []).length;
   const overLimit = rosterCount > league.roster_size;

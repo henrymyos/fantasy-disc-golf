@@ -7,6 +7,7 @@ import { ConfirmDropButton } from "@/components/confirm-drop-button";
 import { placeWaiverClaim } from "@/actions/rosters";
 import { applyProjectionVariance } from "@/lib/projections";
 import { getActiveTournament } from "@/lib/lineup-lock";
+import { getLeagueNextTournamentId } from "@/lib/league-schedule";
 import { LiveScoreRefresher } from "@/components/live-score-refresher";
 
 export default async function PlayerPage({
@@ -69,7 +70,46 @@ export default async function PlayerPage({
     .select("player_id, players(id, name, division)")
     .eq("league_id", id)
     .eq("team_id", member.id);
-  const myRoster = myRosterRows ?? [];
+
+  // Upcoming-event projection per roster player (per-event scoring pace, 0 if
+  // not registered for the next event), shown in the add-with-drop popup.
+  const rosterPlayerIds = (myRosterRows ?? []).map((r: any) => r.player_id as number);
+  const nextTournamentId: number | null =
+    activeTournament?.id ?? (await getLeagueNextTournamentId(supabase, Number(id)));
+  let nextRegisteredSet: Set<number> | null = null;
+  if (nextTournamentId != null) {
+    const { data: regRow } = await supabase
+      .from("tournaments")
+      .select("registered_player_ids")
+      .eq("id", nextTournamentId)
+      .maybeSingle();
+    const ids = (regRow as any)?.registered_player_ids as number[] | null;
+    if (ids && ids.length > 0) nextRegisteredSet = new Set(ids);
+  }
+  const { data: rosterResults } = rosterPlayerIds.length > 0
+    ? await supabase
+        .from("tournament_results")
+        .select("player_id, fantasy_points")
+        .in("player_id", rosterPlayerIds)
+    : { data: [] as any[] };
+  const rosterTotals = new Map<number, { total: number; played: number }>();
+  for (const r of rosterResults ?? []) {
+    const cur = rosterTotals.get((r as any).player_id) ?? { total: 0, played: 0 };
+    cur.total += Number((r as any).fantasy_points ?? 0);
+    cur.played += 1;
+    rosterTotals.set((r as any).player_id, cur);
+  }
+  const rosterProjectionFor = (pid: number): number | null => {
+    if (nextRegisteredSet != null && !nextRegisteredSet.has(pid)) return 0;
+    const t = rosterTotals.get(pid);
+    if (!t || t.played === 0) return null;
+    return applyProjectionVariance(t.total / t.played, pid, 3);
+  };
+
+  const myRoster = (myRosterRows ?? []).map((r: any) => ({
+    ...r,
+    projection: rosterProjectionFor(r.player_id),
+  }));
   const rosterCount = myRoster.length;
   const openSpots = Math.max(0, ((league as any)?.roster_size ?? 14) - rosterCount);
 
