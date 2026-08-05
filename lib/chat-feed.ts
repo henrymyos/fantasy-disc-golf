@@ -22,6 +22,8 @@ export type MoveEvent = {
   kind: "move";
   ts: string;
   actor: string;
+  /** league_members.id of the acting team — lets the chat show their avatar. */
+  actorMemberId?: number | null;
   gains: FeedAsset[];
   losses: FeedAsset[];
   // "waiver" when this add came from a won waiver claim (vs. a free-agent add).
@@ -135,6 +137,7 @@ export async function buildLeagueSystemFeed(
         kind: "move",
         ts: t.created_at,
         actor,
+        actorMemberId: teamId ?? null,
         gains: [player],
         losses: dropped ? [dropped] : [],
         via: waiverKeys.has(`${teamId}:${(t as any).player_id}`) ? "waiver" : undefined,
@@ -145,6 +148,7 @@ export async function buildLeagueSystemFeed(
         kind: "move",
         ts: t.created_at,
         actor,
+        actorMemberId: teamId ?? null,
         gains: [],
         losses: [player],
       });

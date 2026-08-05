@@ -503,7 +503,7 @@ export function LeagueChat({
           ) : (
             timeline.map((item, idx) => {
               if (item.type === "sys") {
-                return <SystemMessage key={item.key} event={item.event} ts={item.ts} now={now} leagueId={leagueId} />;
+                return <SystemMessage key={item.key} event={item.event} ts={item.ts} now={now} leagueId={leagueId} memberById={memberById} />;
               }
               const m = item.message;
               const sender = memberById.get(m.sender_member_id);
@@ -633,7 +633,7 @@ function previewFor(
 
 /** Sleeper-style system message: a trade, roster move, or a plain notice
  *  (member join, weekly result, draft scheduled). */
-function SystemMessage({ event, ts, now, leagueId }: { event: SystemEvent; ts: string; now: number; leagueId: number }) {
+function SystemMessage({ event, ts, now, leagueId, memberById }: { event: SystemEvent; ts: string; now: number; leagueId: number; memberById: Map<number, Member> }) {
   const time = formatRelativeTime(ts, now);
   const emoji =
     event.kind === "notice"
@@ -642,19 +642,25 @@ function SystemMessage({ event, ts, now, leagueId }: { event: SystemEvent; ts: s
         : event.variant === "draft"
           ? "📅"
           : "👋"
-      : event.kind === "move" && event.via === "waiver"
-        ? "🔄"
-        : null;
+      : null;
   return (
     <div className="flex items-start gap-2.5 py-1">
-      <div className="shrink-0 w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-gray-300 text-sm">
-        {emoji ?? (
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2l8 3v6c0 5-3.4 8.5-8 11-4.6-2.5-8-6-8-11V5l8-3z" opacity="0.9" />
-            <path d="M12 7.5l1.2 2.4 2.6.4-1.9 1.8.45 2.6L12 13.9l-2.35 1.2.45-2.6-1.9-1.8 2.6-.4L12 7.5z" fill="#1a1d23" />
-          </svg>
-        )}
-      </div>
+      {event.kind === "move" ? (
+        // The acting team's profile photo (or colored initial), not a generic icon.
+        <MemberAvatar
+          member={event.actorMemberId != null ? memberById.get(event.actorMemberId) : undefined}
+          name={event.actor}
+        />
+      ) : (
+        <div className="shrink-0 w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-gray-300 text-sm">
+          {emoji ?? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2l8 3v6c0 5-3.4 8.5-8 11-4.6-2.5-8-6-8-11V5l8-3z" opacity="0.9" />
+              <path d="M12 7.5l1.2 2.4 2.6.4-1.9 1.8.45 2.6L12 13.9l-2.35 1.2.45-2.6-1.9-1.8 2.6-.4L12 7.5z" fill="#1a1d23" />
+            </svg>
+          )}
+        </div>
+      )}
       <div className="min-w-0 flex-1">
         <p className="text-[10px] text-gray-400 mb-1" title={new Date(ts).toLocaleString()}>{time}</p>
         {event.kind === "trade" ? (
