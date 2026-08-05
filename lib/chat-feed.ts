@@ -14,7 +14,8 @@ export type TradeEvent = {
   id: string;
   kind: "trade";
   ts: string;
-  teams: { teamName: string; gains: FeedAsset[]; losses: FeedAsset[] }[];
+  /** memberId is league_members.id — lets the chat show each team's avatar. */
+  teams: { memberId: number; teamName: string; gains: FeedAsset[]; losses: FeedAsset[] }[];
 };
 
 export type MoveEvent = {
@@ -195,6 +196,7 @@ export async function buildLeagueSystemFeed(
       kind: "trade",
       ts,
       teams: order.map((id) => ({
+        memberId: id,
         teamName: teamName.get(id) ?? "A team",
         gains: buckets.get(id)!.gains,
         losses: buckets.get(id)!.losses,

@@ -651,6 +651,15 @@ function SystemMessage({ event, ts, now, leagueId, memberById }: { event: System
           member={event.actorMemberId != null ? memberById.get(event.actorMemberId) : undefined}
           name={event.actor}
         />
+      ) : event.kind === "trade" ? (
+        // Every involved team's avatar, overlapped Sleeper-style.
+        <div className="flex -space-x-3 shrink-0">
+          {event.teams.map((t) => (
+            <div key={t.memberId} className="rounded-full ring-2 ring-[#1a1d23]">
+              <MemberAvatar member={memberById.get(t.memberId)} name={t.teamName} />
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="shrink-0 w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-gray-300 text-sm">
           {emoji ?? (
