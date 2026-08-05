@@ -36,6 +36,9 @@ export type NoticeEvent = {
   variant: "join" | "result" | "draft";
   title: string;
   lines?: string[];
+  // Result notices carry the finalized week — the chat renders them as a
+  // button to /league/[id]/recaps titled "Week N Recap".
+  week?: number;
   // Draft notices carry the raw scheduled time so the client can format it in
   // the viewer's own timezone.
   scheduledAt?: string | null;
@@ -207,43 +210,30 @@ export async function buildLeagueSystemFeed(
     });
   }
 
-  // Finalized weekly results, one notice per week listing every matchup.
+  // Finalized weekly results, one notice per week. The chat renders these as
+  // a "Week N Recap" button; the latest matchup finalized in the week anchors
+  // the timestamp.
   const { data: finals } = await supabase
     .from("matchups")
-    .select("week, team1_id, team2_id, team1_score, team2_score, finalized_at")
+    .select("week, finalized_at")
     .eq("league_id", leagueId)
     .eq("is_final", true)
     .not("finalized_at", "is", null);
-  const weekBuckets = new Map<number, { ts: string; lines: string[] }>();
+  const weekFinalizedAt = new Map<number, string>();
   for (const m of finals ?? []) {
     const wk = (m as any).week as number;
     const ts = (m as any).finalized_at as string;
-    const t1 = teamName.get((m as any).team1_id) ?? "Team 1";
-    const s1 = Number((m as any).team1_score ?? 0);
-    const t2Id = (m as any).team2_id;
-    const s2 = Number((m as any).team2_score ?? 0);
-    let line: string;
-    if (t2Id == null) {
-      line = `${t1} had a bye (${s1.toFixed(1)})`;
-    } else {
-      const t2 = teamName.get(t2Id) ?? "Team 2";
-      if (s1 === s2) line = `${t1} tied ${t2}, ${s1.toFixed(1)}–${s2.toFixed(1)}`;
-      else if (s1 > s2) line = `${t1} def. ${t2}, ${s1.toFixed(1)}–${s2.toFixed(1)}`;
-      else line = `${t2} def. ${t1}, ${s2.toFixed(1)}–${s1.toFixed(1)}`;
-    }
-    const cur = weekBuckets.get(wk) ?? { ts, lines: [] };
-    if (ts > cur.ts) cur.ts = ts; // latest matchup finalized in the week anchors it
-    cur.lines.push(line);
-    weekBuckets.set(wk, cur);
+    const cur = weekFinalizedAt.get(wk);
+    if (!cur || ts > cur) weekFinalizedAt.set(wk, ts);
   }
-  for (const [wk, v] of weekBuckets) {
+  for (const [wk, ts] of weekFinalizedAt) {
     events.push({
       id: `week-${wk}`,
       kind: "notice",
-      ts: v.ts,
+      ts,
       variant: "result",
       title: `Week ${wk} results`,
-      lines: v.lines,
+      week: wk,
     });
   }
 

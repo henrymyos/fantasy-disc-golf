@@ -687,8 +687,20 @@ function SystemMessage({ event, ts, now, leagueId }: { event: SystemEvent; ts: s
   );
 }
 
-/** Body for a notice event (join / weekly result / draft scheduled). */
+/** Body for a notice event (join / weekly result / draft scheduled). A
+ *  weekly-result notice is just a button to the recaps page. */
 function NoticeBody({ event, leagueId }: { event: NoticeEvent; leagueId: number }) {
+  if (event.variant === "result") {
+    return (
+      <Link
+        href={`/league/${leagueId}/recaps`}
+        className="inline-flex items-center gap-2 bg-[#4B3DFF]/15 hover:bg-[#4B3DFF]/25 border border-[#4B3DFF]/30 text-[#a9a1ff] text-sm font-semibold px-4 py-2.5 rounded-xl transition"
+      >
+        📰 {event.week != null ? `Week ${event.week} Recap` : "Weekly Recap"}
+        <span aria-hidden>→</span>
+      </Link>
+    );
+  }
   const heading =
     event.variant === "draft"
       ? `The draft is scheduled for ${formatDraftTime(event.scheduledAt)}`
@@ -706,15 +718,6 @@ function NoticeBody({ event, leagueId }: { event: NoticeEvent; leagueId: number 
             </p>
           ))}
         </div>
-      )}
-      {event.variant === "result" && (
-        <Link
-          href={`/league/${leagueId}/recaps`}
-          className="inline-flex items-center gap-1.5 mt-2 bg-[#4B3DFF]/15 hover:bg-[#4B3DFF]/25 border border-[#4B3DFF]/30 text-[#a9a1ff] text-xs font-semibold px-3 py-1.5 rounded-lg transition"
-        >
-          📰 View weekly recap &amp; awards
-          <span aria-hidden>→</span>
-        </Link>
       )}
     </>
   );
