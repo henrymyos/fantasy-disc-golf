@@ -277,7 +277,7 @@ export default async function MatchupDetailPage({
   const team1Actual = starterTotal(t1Team.starterRows, (r) => r.actual);
   const team2Actual = starterTotal(t2Team.starterRows, (r) => r.actual);
   // Once the event has ended with scores on the board (but before the
-  // Wednesday finalize), each player's "finishing" total IS their actual —
+  // Monday finalize), each player's "finishing" total IS their actual —
   // the win bar must track the real result, not the pre-event projections.
   const settled = ended && actuals.size > 0;
   const finishingFor = (r: PlayerRow) =>

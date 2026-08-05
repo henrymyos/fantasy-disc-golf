@@ -4,23 +4,23 @@ import { finalizeWeekScoresCore, advanceWeekCore } from "@/lib/scoring-finalize"
 import { getLeagueSchedule } from "@/lib/league-schedule";
 
 /**
- * The lock deadline for a week: the first Wednesday at 00:00 UTC strictly after
- * the event's end date. An event ending Sunday locks the following Wednesday,
- * giving everyone a couple of days to review before the result is official.
- * (The daily cron runs at 08:00 UTC, so the lock actually executes Wed morning.)
+ * The lock deadline for a week: the first Monday at 00:00 UTC strictly after
+ * the event's end date. Results don't change once the event has wrapped, so a
+ * Sunday-ending event becomes official on the next daily cron run (Monday
+ * ~08:00 UTC). Commissioners can still re-finalize manually for corrections.
  */
-export function wednesdayAfter(endDateIso: string): Date {
+export function mondayAfter(endDateIso: string): Date {
   const d = new Date(`${endDateIso}T00:00:00Z`);
   do {
     d.setUTCDate(d.getUTCDate() + 1);
-  } while (d.getUTCDay() !== 3); // 3 = Wednesday
+  } while (d.getUTCDay() !== 1); // 1 = Monday
   d.setUTCHours(0, 0, 0, 0);
   return d;
 }
 
 /**
  * Auto-finalizes any active league whose current week's event has ended and
- * whose Wednesday deadline has passed, then advances the week. Idempotent: once
+ * whose Monday deadline has passed, then advances the week. Idempotent: once
  * a week is advanced, the new current week's deadline hasn't passed, so nothing
  * re-fires. Commissioners can still re-finalize manually for corrections.
  * Returns the "leagueId:week" pairs it locked.
@@ -45,7 +45,7 @@ export async function autoFinalizeDueWeeks(admin: SupabaseClient): Promise<strin
     const schedule = await getLeagueSchedule(admin, leagueId);
     const leagueWeek = schedule?.weeks.find((w) => w.week === week);
     if (!leagueWeek) continue; // no event mapped to this week — leave it to the commissioner
-    if (now < wednesdayAfter(leagueWeek.endDate).getTime()) continue; // review window still open
+    if (now < mondayAfter(leagueWeek.endDate).getTime()) continue; // event week still open
 
     // A behind league advances at most one week per daily run — avoids a burst
     // of finalized weeks + notifications all at once. It catches up over days.

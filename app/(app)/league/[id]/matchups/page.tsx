@@ -76,7 +76,7 @@ export default async function MatchupsPage({ params }: { params: Promise<{ id: s
   const totalByPlayer = new Map<number, { sum: number; count: number }>();
   // Actual points per player per event, so weeks whose event has started show
   // real scores on the cards instead of the stored 0.0 (which only updates at
-  // the Wednesday finalize).
+  // the Monday finalize).
   const ptsByTournamentPlayer = new Map<number, Map<number, number>>();
   (allResults ?? []).forEach((r: any) => {
     const pts = fantasyPointsFromResult(rules, {

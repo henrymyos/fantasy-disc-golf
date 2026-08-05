@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { applyProjectionVariance, winProbability } from "@/lib/projections";
-import { getLeagueNextTournamentId, getLeagueSchedule } from "@/lib/league-schedule";
+import { featuredWeekFor, getLeagueNextTournamentId, getLeagueSchedule } from "@/lib/league-schedule";
 import { fantasyPointsFromResult, resolveScoringRules, describeScoreContributions } from "@/lib/scoring-rules";
 import { LiveScoreRefresher } from "@/components/live-score-refresher";
 import { WinProbChart } from "@/components/win-prob-chart";
@@ -82,14 +82,21 @@ export default async function MyMatchupPage({
     .single();
   if (!myMember) redirect(`/league/${id}`);
 
-  // Find my current-week matchup; fall back to next scheduled if none yet.
+  // The featured week: the just-finished week keeps top billing until
+  // Wednesday midday, then the surfaces flip to the new current week.
+  const schedule = await getLeagueSchedule(supabase, Number(id));
+  const featuredWeek = schedule
+    ? featuredWeekFor(schedule, league.current_week)
+    : league.current_week;
+
+  // Find my featured-week matchup; fall back to next scheduled if none yet.
   let { data: matchup } = await supabase
     .from("matchups")
     .select(
       "id, week, team1_id, team2_id, team1_score, team2_score, is_final, team1:league_members!matchups_team1_id_fkey(id, team_name), team2:league_members!matchups_team2_id_fkey(id, team_name)",
     )
     .eq("league_id", id)
-    .eq("week", league.current_week)
+    .eq("week", featuredWeek)
     .or(`team1_id.eq.${myMember.id},team2_id.eq.${myMember.id}`)
     .maybeSingle();
   if (!matchup) {
@@ -128,9 +135,8 @@ export default async function MyMatchupPage({
   // This matchup belongs to a specific LEAGUE week → resolve that week's event
   // through the league schedule, exactly like the matchup detail page. Keying
   // off the globally active/next tournament instead points at the WRONG event
-  // between an event's finish (Sunday) and the Wednesday auto-finalize — the
+  // between an event's finish (Sunday) and the Monday auto-finalize — the
   // week's actual scores vanish and everything reads 0.0.
-  const schedule = await getLeagueSchedule(supabase, Number(id));
   const scheduleWeek = schedule?.weeks.find((w) => w.week === (matchup as any).week) ?? null;
   const weekTournamentId: number | null =
     scheduleWeek?.tournamentIds[0]
@@ -320,7 +326,7 @@ export default async function MyMatchupPage({
   const t2Actual = starterTotal(t2Team.starterRows, (r) => r.actual);
   // Each player's expected finishing total: their live pace if scored,
   // otherwise the pre-event season projection. Once the event has ended with
-  // scores on the board (but before the Wednesday finalize), the finishing
+  // scores on the board (but before the Monday finalize), the finishing
   // total IS the actual — the win bar must track the real result.
   const settled = ended && actuals.size > 0;
   const finishingFor = (r: StarterRow) =>

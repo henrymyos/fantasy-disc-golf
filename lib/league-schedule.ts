@@ -66,6 +66,31 @@ export async function getLeagueNextTournamentId(
   return week?.tournamentIds[0] ?? null;
 }
 
+/**
+ * The league week to FEATURE on the dashboard and Your Matchup surfaces.
+ * Weeks become official Monday morning (mondayAfter in lib/auto-finalize
+ * advances current_week), but the finished week keeps top billing until
+ * Wednesday 12:00 UTC after its event ends — league members get a couple of
+ * days with the final result before the surfaces flip to the upcoming week.
+ */
+export function featuredWeekFor(
+  schedule: LeagueSchedule,
+  currentWeek: number,
+  nowMs = Date.now(),
+): number {
+  const prev = schedule.weeks.find((w) => w.week === currentWeek - 1);
+  if (!prev) return currentWeek;
+  // Only a week whose event actually finished holds the spotlight (a manual
+  // week advance past a future event must not pin the page to it).
+  if (nowMs <= Date.parse(`${prev.endDate}T23:59:59Z`)) return currentWeek;
+  const handoff = new Date(`${prev.endDate}T00:00:00Z`);
+  do {
+    handoff.setUTCDate(handoff.getUTCDate() + 1);
+  } while (handoff.getUTCDay() !== 3); // 3 = Wednesday
+  handoff.setUTCHours(12, 0, 0, 0); // midday UTC
+  return nowMs < handoff.getTime() ? currentWeek - 1 : currentWeek;
+}
+
 export async function getLeagueSchedule(
   supabase: SupabaseClient,
   leagueId: number,

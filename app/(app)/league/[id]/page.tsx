@@ -15,7 +15,7 @@ import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
 import { rankTeams } from "@/lib/standings";
 import { applyProjectionVariance } from "@/lib/projections";
 import { getActiveTournament } from "@/lib/lineup-lock";
-import { getLeagueNextTournamentId, getLeagueSchedule } from "@/lib/league-schedule";
+import { featuredWeekFor, getLeagueNextTournamentId, getLeagueSchedule } from "@/lib/league-schedule";
 import { CopyButton } from "@/components/copy-button";
 import { InviteLink } from "@/components/invite-link";
 import { getActivityFeed } from "@/lib/activity-feed";
@@ -104,6 +104,13 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   const emptySlotCount =
     preDraft && maxTeams != null ? Math.max(0, maxTeams - (members ?? []).length) : 0;
 
+  // The featured week: the just-finished week keeps top billing until
+  // Wednesday midday, then the dashboard flips to the new current week.
+  const leagueSchedule = await getLeagueSchedule(supabase, Number(id));
+  const featuredWeek = leagueSchedule
+    ? featuredWeekFor(leagueSchedule, league.current_week)
+    : league.current_week;
+
   const { data: matchups } = await supabase
     .from("matchups")
     .select(`
@@ -112,7 +119,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
       team2:league_members!matchups_team2_id_fkey(id, team_name)
     `)
     .eq("league_id", id)
-    .eq("week", league.current_week);
+    .eq("week", featuredWeek);
 
   // Compute standings from all matchups
   const { data: allMatchups } = await supabase
@@ -233,13 +240,12 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   let settled = false;
   let progressFrac = 0;
   if ((matchups ?? []).length > 0) {
-    // Resolve the CURRENT league week's event through the league schedule —
-    // the same source the matchup pages use. The globally active/next
-    // tournament points at the wrong event between an event's Sunday finish
-    // and the Wednesday finalize.
-    const schedule = await getLeagueSchedule(supabase, Number(id));
+    // Resolve the FEATURED week's event through the league schedule — the
+    // same source the matchup pages use. The globally active/next tournament
+    // points at the wrong event between an event's Sunday finish and the
+    // Monday finalize.
     const targetTournamentId: number | null =
-      schedule?.weekToTournamentIds.get(league.current_week)?.[0]
+      leagueSchedule?.weekToTournamentIds.get(featuredWeek)?.[0]
       ?? (await getLeagueNextTournamentId(supabase, Number(id)));
 
     // Registered players for the target tournament (non-registered = OUT) +
@@ -288,7 +294,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
         weekActualByPlayer.set(r.player_id, (weekActualByPlayer.get(r.player_id) ?? 0) + Number(r.fantasy_points ?? 0));
       }
     });
-    // Event over with scores on the board (awaiting the Wednesday finalize):
+    // Event over with scores on the board (awaiting the Monday finalize):
     // the win % must track the real result, not projections.
     settled = ended && weekActualByPlayer.size > 0;
     if (settled) progressFrac = 1;
@@ -597,7 +603,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
         )}
 
         <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
-          <h2 className="font-bold text-white mb-4">Week {league.current_week} Matchups</h2>
+          <h2 className="font-bold text-white mb-4">Week {featuredWeek} Matchups</h2>
           {(matchups ?? []).length === 0 ? (
             <p className="text-gray-400 text-sm text-center py-6">
               No matchups scheduled yet

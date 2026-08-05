@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resetWaiverPriority, runWaiverProcessing } from "@/lib/waivers";
 import { runLineupUnsetCheck } from "@/lib/lineup-unset-check";
-import { autoFinalizeDueWeeks, wednesdayAfter } from "@/lib/auto-finalize";
+import { autoFinalizeDueWeeks, mondayAfter } from "@/lib/auto-finalize";
 import { runDueDraftTimers } from "@/lib/draft-timer";
 import { applyDraftPostponements } from "@/lib/draft-postpone";
 import { runDraftReminders } from "@/lib/draft-reminders";
@@ -81,8 +81,8 @@ export async function GET(request: Request) {
   //        on/before today and ending strictly AFTER today. An event whose
   //        end_date is today has played its final round, so it no longer blocks
   //        (this is the Wednesday-ending fix).
-  //      • Otherwise process once the Wednesday-after review window of the most
-  //        recently concluded event has passed. This is the same review window
+  //      • Otherwise process once the Monday-after deadline of the most
+  //        recently concluded event has passed. This is the same deadline
   //        auto-finalize uses, so waivers unlock in lockstep with week scoring —
   //        important because finalization reads live starter rosters.
   //    Like the lock above, this gate is league-scoped: each locked league
@@ -116,14 +116,14 @@ export async function GET(request: Request) {
       .sort();
     const latestEnd = concludedEnds[concludedEnds.length - 1];
     const reviewWindowPassed =
-      !latestEnd || Date.now() >= wednesdayAfter(latestEnd).getTime();
+      !latestEnd || Date.now() >= mondayAfter(latestEnd).getTime();
     if (!reviewWindowPassed) continue;
     await runWaiverProcessing(leagueId);
     processed.push(leagueId);
   }
 
-  // 3) Auto-finalize any week whose event ended and whose Wednesday review
-  //    deadline has passed (then advance the week). Self-gated per league.
+  // 3) Auto-finalize any week whose event ended and whose Monday deadline has
+  //    passed (then advance the week). Self-gated per league.
   const autoFinalized = await autoFinalizeDueWeeks(admin);
 
   // 4) Lineup-unset notifications for any tournament within the next 6h.
