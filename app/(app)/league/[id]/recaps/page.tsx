@@ -33,10 +33,15 @@ export default async function RecapsPage({ params }: { params: Promise<{ id: str
     .eq("league_id", id)
     .order("week", { ascending: false });
 
-  // Recaps written before the awards format are a single paragraph (no
-  // newlines). Regenerate those in place — generateWeeklyRecap upserts the
-  // fresh body, so each one self-heals exactly once.
-  const legacy = (recaps ?? []).filter((r: any) => !String(r.body ?? "").includes("\n"));
+  // Regenerate stale recap formats in place — generateWeeklyRecap upserts the
+  // fresh body, so each one self-heals. Stale means: written before the awards
+  // format (a single paragraph, no newlines), or with a points-based Blowout
+  // line from before the percent-margin ranking (no % in the award).
+  const legacy = (recaps ?? []).filter((r: any) => {
+    const body = String(r.body ?? "");
+    if (!body.includes("\n")) return true;
+    return body.includes("**Biggest Blowout:**") && !/\*\*Biggest Blowout:\*\*[^\n]*%/.test(body);
+  });
   if (legacy.length > 0) {
     const admin = createAdminClient();
     const schedule = await getLeagueSchedule(admin, Number(id)).catch(() => null);

@@ -108,6 +108,9 @@ export async function generateWeeklyRecap(
     winnerId: number | null;
     loserId: number | null;
     margin: number;
+    /** Margin as a percentage of the loser's score (Infinity if the loser
+     *  scored 0) — ranks Blowout/Closest Call by relative dominance. */
+    pctMargin: number;
     text: string;
   };
   const lines: Line[] = [];
@@ -122,6 +125,7 @@ export async function generateWeeklyRecap(
         winnerId: null,
         loserId: null,
         margin: 0,
+        pctMargin: 0,
         text: `**${t1}** and **${t2}** tied **${fmt(s1)}-${fmt(s2)}**.`,
       });
       continue;
@@ -141,7 +145,14 @@ export async function generateWeeklyRecap(
       text += ` behind ${winnerTop.name}'s ${finishPhrase(winnerTop)}`;
     }
     text += ".";
-    lines.push({ winnerId, loserId, margin: Math.abs(s1 - s2), text });
+    const margin = Math.abs(s1 - s2);
+    lines.push({
+      winnerId,
+      loserId,
+      margin,
+      pctMargin: loseScore > 0 ? (margin / loseScore) * 100 : Infinity,
+      text,
+    });
   }
 
   // ---- Awards (Sleeper-style weekly report) --------------------------------
@@ -170,17 +181,24 @@ export async function generateWeeklyRecap(
     awards.push(`⭐ **MVP:** ${mvp.name} (${teamName(mvp.teamId)}) — ${fmt(mvp.points)} pts${finish}`);
   }
 
-  // Blowout + Closest Call only mean something with 2+ decided matchups.
+  // Blowout + Closest Call, ranked by percent margin over the loser rather
+  // than raw points so a 20-point win over a 40-point team outranks a
+  // 25-point win over a 150-point team. Only meaningful with 2+ decided
+  // matchups.
   const decided = lines.filter((l) => l.winnerId != null);
+  const byPct = (l: Line) =>
+    Number.isFinite(l.pctMargin)
+      ? `by ${l.pctMargin < 10 ? l.pctMargin.toFixed(1) : Math.round(l.pctMargin).toString()}%`
+      : `by ${fmt(l.margin)} pts`;
   if (decided.length >= 2) {
-    const blowout = [...decided].sort((a, b) => b.margin - a.margin)[0];
-    const closest = [...decided].sort((a, b) => a.margin - b.margin)[0];
+    const blowout = [...decided].sort((a, b) => b.pctMargin - a.pctMargin)[0];
+    const closest = [...decided].sort((a, b) => a.pctMargin - b.pctMargin)[0];
     if (blowout !== closest) {
       awards.push(
-        `💥 **Biggest Blowout:** **${teamName(blowout.winnerId!)}** over **${teamName(blowout.loserId!)}** by ${fmt(blowout.margin)}`,
+        `💥 **Biggest Blowout:** **${teamName(blowout.winnerId!)}** over **${teamName(blowout.loserId!)}** ${byPct(blowout)}`,
       );
       awards.push(
-        `😅 **Closest Call:** **${teamName(closest.winnerId!)}** past **${teamName(closest.loserId!)}** by ${fmt(closest.margin)}`,
+        `😅 **Closest Call:** **${teamName(closest.winnerId!)}** past **${teamName(closest.loserId!)}** ${byPct(closest)}`,
       );
     }
   }
