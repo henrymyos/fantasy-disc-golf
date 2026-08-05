@@ -19,7 +19,9 @@ import { getLeagueSchedule } from "@/lib/league-schedule";
 // Gated by CRON_SECRET — same bearer flow as /api/sync-pdga.
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// Finalizing a due week re-runs the PDGA import (a scrape across every event
+// with a pdga_event_id) before locking scores — same headroom as /api/sync-pdga.
+export const maxDuration = 300;
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
