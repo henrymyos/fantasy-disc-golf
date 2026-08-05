@@ -29,13 +29,35 @@ export function AddWithDropModal({
   const rosterFull = openSpots === 0;
 
   // While the popup is open, lock scrolling on the page behind it — only the
-  // roster list inside the popup scrolls.
+  // roster list inside the popup scrolls. iOS Safari ignores overflow:hidden
+  // on body for touch scrolling, so pin the body with position:fixed instead
+  // and restore the scroll position on close.
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const body = document.body;
+    const scrollY = window.scrollY;
+    const prev = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+      overflow: body.style.overflow,
+    };
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = prev;
+      body.style.position = prev.position;
+      body.style.top = prev.top;
+      body.style.left = prev.left;
+      body.style.right = prev.right;
+      body.style.width = prev.width;
+      body.style.overflow = prev.overflow;
+      window.scrollTo(0, scrollY);
     };
   }, [open]);
 
@@ -71,7 +93,7 @@ export function AddWithDropModal({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overscroll-contain"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overscroll-contain touch-none"
           onClick={() => { setOpen(false); setSelected(null); }}
         >
           <div
@@ -104,7 +126,7 @@ export function AddWithDropModal({
             </div>
 
             {/* Roster list — the only scrollable region while the popup is open */}
-            <div className="px-3 py-3 space-y-1.5 max-h-72 overflow-y-auto overscroll-contain">
+            <div className="px-3 py-3 space-y-1.5 max-h-72 overflow-y-auto overscroll-contain touch-pan-y">
               {myRoster.map((spot) => {
                 const p = spot.players;
                 if (!p) return null;
