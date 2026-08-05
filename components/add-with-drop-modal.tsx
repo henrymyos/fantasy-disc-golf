@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { addFreeAgent, placeWaiverClaim } from "@/actions/rosters";
 
 type RosterPlayer = {
@@ -27,6 +27,17 @@ export function AddWithDropModal({
 
   const isWaiver = mode === "waiver";
   const rosterFull = openSpots === 0;
+
+  // While the popup is open, lock scrolling on the page behind it — only the
+  // roster list inside the popup scrolls.
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
 
   function handleConfirm() {
     if (rosterFull && selected == null) return;
@@ -60,11 +71,11 @@ export function AddWithDropModal({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overscroll-contain"
           onClick={() => { setOpen(false); setSelected(null); }}
         >
           <div
-            className="bg-[#1a1d23] border border-white/10 rounded-2xl w-full max-w-sm shadow-xl overflow-hidden"
+            className="bg-[#1a1d23] border border-white/10 rounded-2xl w-full max-w-sm max-h-[85vh] shadow-xl overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -92,8 +103,8 @@ export function AddWithDropModal({
               )}
             </div>
 
-            {/* Roster list */}
-            <div className="px-3 py-3 space-y-1.5 max-h-72 overflow-y-auto">
+            {/* Roster list — the only scrollable region while the popup is open */}
+            <div className="px-3 py-3 space-y-1.5 max-h-72 overflow-y-auto overscroll-contain">
               {myRoster.map((spot) => {
                 const p = spot.players;
                 if (!p) return null;
