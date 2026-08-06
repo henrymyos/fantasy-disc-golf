@@ -93,7 +93,7 @@ export default async function MyMatchupPage({
   let { data: matchup } = await supabase
     .from("matchups")
     .select(
-      "id, week, team1_id, team2_id, team1_score, team2_score, is_final, team1:league_members!matchups_team1_id_fkey(id, team_name), team2:league_members!matchups_team2_id_fkey(id, team_name)",
+      "id, week, team1_id, team2_id, team1_score, team2_score, is_final, team1:league_members!matchups_team1_id_fkey(id, team_name, profiles(avatar_url, avatar_color)), team2:league_members!matchups_team2_id_fkey(id, team_name, profiles(avatar_url, avatar_color))",
     )
     .eq("league_id", id)
     .eq("week", featuredWeek)
@@ -103,7 +103,7 @@ export default async function MyMatchupPage({
     const { data: upcoming } = await supabase
       .from("matchups")
       .select(
-        "id, week, team1_id, team2_id, team1_score, team2_score, is_final, team1:league_members!matchups_team1_id_fkey(id, team_name), team2:league_members!matchups_team2_id_fkey(id, team_name)",
+        "id, week, team1_id, team2_id, team1_score, team2_score, is_final, team1:league_members!matchups_team1_id_fkey(id, team_name, profiles(avatar_url, avatar_color)), team2:league_members!matchups_team2_id_fkey(id, team_name, profiles(avatar_url, avatar_color))",
       )
       .eq("league_id", id)
       .eq("is_final", false)
@@ -417,6 +417,8 @@ export default async function MyMatchupPage({
         <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-end">
           <TeamHeader
             name={t1?.team_name ?? "TBD"}
+            avatarUrl={t1?.profiles?.avatar_url ?? null}
+            avatarColor={t1?.profiles?.avatar_color ?? null}
             score={t1Display}
             projected={t1Finishing}
             isFinal={isFinal || settled}
@@ -430,6 +432,8 @@ export default async function MyMatchupPage({
           </div>
           <TeamHeader
             name={t2?.team_name ?? "TBD"}
+            avatarUrl={t2?.profiles?.avatar_url ?? null}
+            avatarColor={t2?.profiles?.avatar_color ?? null}
             score={t2Display}
             projected={t2Finishing}
             isFinal={isFinal || settled}
@@ -512,6 +516,8 @@ export default async function MyMatchupPage({
 
 function TeamHeader({
   name,
+  avatarUrl,
+  avatarColor,
   score,
   projected,
   isFinal,
@@ -520,6 +526,8 @@ function TeamHeader({
   right,
 }: {
   name: string;
+  avatarUrl?: string | null;
+  avatarColor?: string | null;
   score: number;
   projected: number;
   isFinal: boolean;
@@ -529,10 +537,23 @@ function TeamHeader({
 }) {
   return (
     <div className={`min-w-0 ${right ? "text-right" : ""}`}>
-      <p className="text-white font-bold text-lg truncate">
-        {name}
-        {isMine && <span className="text-gray-400 text-xs font-normal ml-2">(you)</span>}
-      </p>
+      <div className={`flex items-center gap-2.5 ${right ? "flex-row-reverse" : ""}`}>
+        {avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={avatarUrl} alt="" className="w-10 h-10 rounded-full object-cover shrink-0 bg-white/10" />
+        ) : (
+          <div
+            className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center text-white text-sm font-bold"
+            style={{ backgroundColor: avatarColor ?? "#4B3DFF" }}
+          >
+            {name[0]?.toUpperCase()}
+          </div>
+        )}
+        <p className="text-white font-bold text-lg truncate min-w-0">
+          {name}
+          {isMine && <span className="text-gray-400 text-xs font-normal ml-2">(you)</span>}
+        </p>
+      </div>
       <p className="text-white text-3xl font-black tabular-nums mt-2">{score.toFixed(1)}</p>
       {!isFinal && (
         <p className="text-gray-400 text-xs mt-1">

@@ -27,8 +27,8 @@ export default async function MatchupsPage({ params }: { params: Promise<{ id: s
     .from("matchups")
     .select(`
       id, week, team1_id, team2_id, team1_score, team2_score, is_final,
-      team1:league_members!matchups_team1_id_fkey(id, team_name, user_id),
-      team2:league_members!matchups_team2_id_fkey(id, team_name, user_id)
+      team1:league_members!matchups_team1_id_fkey(id, team_name, user_id, profiles(avatar_url, avatar_color)),
+      team2:league_members!matchups_team2_id_fkey(id, team_name, user_id, profiles(avatar_url, avatar_color))
     `)
     .eq("league_id", id)
     .order("week", { ascending: false });
@@ -201,11 +201,29 @@ export default async function MatchupsPage({ params }: { params: Promise<{ id: s
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${
-                        m.is_final && m.team1_score > m.team2_score ? "bg-[#36D7B7] text-black" : "bg-white/10 text-white"
-                      }`}>
-                        {t1?.team_name?.[0]?.toUpperCase()}
-                      </div>
+                      {(t1 as any)?.profiles?.avatar_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={(t1 as any).profiles.avatar_url}
+                          alt=""
+                          className={`w-9 h-9 rounded-full object-cover shrink-0 bg-white/10 ${
+                            m.is_final && m.team1_score > m.team2_score ? "ring-2 ring-[#36D7B7]" : ""
+                          }`}
+                        />
+                      ) : (
+                        <div
+                          className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+                            m.is_final && m.team1_score > m.team2_score ? "bg-[#36D7B7] text-black" : "text-white"
+                          }`}
+                          style={
+                            m.is_final && m.team1_score > m.team2_score
+                              ? undefined
+                              : { backgroundColor: (t1 as any)?.profiles?.avatar_color ?? "rgba(255,255,255,0.1)" }
+                          }
+                        >
+                          {t1?.team_name?.[0]?.toUpperCase()}
+                        </div>
+                      )}
                       <div>
                         <p className="text-white text-sm font-medium">{t1?.team_name}</p>
                         <p className="text-xl font-bold text-white">{score1.toFixed(1)}</p>
@@ -228,11 +246,29 @@ export default async function MatchupsPage({ params }: { params: Promise<{ id: s
                     </span>
 
                     <div className="flex items-center gap-3 flex-row-reverse">
-                      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${
-                        m.is_final && m.team2_score > m.team1_score ? "bg-[#36D7B7] text-black" : "bg-white/10 text-white"
-                      }`}>
-                        {t2?.team_name?.[0]?.toUpperCase()}
-                      </div>
+                      {(t2 as any)?.profiles?.avatar_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={(t2 as any).profiles.avatar_url}
+                          alt=""
+                          className={`w-9 h-9 rounded-full object-cover shrink-0 bg-white/10 ${
+                            m.is_final && m.team2_score > m.team1_score ? "ring-2 ring-[#36D7B7]" : ""
+                          }`}
+                        />
+                      ) : (
+                        <div
+                          className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+                            m.is_final && m.team2_score > m.team1_score ? "bg-[#36D7B7] text-black" : "text-white"
+                          }`}
+                          style={
+                            m.is_final && m.team2_score > m.team1_score
+                              ? undefined
+                              : { backgroundColor: (t2 as any)?.profiles?.avatar_color ?? "rgba(255,255,255,0.1)" }
+                          }
+                        >
+                          {t2?.team_name?.[0]?.toUpperCase()}
+                        </div>
+                      )}
                       <div className="text-right">
                         <p className="text-white text-sm font-medium">{t2?.team_name}</p>
                         <p className="text-xl font-bold text-white">{score2.toFixed(1)}</p>

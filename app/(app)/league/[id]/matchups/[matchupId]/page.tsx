@@ -65,8 +65,8 @@ export default async function MatchupDetailPage({
     .from("matchups")
     .select(`
       id, week, team1_id, team2_id, team1_score, team2_score, is_final,
-      team1:league_members!matchups_team1_id_fkey(id, team_name, division_name),
-      team2:league_members!matchups_team2_id_fkey(id, team_name, division_name)
+      team1:league_members!matchups_team1_id_fkey(id, team_name, division_name, profiles(avatar_url, avatar_color)),
+      team2:league_members!matchups_team2_id_fkey(id, team_name, division_name, profiles(avatar_url, avatar_color))
     `)
     .eq("id", matchupId)
     .eq("league_id", id)
@@ -364,6 +364,8 @@ export default async function MatchupDetailPage({
           <TeamHeader
             name={team1.team_name}
             division={team1.division_name}
+            avatarUrl={(team1 as any).profiles?.avatar_url ?? null}
+            avatarColor={(team1 as any).profiles?.avatar_color ?? null}
             score={team1Display}
             projected={team1Finishing}
             isFinal={isFinal || settled}
@@ -377,6 +379,8 @@ export default async function MatchupDetailPage({
           <TeamHeader
             name={team2.team_name}
             division={team2.division_name}
+            avatarUrl={(team2 as any).profiles?.avatar_url ?? null}
+            avatarColor={(team2 as any).profiles?.avatar_color ?? null}
             score={team2Display}
             projected={team2Finishing}
             isFinal={isFinal || settled}
@@ -460,6 +464,8 @@ export default async function MatchupDetailPage({
 function TeamHeader({
   name,
   division,
+  avatarUrl,
+  avatarColor,
   score,
   projected,
   isFinal,
@@ -468,6 +474,8 @@ function TeamHeader({
 }: {
   name: string;
   division: string | null;
+  avatarUrl?: string | null;
+  avatarColor?: string | null;
   score: number;
   projected: number;
   isFinal: boolean;
@@ -476,8 +484,23 @@ function TeamHeader({
 }) {
   return (
     <div className={`flex-1 min-w-0 ${right ? "text-right" : ""}`}>
-      <p className="text-white font-bold text-lg truncate">{name}</p>
-      {division && <p className="text-gray-400 text-xs mt-0.5">{division}</p>}
+      <div className={`flex items-center gap-2.5 ${right ? "flex-row-reverse" : ""}`}>
+        {avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={avatarUrl} alt="" className="w-10 h-10 rounded-full object-cover shrink-0 bg-white/10" />
+        ) : (
+          <div
+            className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center text-white text-sm font-bold"
+            style={{ backgroundColor: avatarColor ?? "#4B3DFF" }}
+          >
+            {name[0]?.toUpperCase()}
+          </div>
+        )}
+        <div className="min-w-0">
+          <p className="text-white font-bold text-lg truncate">{name}</p>
+          {division && <p className="text-gray-400 text-xs mt-0.5">{division}</p>}
+        </div>
+      </div>
       <p className="text-white text-3xl font-black tabular-nums mt-2">{score.toFixed(1)}</p>
       {!isFinal && (
         <p className="text-gray-400 text-xs mt-0.5">
