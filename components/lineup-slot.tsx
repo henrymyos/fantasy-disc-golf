@@ -63,10 +63,10 @@ function WeekPointsBadge({ wp }: { wp: WeekPoints }) {
   }
   return (
     <span
-      className="ml-2 text-xs font-semibold tabular-nums text-gray-400 shrink-0"
+      className="ml-2 text-sm font-semibold tabular-nums text-gray-400 shrink-0"
       title="Projected points this week"
     >
-      ~{wp.projected?.toFixed(1)}
+      {wp.projected?.toFixed(1)}
     </span>
   );
 }

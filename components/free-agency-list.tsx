@@ -242,7 +242,7 @@ export function FreeAgencyList({
           <div className="space-y-1">
             {filteredAgents.map((player) => {
               const primary = sort === "projected"
-                ? (player.nextWeekPoints != null ? `~${player.nextWeekPoints.toFixed(1)}` : "—")
+                ? (player.nextWeekPoints != null ? player.nextWeekPoints.toFixed(1) : "—")
                 : sort === "rank"
                 ? (tab === "all"
                     ? (player.overallRank != null ? `#${player.overallRank}` : "—")
@@ -293,7 +293,7 @@ export function FreeAgencyList({
             );
 
             const primary = sort === "projected"
-              ? (player.nextWeekPoints != null ? `~${player.nextWeekPoints.toFixed(1)}` : "—")
+              ? (player.nextWeekPoints != null ? player.nextWeekPoints.toFixed(1) : "—")
               : sort === "rank"
               ? (tab === "all"
                   ? (player.overallRank != null ? `#${player.overallRank}` : "—")

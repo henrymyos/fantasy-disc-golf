@@ -176,10 +176,9 @@ export function AddWithDropModal({
                       <span className="text-red-400 text-xs font-semibold shrink-0">Drop</span>
                     ) : (
                       <span className="text-right shrink-0 leading-tight">
-                        <span className="block text-sm text-gray-200 font-semibold">
+                        <span className="block text-base text-gray-200 font-semibold tabular-nums">
                           {spot.projection != null ? spot.projection.toFixed(1) : "—"}
                         </span>
-                        <span className="block text-[10px] text-gray-500">proj</span>
                       </span>
                     )}
                   </div>

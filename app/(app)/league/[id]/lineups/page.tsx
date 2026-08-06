@@ -343,7 +343,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
               <div className="text-right">
                 <p className="text-white font-semibold text-sm tabular-nums">{myWins}-{myLosses}</p>
                 <p className="text-gray-400 text-xs mt-0.5">
-                  {anyActual ? "" : "~"}{displayTotal.toFixed(1)} pts {anyActual ? "this event" : "projected"}
+                  {displayTotal.toFixed(1)} pts {anyActual ? "this event" : "projected"}
                 </p>
               </div>
             );

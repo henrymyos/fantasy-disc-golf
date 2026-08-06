@@ -76,7 +76,7 @@ export function MatchupWrapup({ t1, t2 }: { t1: TeamWrapup; t2: TeamWrapup }) {
             <p className="text-white text-sm font-medium">Matchup MVP: {w.mvp.name}</p>
             <p className="text-gray-400 text-xs mt-0.5">
               {w.mvp.actual.toFixed(1)} pts for {w.mvp.teamName}
-              {w.mvp.projected != null && <> · projected ~{w.mvp.projected.toFixed(1)}</>}
+              {w.mvp.projected != null && <> · projected {w.mvp.projected.toFixed(1)}</>}
             </p>
           </div>
         </div>
@@ -86,7 +86,7 @@ export function MatchupWrapup({ t1, t2 }: { t1: TeamWrapup; t2: TeamWrapup }) {
             <div className="min-w-0 flex-1">
               <p className="text-white text-sm font-medium">Biggest bust: {w.bust.name}</p>
               <p className="text-gray-400 text-xs mt-0.5">
-                {w.bust.actual.toFixed(1)} pts for {w.bust.teamName} · projected ~{w.bust.projected!.toFixed(1)}
+                {w.bust.actual.toFixed(1)} pts for {w.bust.teamName} · projected {w.bust.projected!.toFixed(1)}
               </p>
             </div>
           </div>

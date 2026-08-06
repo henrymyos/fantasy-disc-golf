@@ -865,7 +865,7 @@ function TeamScore({
         <p className={`font-semibold text-sm ${isWinner ? "text-white" : "text-gray-400"}`}>{name}</p>
         <p className={`text-lg font-bold ${isWinner ? "text-[#36D7B7]" : "text-white"}`}>{score.toFixed(1)}</p>
         {!isFinal && projected != null && projected > 0 && (
-          <p className="text-gray-400 text-[10px] mt-0.5">~{projected.toFixed(1)} proj</p>
+          <p className="text-gray-400 text-xs mt-0.5">{projected.toFixed(1)}</p>
         )}
       </div>
     </div>

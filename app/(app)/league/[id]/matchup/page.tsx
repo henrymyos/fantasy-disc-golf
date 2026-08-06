@@ -556,9 +556,7 @@ function TeamHeader({
       </div>
       <p className="text-white text-3xl font-black tabular-nums mt-2">{score.toFixed(1)}</p>
       {!isFinal && (
-        <p className="text-gray-400 text-xs mt-1">
-          ~{projected.toFixed(1)} {inProgress ? "final proj" : "projected"}
-        </p>
+        <p className="text-gray-400 text-sm tabular-nums mt-1">{projected.toFixed(1)}</p>
       )}
     </div>
   );
@@ -675,7 +673,7 @@ function PointsCell({
     }
     return (
       <p className={`text-sm tabular-nums font-semibold text-gray-400 ${alignClass}`}>
-        {row.projected != null ? `~${row.projected.toFixed(1)}` : "—"}
+        {row.projected != null ? row.projected.toFixed(1) : "—"}
       </p>
     );
   }
@@ -685,8 +683,8 @@ function PointsCell({
     return (
       <div className={alignClass}>
         <p className="text-white text-sm font-semibold tabular-nums">{row.actual.toFixed(1)}</p>
-        <p className={`text-[10px] tabular-nums ${colorVsProjection(row.paceProjected, row.projected)}`}>
-          ~{row.paceProjected.toFixed(1)}
+        <p className={`text-xs tabular-nums ${colorVsProjection(row.paceProjected, row.projected)}`}>
+          {row.paceProjected.toFixed(1)}
         </p>
       </div>
     );
@@ -699,7 +697,7 @@ function PointsCell({
         {row.actual.toFixed(1)}
       </p>
       {row.projected != null && (
-        <p className="text-[10px] tabular-nums text-gray-500">~{row.projected.toFixed(1)}</p>
+        <p className="text-xs tabular-nums text-gray-500">{row.projected.toFixed(1)}</p>
       )}
     </div>
   );

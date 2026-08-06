@@ -228,13 +228,13 @@ export default async function MatchupsPage({ params }: { params: Promise<{ id: s
                         <p className="text-white text-sm font-medium">{t1?.team_name}</p>
                         <p className="text-xl font-bold text-white">{score1.toFixed(1)}</p>
                         {hasProj && (
-                          <p className="text-gray-400 text-[10px]">
-                            ~{proj1.toFixed(1)} proj ·{" "}
+                          <p className="text-gray-400 text-xs">
+                            {proj1.toFixed(1)} ·{" "}
                             <span className={win1 >= win2 ? "text-white font-semibold" : ""}>{win1}%</span>
                           </p>
                         )}
                         {live && !live.ended && (
-                          <p className="text-gray-400 text-[10px]">
+                          <p className="text-gray-400 text-xs">
                             <span className={win1 >= win2 ? "text-white font-semibold" : ""}>{win1}%</span> to win
                           </p>
                         )}
@@ -273,13 +273,13 @@ export default async function MatchupsPage({ params }: { params: Promise<{ id: s
                         <p className="text-white text-sm font-medium">{t2?.team_name}</p>
                         <p className="text-xl font-bold text-white">{score2.toFixed(1)}</p>
                         {hasProj && (
-                          <p className="text-gray-400 text-[10px]">
-                            ~{proj2.toFixed(1)} proj ·{" "}
+                          <p className="text-gray-400 text-xs">
+                            {proj2.toFixed(1)} ·{" "}
                             <span className={win2 > win1 ? "text-white font-semibold" : ""}>{win2}%</span>
                           </p>
                         )}
                         {live && !live.ended && (
-                          <p className="text-gray-400 text-[10px]">
+                          <p className="text-gray-400 text-xs">
                             <span className={win2 > win1 ? "text-white font-semibold" : ""}>{win2}%</span> to win
                           </p>
                         )}
