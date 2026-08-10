@@ -177,10 +177,15 @@ async function fetchRoundJson(pdgaId: number, division: "MPO" | "FPO", round: nu
 async function computeBonusesForEvent(pdgaId: number): Promise<{
   bonus: Map<string, RoundBonus>;
   registered: Array<{ pdgaNum: number | null; name: string; division: "MPO" | "FPO" }>;
+  dnf: Set<string>;
 }> {
   const bonus = new Map<string, RoundBonus>();
   const registeredKeys = new Set<string>();
   const registered: Array<{ pdgaNum: number | null; name: string; division: "MPO" | "FPO" }> = [];
+  // PDGA#s of players who withdrew/DNF'd. PDGA Live marks them with sentinel
+  // totals (GrandTotal 999 / RoundtoPar ~935) and pads their remaining holes
+  // at par+4, which would otherwise import as a mountain of bogey strokes.
+  const dnf = new Set<string>();
 
   for (const division of ["MPO", "FPO"] as const) {
     // Fetch rounds sequentially with a small gap instead of a 12-wide burst —
@@ -205,6 +210,12 @@ async function computeBonusesForEvent(pdgaId: number): Promise<{
         if (!pdgaNum && !name) continue;
         // Key the dedup by division too so a name-only fallback can still be
         // resolved within the right division downstream.
+        if (
+          pdgaNum != null &&
+          (Number(s.GrandTotal) >= 900 || Number(s.RoundtoPar) >= 900)
+        ) {
+          dnf.add(String(pdgaNum));
+        }
         const key = pdgaNum != null ? `p:${pdgaNum}` : `n:${division}:${normalizeName(name)}`;
         if (registeredKeys.has(key)) continue;
         registeredKeys.add(key);
@@ -228,6 +239,8 @@ async function computeBonusesForEvent(pdgaId: number): Promise<{
       for (const s of completed) {
         if (!s.PDGANum) continue;
         const key = String(s.PDGANum);
+        // A withdrawn player's par+4 filler holes aren't real golf — no bonuses.
+        if (dnf.has(key)) continue;
         const entry = bonus.get(key) ?? { hot: 0, bogey: 0, ace: 0, under: 0, over: 0, eagle: 0 };
 
         if (s.RoundScore === minRound) entry.hot += 1;
@@ -257,7 +270,7 @@ async function computeBonusesForEvent(pdgaId: number): Promise<{
     }
   }
 
-  return { bonus, registered };
+  return { bonus, registered, dnf };
 }
 
 type ParsedRow = { place: number; pdgaNumber: number; name: string };
@@ -412,7 +425,7 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
 
     // Pull per-player hot rounds, bogey-free rounds, aces — and the set of
     // every PDGA# / name that appears in any round (= registered field).
-    const { bonus: bonusByPdga, registered } = await computeBonusesForEvent(event.pdgaId);
+    const { bonus: bonusByPdga, registered, dnf } = await computeBonusesForEvent(event.pdgaId);
 
     // Update the lock-at timestamp from PDGA's round 1 tee times.
     const lockAtIso = await fetchFirstTeeTime(event.pdgaId, event.startDate);
@@ -455,6 +468,24 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
         const player = byPdga.get(String(r.pdgaNumber)) ?? byName.get(`${division}:${normalizeName(r.name)}`);
         if (!player) {
           unmatched.push({ event: event.name, ...r, division });
+          continue;
+        }
+        // Withdrawn/DNF: PDGA pads their remaining holes at par+4 and still
+        // lists a finishing place, which would score as heavy negatives.
+        // A dropout simply gets 0 for the week.
+        if (dnf.has(String(r.pdgaNumber))) {
+          rowsToInsert.push({
+            tournament_id: event.dbId,
+            player_id: player.id,
+            finishing_position: null,
+            hot_round_count: 0,
+            bogey_free_count: 0,
+            ace_count: 0,
+            under_par_strokes: 0,
+            over_par_strokes: 0,
+            eagle_count: 0,
+            fantasy_points: 0,
+          });
           continue;
         }
         const bonus = bonusByPdga.get(String(r.pdgaNumber)) ?? { hot: 0, bogey: 0, ace: 0, under: 0, over: 0, eagle: 0 };
@@ -504,7 +535,17 @@ export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportRes
       .from("tournament_results")
       .select("player_id, finishing_position, hot_round_count, bogey_free_count, ace_count, under_par_strokes, over_par_strokes, eagle_count")
       .eq("tournament_id", tid);
-    const existingBirdie = (existing ?? []).reduce((s, r: any) => s + Number(r.under_par_strokes ?? 0), 0);
+    // Players zeroed as DNF this scrape may have real pre-withdrawal birdies in
+    // the stored rows — exclude them from the completeness comparison so the
+    // DNF correction doesn't read as a less-complete scrape and get skipped.
+    const zeroedIds = new Set(
+      evRows
+        .filter((r) => r.finishing_position == null && Number(r.fantasy_points) === 0)
+        .map((r) => r.player_id as number),
+    );
+    const existingBirdie = (existing ?? [])
+      .filter((r: any) => !zeroedIds.has(r.player_id as number))
+      .reduce((s, r: any) => s + Number(r.under_par_strokes ?? 0), 0);
     if (existingBirdie > 0 && newBirdie < existingBirdie) continue; // keep the fuller data
 
     // Upsert on the (tournament_id, player_id) unique constraint instead of a
