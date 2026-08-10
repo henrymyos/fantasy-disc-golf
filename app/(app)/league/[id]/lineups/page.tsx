@@ -3,7 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { LineupSlot, BenchSlot } from "@/components/lineup-slot";
 import { TeamActionsPanel } from "@/components/team-actions-panel";
 import { getActiveTournament } from "@/lib/lineup-lock";
+import { getPollableTournament } from "@/lib/live-window";
 import { getLeagueNextTournamentId } from "@/lib/league-schedule";
+import { LiveScoreRefresher } from "@/components/live-score-refresher";
 import { applyProjectionVariance } from "@/lib/projections";
 import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
 
@@ -67,13 +69,18 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
 
   const activeTournament = await getActiveTournament(supabase, Number(id));
   const lineupLocked = activeTournament !== null;
+  // Live or recently-ended event — keeps the score poller running and the
+  // week's actuals on screen through the post-event grace window.
+  const pollableTournament = await getPollableTournament(supabase, Number(id));
 
-  // Per-player projected and actual points for the next calendar event on
-  // the schedule (the in-progress event if one is happening, else the
-  // earliest upcoming event by start_date).
+  // Per-player projected and actual points for the week's event: the live
+  // event, else (during the grace window) the just-ended event so actuals
+  // stay visible until the week flips, else the next upcoming event.
   const playerIds = roster.map((r: any) => r.player_id);
   const nextTournamentId: number | null =
-    activeTournament?.id ?? (await getLeagueNextTournamentId(supabase, Number(id)));
+    activeTournament?.id
+    ?? (pollableTournament != null && pollableTournament.id > 0 ? pollableTournament.id : null)
+    ?? (await getLeagueNextTournamentId(supabase, Number(id)));
 
   const { data: allResults } = playerIds.length > 0
     ? await supabase
@@ -288,6 +295,10 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="max-w-2xl space-y-4">
+      {pollableTournament && (
+        <LiveScoreRefresher tournamentName={pollableTournament.name} />
+      )}
+
       {overRoster && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex items-start gap-3">
           <span className="text-red-400 text-lg leading-none mt-0.5">⚠</span>
