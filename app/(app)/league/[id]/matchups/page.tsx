@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveTournament } from "@/lib/lineup-lock";
+import { getPollableTournament } from "@/lib/live-window";
 import { getLeagueSchedule } from "@/lib/league-schedule";
 import { LiveScoreRefresher } from "@/components/live-score-refresher";
 import { applyProjectionVariance, winProbability } from "@/lib/projections";
@@ -34,6 +35,9 @@ export default async function MatchupsPage({ params }: { params: Promise<{ id: s
     .order("week", { ascending: false });
 
   const activeTournament = await getActiveTournament(supabase, Number(id));
+  // Live or recently-ended: keeps the score poller running through the
+  // post-event grace window (see lib/live-window.ts).
+  const pollableTournament = await getPollableTournament(supabase, Number(id));
 
   // Project every team against the league's own current-or-next scheduled
   // event, under this league's scoring rules, with players not registered for
@@ -162,8 +166,8 @@ export default async function MatchupsPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="max-w-2xl space-y-6">
-      {activeTournament && (
-        <LiveScoreRefresher tournamentName={activeTournament.name} />
+      {pollableTournament && (
+        <LiveScoreRefresher tournamentName={pollableTournament.name} />
       )}
       {weeks.map((week) => (
         <div key={week} className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">

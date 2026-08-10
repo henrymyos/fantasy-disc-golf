@@ -7,6 +7,7 @@ import { ConfirmDropButton } from "@/components/confirm-drop-button";
 import { placeWaiverClaim } from "@/actions/rosters";
 import { applyProjectionVariance } from "@/lib/projections";
 import { getActiveTournament } from "@/lib/lineup-lock";
+import { getPollableTournament } from "@/lib/live-window";
 import { getLeagueNextTournamentId } from "@/lib/league-schedule";
 import { LiveScoreRefresher } from "@/components/live-score-refresher";
 
@@ -63,6 +64,9 @@ export default async function PlayerPage({
   const draftComplete = draft?.status === "complete";
 
   const activeTournament = await getActiveTournament(supabase, Number(id));
+  // Live or recently-ended: keeps the score poller running through the
+  // post-event grace window (see lib/live-window.ts).
+  const pollableTournament = await getPollableTournament(supabase, Number(id));
   const waiversActive = ((league as any)?.waivers_locked === true) || activeTournament !== null;
 
   const { data: myRosterRows } = await supabase
@@ -225,8 +229,8 @@ export default async function PlayerPage({
 
   return (
     <div className="max-w-2xl space-y-6">
-      {activeTournament && (
-        <LiveScoreRefresher tournamentName={activeTournament.name} />
+      {pollableTournament && (
+        <LiveScoreRefresher tournamentName={pollableTournament.name} />
       )}
 
       {/* Back + header */}

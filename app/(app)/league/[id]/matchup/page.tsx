@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { applyProjectionVariance, winProbability } from "@/lib/projections";
+import { LIVE_END_GRACE_MS } from "@/lib/live-window";
 import { featuredWeekFor, getLeagueNextTournamentId, getLeagueSchedule } from "@/lib/league-schedule";
 import { fantasyPointsFromResult, resolveScoringRules, describeScoreContributions } from "@/lib/scoring-rules";
 import { LiveScoreRefresher } from "@/components/live-score-refresher";
@@ -170,6 +171,7 @@ export default async function MyMatchupPage({
   // last competition day.
   let inProgress = false;
   let ended = false;
+  let pollLive = false;
   let progressFrac = 0;
   if (weekTournament) {
     const startMs = weekTournament.lock_at
@@ -180,6 +182,9 @@ export default async function MyMatchupPage({
     const now = Date.now();
     inProgress = Number.isFinite(startMs) && Number.isFinite(endMs) && now >= startMs && now <= endMs;
     ended = Number.isFinite(endMs) && now > endMs;
+    // Keep polling for a grace window past the UTC end so late-posted Sunday
+    // final-round results still flow in before the Monday finalize.
+    pollLive = inProgress || (ended && now <= endMs + LIVE_END_GRACE_MS);
     const span = endMs - startMs;
     if (inProgress && span > 0) {
       progressFrac = Math.min(1, Math.max(0, (now - startMs) / span));
@@ -409,7 +414,7 @@ export default async function MyMatchupPage({
         </p>
       </div>
 
-      {inProgress && weekTournamentName && (
+      {pollLive && weekTournamentName && (
         <LiveScoreRefresher tournamentName={weekTournamentName} />
       )}
 
