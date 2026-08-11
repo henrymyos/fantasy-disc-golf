@@ -8,6 +8,7 @@ import { buildSeasonSchedule } from "@/lib/matchup-scheduler";
 import { effectiveSelection } from "@/lib/dgpt-2026-schedule";
 import { regularSeasonWeekCount } from "@/lib/season-weeks";
 import { getLeagueSchedule } from "@/lib/league-schedule";
+import { applyLineupPlansForWeek, type PlannedStarter } from "@/lib/lineup-plans";
 
 /** Round-robin pairing for a given week (used when next week's matchups don't
  *  already exist). */
@@ -80,26 +81,59 @@ export async function finalizeWeekScoresCore(
     playerPoints[r.player_id] = (playerPoints[r.player_id] ?? 0) + pts;
   });
 
-  const { data: starters } = await admin
+  const { data: rosterRows } = await admin
     .from("rosters")
-    .select("team_id, player_id, lineup_order, players(division)")
-    .eq("league_id", leagueId)
-    .eq("is_starter", true);
+    .select("team_id, player_id, is_starter, lineup_order, players(division)")
+    .eq("league_id", leagueId);
 
   // Cap each team to its configured division slots (lowest lineup_order first)
   // so the official score matches the lineup the UI shows, not every starter row.
   const rowsByTeam = new Map<number, StarterRow[]>();
-  (starters ?? []).forEach((s: any) => {
-    const list = rowsByTeam.get(s.team_id) ?? [];
-    list.push({ player_id: s.player_id, division: s.players?.division ?? "MPO", lineup_order: s.lineup_order ?? null });
-    rowsByTeam.set(s.team_id, list);
+  const allByTeam = new Map<number, Array<{ player_id: number; division: string }>>();
+  (rosterRows ?? []).forEach((s: any) => {
+    const division = s.players?.division ?? "MPO";
+    if (s.is_starter) {
+      const list = rowsByTeam.get(s.team_id) ?? [];
+      list.push({ player_id: s.player_id, division, lineup_order: s.lineup_order ?? null });
+      rowsByTeam.set(s.team_id, list);
+    }
+    const all = allByTeam.get(s.team_id) ?? [];
+    all.push({ player_id: s.player_id, division });
+    allByTeam.set(s.team_id, all);
   });
 
   const teamScores: Record<number, number> = {};
+  const starterIdsByTeam = new Map<number, number[]>();
   for (const [teamId, rows] of rowsByTeam) {
     let sum = 0;
-    for (const pid of cappedStarterIds(rows, mpoSlots, fpoSlots)) sum += playerPoints[pid] ?? 0;
+    const ids = cappedStarterIds(rows, mpoSlots, fpoSlots);
+    starterIdsByTeam.set(teamId, ids);
+    for (const pid of ids) sum += playerPoints[pid] ?? 0;
     teamScores[teamId] = sum;
+  }
+
+  // Record each team's scored lineup so past-week views can show the real
+  // historical lineup after rosters change. Best-effort: the table may not
+  // exist until the 2026-08 migration runs.
+  try {
+    for (const [teamId, all] of allByTeam) {
+      const ids = starterIdsByTeam.get(teamId) ?? [];
+      const idSet = new Set(ids);
+      const divByPlayer = new Map(all.map((p) => [p.player_id, p.division]));
+      const perDivCount: Record<string, number> = {};
+      const starters: PlannedStarter[] = ids.map((pid) => {
+        const slot = (divByPlayer.get(pid) === "FPO" ? "FPO" : "MPO") as "MPO" | "FPO";
+        perDivCount[slot] = (perDivCount[slot] ?? 0) + 1;
+        return { player_id: pid, slot, order: perDivCount[slot] };
+      });
+      const bench = all.map((p) => p.player_id).filter((pid) => !idSet.has(pid));
+      await admin.from("lineup_snapshots").upsert(
+        { league_id: leagueId, team_id: teamId, week, lineup: { starters, bench } },
+        { onConflict: "league_id,team_id,week" },
+      );
+    }
+  } catch {
+    // snapshots are a nice-to-have; never block finalize on them
   }
 
   const { data: matchups } = await admin
@@ -167,7 +201,7 @@ export async function finalizeWeekScoresCore(
 export async function advanceWeekCore(admin: SupabaseClient, leagueId: number): Promise<void> {
   const { data: league } = await admin
     .from("leagues")
-    .select("current_week, selected_event_slugs, season_year, max_teams")
+    .select("current_week, selected_event_slugs, season_year, max_teams, mpo_starters, fpo_starters")
     .eq("id", leagueId)
     .single();
   if (!league) return;
@@ -218,4 +252,14 @@ export async function advanceWeekCore(admin: SupabaseClient, leagueId: number): 
   }
 
   await admin.from("leagues").update({ current_week: nextWeek }).eq("id", leagueId);
+
+  // The new week's staged lineups (set from the Team page's week switcher)
+  // become the live lineups now.
+  await applyLineupPlansForWeek(
+    admin,
+    leagueId,
+    nextWeek,
+    (league as any).mpo_starters ?? 4,
+    (league as any).fpo_starters ?? 2,
+  );
 }

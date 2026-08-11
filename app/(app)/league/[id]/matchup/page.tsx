@@ -3,7 +3,9 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { applyProjectionVariance, winProbability } from "@/lib/projections";
 import { LIVE_END_GRACE_MS } from "@/lib/live-window";
-import { featuredWeekFor, getLeagueNextTournamentId, getLeagueSchedule } from "@/lib/league-schedule";
+import { featuredWeekFor, getLeagueNextTournamentId, getLeagueSchedule, weekTabsFor } from "@/lib/league-schedule";
+import { buildSeasonSchedule } from "@/lib/matchup-scheduler";
+import { WeekSwitcher } from "@/components/week-switcher";
 import { fantasyPointsFromResult, resolveScoringRules, describeScoreContributions } from "@/lib/scoring-rules";
 import { LiveScoreRefresher } from "@/components/live-score-refresher";
 import { WinProbChart } from "@/components/win-prob-chart";
@@ -53,10 +55,13 @@ function buildSlotArray(starters: any[], numSlots: number): (any | null)[] {
 
 export default async function MyMatchupPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ week?: string }>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -90,17 +95,38 @@ export default async function MyMatchupPage({
     ? featuredWeekFor(schedule, league.current_week)
     : league.current_week;
 
-  // Find my featured-week matchup; fall back to next scheduled if none yet.
+  // Week navigation: ?week=N shows my matchup for any week of the season;
+  // no param keeps the featured-week default.
+  const totalWeeks = schedule?.weeks.length ?? league.current_week;
+  const currentWeek = Math.min(league.current_week, Math.max(totalWeeks, 1));
+  const requested = Number(sp.week);
+  const hasExplicitWeek =
+    Number.isInteger(requested) && requested >= 1 && requested <= totalWeeks;
+  const selectedWeek = hasExplicitWeek
+    ? requested
+    : Math.min(Math.max(featuredWeek, 1), totalWeeks);
+  const weekTabs = schedule ? weekTabsFor(schedule) : [];
+  const weekStrip = weekTabs.length > 0 && (
+    <WeekSwitcher
+      basePath={`/league/${id}/matchup`}
+      weeks={weekTabs}
+      selected={selectedWeek}
+      currentWeek={currentWeek}
+    />
+  );
+
+  // Find my matchup for the selected week; without an explicit week, fall
+  // back to my next scheduled matchup if the featured week has none yet.
   let { data: matchup } = await supabase
     .from("matchups")
     .select(
       "id, week, team1_id, team2_id, team1_score, team2_score, is_final, team1:league_members!matchups_team1_id_fkey(id, team_name, profiles(avatar_url, avatar_color)), team2:league_members!matchups_team2_id_fkey(id, team_name, profiles(avatar_url, avatar_color))",
     )
     .eq("league_id", id)
-    .eq("week", featuredWeek)
+    .eq("week", selectedWeek)
     .or(`team1_id.eq.${myMember.id},team2_id.eq.${myMember.id}`)
     .maybeSingle();
-  if (!matchup) {
+  if (!matchup && !hasExplicitWeek) {
     const { data: upcoming } = await supabase
       .from("matchups")
       .select(
@@ -115,13 +141,58 @@ export default async function MyMatchupPage({
     matchup = upcoming;
   }
 
+  // A future regular-season week with no scheduled row yet: derive my opponent
+  // from the same round-robin the week-advance uses, so any week is browsable.
+  const selectedIsPlayoff =
+    schedule?.weeks.find((w) => w.week === selectedWeek)?.isPlayoff ?? false;
+  if (
+    !matchup &&
+    selectedWeek > currentWeek &&
+    schedule != null &&
+    selectedWeek <= schedule.regularWeeks
+  ) {
+    const { data: members } = await supabase
+      .from("league_members")
+      .select("id, team_name, division_name, profiles(avatar_url, avatar_color)")
+      .eq("league_id", id)
+      .order("joined_at");
+    if (members && members.length >= 2) {
+      const season = buildSeasonSchedule(
+        members.map((m: any) => ({ id: m.id, divisionName: m.division_name })),
+        selectedWeek,
+      );
+      const pair = season
+        .find((s) => s.week === selectedWeek)
+        ?.pairs.find(([a, b]) => a === myMember.id || b === myMember.id);
+      if (pair) {
+        const memberById = new Map<number, any>((members ?? []).map((m: any) => [m.id, m]));
+        matchup = {
+          id: null,
+          week: selectedWeek,
+          team1_id: pair[0],
+          team2_id: pair[1],
+          team1_score: 0,
+          team2_score: 0,
+          is_final: false,
+          team1: memberById.get(pair[0]),
+          team2: memberById.get(pair[1]),
+        } as any;
+      }
+    }
+  }
+
   if (!matchup) {
     return (
-      <div className="max-w-2xl">
-        <h2 className="text-white font-bold text-xl mb-2">Your Matchup</h2>
+      <div className="max-w-2xl space-y-4">
+        <h2 className="text-white font-bold text-xl">Your Matchup</h2>
+        {weekStrip}
         <div className="bg-[#1a1d23] rounded-2xl p-12 border border-white/5 text-center">
           <p className="text-gray-400 text-sm">
-            No matchup scheduled for you yet. Check back once the regular season starts.
+            {hasExplicitWeek
+              ? selectedIsPlayoff
+                ? `Week ${selectedWeek} is a playoff week — matchups are set once the bracket is decided.`
+                : `No matchup for you in week ${selectedWeek}.`
+              : "No matchup scheduled for you yet. Check back once the regular season starts."}
           </p>
         </div>
       </div>
@@ -351,12 +422,15 @@ export default async function MyMatchupPage({
   const isMine = (id: number) => id === myMember.id;
 
   // Win-probability history (snapshotted by the gameday pass on each refresh).
-  const { data: snapshots } = await supabase
-    .from("matchup_prob_snapshots")
-    .select("t1_win_pct, created_at")
-    .eq("matchup_id", (matchup as any).id)
-    .order("created_at", { ascending: true })
-    .limit(500);
+  // Skipped for derived future pairings, which have no matchup row yet.
+  const { data: snapshots } = (matchup as any).id != null
+    ? await supabase
+        .from("matchup_prob_snapshots")
+        .select("t1_win_pct, created_at")
+        .eq("matchup_id", (matchup as any).id)
+        .order("created_at", { ascending: true })
+        .limit(500)
+    : { data: [] as any[] };
   const probPoints = (snapshots ?? []).map((s: any) => ({
     pct: s.t1_win_pct as number,
     ts: s.created_at as string,
@@ -410,9 +484,11 @@ export default async function MyMatchupPage({
         <p className="text-gray-400 text-sm mt-1">
           Week {(matchup as any).week}
           {weekTournamentName && <> · <span className="text-gray-300">{weekTournamentName}</span></>}
-          {isFinal ? " · Final" : settled ? " · unofficial result" : " · live projection"}
+          {isFinal ? " · Final" : settled ? " · unofficial result" : (matchup as any).id == null ? " · projected pairing" : " · live projection"}
         </p>
       </div>
+
+      {weekStrip}
 
       {pollLive && weekTournamentName && (
         <LiveScoreRefresher tournamentName={weekTournamentName} />

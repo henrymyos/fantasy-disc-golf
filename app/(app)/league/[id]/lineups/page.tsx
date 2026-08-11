@@ -1,16 +1,27 @@
 import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { LineupSlot, BenchSlot } from "@/components/lineup-slot";
+import { LineupSlot, BenchSlot, PlayerPhoto, WeekPointsBadge } from "@/components/lineup-slot";
 import { TeamActionsPanel } from "@/components/team-actions-panel";
 import { getActiveTournament } from "@/lib/lineup-lock";
 import { getPollableTournament } from "@/lib/live-window";
-import { getLeagueNextTournamentId } from "@/lib/league-schedule";
+import { featuredWeekFor, getLeagueNextTournamentId, getLeagueSchedule, weekTabsFor } from "@/lib/league-schedule";
+import { getLineupPlan, getLineupSnapshot, lineupPlansAvailable, type PlannedStarter } from "@/lib/lineup-plans";
 import { LiveScoreRefresher } from "@/components/live-score-refresher";
+import { WeekSwitcher } from "@/components/week-switcher";
+import { WeekLineupEditor, type EditorPlayer } from "@/components/week-lineup-editor";
 import { applyProjectionVariance } from "@/lib/projections";
 import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
 
-export default async function LineupsPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function LineupsPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ week?: string }>;
+}) {
   const { id } = await params;
+  const sp = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -45,6 +56,27 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
 
   if (!myMember) redirect("/dashboard?home=1");
 
+  // ── Week selection ──────────────────────────────────────────────────────────
+  // Every league week is navigable: past weeks are read-only history, the
+  // current week is the live editable lineup, and future weeks edit a staged
+  // plan that becomes the real lineup when the week arrives.
+  const schedule = await getLeagueSchedule(supabase, Number(id));
+  const totalWeeks = schedule?.weeks.length ?? league.current_week;
+  const currentWeek = Math.min(league.current_week, Math.max(totalWeeks, 1));
+  const featured = schedule
+    ? featuredWeekFor(schedule, league.current_week)
+    : league.current_week;
+  const requested = Number(sp.week);
+  const selectedWeek =
+    Number.isInteger(requested) && requested >= 1 && requested <= totalWeeks
+      ? requested
+      : Math.min(Math.max(featured, 1), totalWeeks);
+  const mode: "past" | "current" | "future" =
+    selectedWeek < currentWeek ? "past" : selectedWeek > currentWeek ? "future" : "current";
+  const weekTabs = schedule ? weekTabsFor(schedule) : [];
+  const weekTid: number | null =
+    schedule?.weekToTournamentIds.get(selectedWeek)?.[0] ?? null;
+
   const { data: myRoster } = await supabase
     .from("rosters")
     .select("id, is_starter, player_id, lineup_order, players(id, name, division, avatar_url)")
@@ -67,20 +99,23 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
     r.nickname = nickByPlayer.get(r.player_id) ?? null;
   }
 
-  const activeTournament = await getActiveTournament(supabase, Number(id));
+  const activeTournament = mode === "current" ? await getActiveTournament(supabase, Number(id)) : null;
   const lineupLocked = activeTournament !== null;
   // Live or recently-ended event — keeps the score poller running and the
   // week's actuals on screen through the post-event grace window.
   const pollableTournament = await getPollableTournament(supabase, Number(id));
 
-  // Per-player projected and actual points for the week's event: the live
-  // event, else (during the grace window) the just-ended event so actuals
-  // stay visible until the week flips, else the next upcoming event.
+  // Per-player projected and actual points for the SELECTED week's event.
+  // Current week keeps the live chain (active → pollable → next scheduled);
+  // other weeks target that week's own event.
   const playerIds = roster.map((r: any) => r.player_id);
   const nextTournamentId: number | null =
-    activeTournament?.id
-    ?? (pollableTournament != null && pollableTournament.id > 0 ? pollableTournament.id : null)
-    ?? (await getLeagueNextTournamentId(supabase, Number(id)));
+    mode === "current"
+      ? activeTournament?.id
+        ?? (pollableTournament != null && pollableTournament.id > 0 ? pollableTournament.id : null)
+        ?? weekTid
+        ?? (await getLeagueNextTournamentId(supabase, Number(id)))
+      : weekTid;
 
   const { data: allResults } = playerIds.length > 0
     ? await supabase
@@ -181,8 +216,6 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
       .filter(({ slotIndex: si }) => si !== skipIdx + 1);
   }
 
-  const totalFilledStarters = mpoSlotArray.filter(Boolean).length + fpoSlotArray.filter(Boolean).length;
-  const totalSlots = mpoSlots + fpoSlots;
   const overRoster = roster.length > league.roster_size;
   const toDrop = roster.length - league.roster_size;
   const lineupsDisabled = overRoster || lineupLocked;
@@ -214,6 +247,96 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
       myLosses = rec.losses;
     }
   }
+
+  // ── Past week: the recorded (or reconstructed) lineup, read-only ────────────
+  type HistoryRow = {
+    playerId: number;
+    name: string;
+    division: "MPO" | "FPO";
+    avatarUrl: string | null;
+    actual: number | null;
+  };
+  let historyStarters: HistoryRow[] = [];
+  let historyBench: HistoryRow[] = [];
+  let historyIsSnapshot = false;
+  if (mode === "past") {
+    const snapshot = await getLineupSnapshot(supabase, Number(id), myMember.id, selectedWeek);
+    const weekActualFor = async (ids: number[]) => {
+      if (weekTid == null || ids.length === 0) return new Map<number, number>();
+      const { data } = await supabase
+        .from("tournament_results")
+        .select("player_id, fantasy_points")
+        .eq("tournament_id", weekTid)
+        .in("player_id", ids);
+      const m = new Map<number, number>();
+      (data ?? []).forEach((r: any) => {
+        m.set(r.player_id, (m.get(r.player_id) ?? 0) + Number(r.fantasy_points ?? 0));
+      });
+      return m;
+    };
+    if (snapshot) {
+      historyIsSnapshot = true;
+      const ids = [...snapshot.starters.map((s) => s.player_id), ...snapshot.bench];
+      const { data: pRows } = ids.length > 0
+        ? await supabase.from("players").select("id, name, division, avatar_url").in("id", ids)
+        : { data: [] };
+      const pById = new Map<number, any>((pRows ?? []).map((p: any) => [p.id, p]));
+      const actuals = await weekActualFor(ids);
+      const toRow = (pid: number): HistoryRow => ({
+        playerId: pid,
+        name: pById.get(pid)?.name ?? "Unknown",
+        division: (pById.get(pid)?.division as "MPO" | "FPO") ?? "MPO",
+        avatarUrl: pById.get(pid)?.avatar_url ?? null,
+        actual: actuals.has(pid) ? Math.round(actuals.get(pid)! * 10) / 10 : null,
+      });
+      const ordered = [...snapshot.starters].sort((a, b) =>
+        a.slot === b.slot ? a.order - b.order : a.slot === "MPO" ? -1 : 1,
+      );
+      historyStarters = ordered.map((s) => toRow(s.player_id));
+      historyBench = snapshot.bench.map(toRow);
+    } else {
+      // No snapshot recorded (week finalized before this feature) — show the
+      // current lineup with that week's actual points, like the matchup pages.
+      const actuals = await weekActualFor(playerIds);
+      const toRow = (r: any): HistoryRow => ({
+        playerId: r.player_id,
+        name: (r.players as any)?.name ?? "Unknown",
+        division: ((r.players as any)?.division as "MPO" | "FPO") ?? "MPO",
+        avatarUrl: (r.players as any)?.avatar_url ?? null,
+        actual: actuals.has(r.player_id) ? Math.round(actuals.get(r.player_id)! * 10) / 10 : null,
+      });
+      historyStarters = [...mpoSlotArray, ...fpoSlotArray].filter(Boolean).map(toRow);
+      historyBench = bench.map(toRow);
+    }
+  }
+
+  // ── Future week: staged plan (falls back to the live lineup) ────────────────
+  let planStarters: PlannedStarter[] = [];
+  let planSavable = false;
+  if (mode === "future") {
+    planSavable = await lineupPlansAvailable(supabase);
+    const plan = await getLineupPlan(supabase, Number(id), myMember.id, selectedWeek);
+    if (plan && plan.length > 0) {
+      planStarters = plan;
+    } else {
+      const derived: PlannedStarter[] = [];
+      mpoSlotArray.forEach((spot: any, i: number) => {
+        if (spot) derived.push({ player_id: spot.player_id, slot: "MPO", order: i + 1 });
+      });
+      fpoSlotArray.forEach((spot: any, i: number) => {
+        if (spot) derived.push({ player_id: spot.player_id, slot: "FPO", order: i + 1 });
+      });
+      planStarters = derived;
+    }
+  }
+  const editorPlayers: EditorPlayer[] = roster.map((r: any) => ({
+    playerId: r.player_id,
+    name: (r.players as any)?.name ?? "Unknown",
+    division: ((r.players as any)?.division as "MPO" | "FPO") ?? "MPO",
+    avatarUrl: (r.players as any)?.avatar_url ?? null,
+    nickname: r.nickname ?? null,
+    points: weekPointsByPlayer.get(r.player_id) ?? null,
+  }));
 
   // Fetch transaction history
   const { data: txRows } = await supabase
@@ -293,13 +416,71 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
     dropDivision: c.drop_player_id ? (claimPmap.get(c.drop_player_id)?.division ?? null) : null,
   }));
 
+  const historySlotLabels = (() => {
+    const labels: string[] = [];
+    if (historyIsSnapshot) {
+      let m = 0;
+      let f = 0;
+      for (const r of historyStarters) labels.push(r.division === "FPO" ? `FPO${++f}` : `MPO${++m}`);
+    } else {
+      historyStarters.forEach((r, i) => labels.push(`${r.division}${i + 1}`));
+    }
+    return labels;
+  })();
+
+  const historyRow = (r: HistoryRow, label: string | null, starter: boolean) => (
+    <div
+      key={`${label ?? "bn"}-${r.playerId}`}
+      className={`flex items-center gap-3 p-3 rounded-xl border ${
+        starter ? "" : "bg-[#0f1117] border-white/5"
+      }`}
+      style={
+        starter
+          ? {
+              background: r.division === "MPO" ? "var(--mpo-fill)" : "var(--fpo-fill)",
+              borderColor: r.division === "MPO" ? "var(--mpo-fill-border)" : "var(--fpo-fill-border)",
+            }
+          : undefined
+      }
+    >
+      <span
+        className="w-12 shrink-0 text-center text-xs font-bold uppercase tracking-wide py-1 rounded-lg"
+        style={{
+          color: r.division === "MPO" ? "#4B3DFF" : "#36D7B7",
+          background: `${r.division === "MPO" ? "#4B3DFF" : "#36D7B7"}20`,
+        }}
+      >
+        {r.division}
+      </span>
+      <PlayerPhoto player={{ name: r.name, avatar_url: r.avatarUrl }} />
+      <div className="flex-1 min-w-0">
+        <Link
+          href={`/league/${id}/player/${r.playerId}`}
+          className="block text-white text-sm font-medium truncate hover:underline"
+        >
+          {r.name}
+        </Link>
+      </div>
+      <WeekPointsBadge wp={{ projected: null, actual: r.actual ?? 0, isOut: false }} />
+    </div>
+  );
+
   return (
     <div className="max-w-2xl space-y-4">
-      {pollableTournament && (
+      {weekTabs.length > 0 && (
+        <WeekSwitcher
+          basePath={`/league/${id}/lineups`}
+          weeks={weekTabs}
+          selected={selectedWeek}
+          currentWeek={currentWeek}
+        />
+      )}
+
+      {mode === "current" && pollableTournament && (
         <LiveScoreRefresher tournamentName={pollableTournament.name} />
       )}
 
-      {overRoster && (
+      {mode === "current" && overRoster && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex items-start gap-3">
           <span className="text-red-400 text-lg leading-none mt-0.5">⚠</span>
           <div>
@@ -312,7 +493,7 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
-      {lineupLocked && activeTournament && (
+      {mode === "current" && lineupLocked && activeTournament && (
         <div className="bg-yellow-400/10 border border-yellow-400/30 rounded-xl px-4 py-3 flex items-start gap-3">
           <span className="text-yellow-400 text-lg leading-none mt-0.5">🔒</span>
           <div>
@@ -322,99 +503,158 @@ export default async function LineupsPage({ params }: { params: Promise<{ id: st
                   the same calendar date regardless of server timezone (a plain
                   `new Date("YYYY-MM-DD")` would parse as UTC midnight). */}
               Lineup changes reopen after {new Date(activeTournament.end_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}.
+              You can still set future weeks&apos; lineups from the week strip above.
             </p>
           </div>
         </div>
       )}
 
-      <TeamActionsPanel
-        leagueId={Number(id)}
-        myTeamId={myMember.id}
-        rosterTxs={rosterTxs}
-        completedTrades={completedTrades}
-        pendingClaims={pendingWaiverClaims}
-      />
+      {mode === "current" && (
+        <TeamActionsPanel
+          leagueId={Number(id)}
+          myTeamId={myMember.id}
+          rosterTxs={rosterTxs}
+          completedTrades={completedTrades}
+          pendingClaims={pendingWaiverClaims}
+        />
+      )}
 
       <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="font-bold text-white text-lg">{myMember.team_name}</h2>
+          <div>
+            <h2 className="font-bold text-white text-lg">{myMember.team_name}</h2>
+            {mode !== "current" && (
+              <p className="text-gray-400 text-xs mt-0.5">
+                {mode === "past"
+                  ? `Week ${selectedWeek} lineup${historyIsSnapshot ? "" : " (current roster shown)"}`
+                  : `Planning week ${selectedWeek} — applies when the week starts`}
+              </p>
+            )}
+          </div>
           {(() => {
-            const starterSpots = [...mpoSlotArray, ...fpoSlotArray].filter(Boolean) as any[];
             let projTotal = 0;
             let actualTotal = 0;
             let anyActual = false;
-            for (const s of starterSpots) {
-              const wp = weekPointsByPlayer.get(s.player_id);
-              if (!wp) continue;
-              if (wp.actual != null) { actualTotal += wp.actual; anyActual = true; }
-              if (wp.projected != null) projTotal += wp.projected;
+            if (mode === "past") {
+              for (const r of historyStarters) {
+                if (r.actual != null) { actualTotal += r.actual; anyActual = true; }
+              }
+            } else if (mode === "future") {
+              const started = new Set(planStarters.map((s) => s.player_id));
+              for (const pid of started) {
+                const wp = weekPointsByPlayer.get(pid);
+                if (wp?.projected != null) projTotal += wp.projected;
+              }
+            } else {
+              const starterSpots = [...mpoSlotArray, ...fpoSlotArray].filter(Boolean) as any[];
+              for (const s of starterSpots) {
+                const wp = weekPointsByPlayer.get(s.player_id);
+                if (!wp) continue;
+                if (wp.actual != null) { actualTotal += wp.actual; anyActual = true; }
+                if (wp.projected != null) projTotal += wp.projected;
+              }
             }
             const displayTotal = anyActual ? actualTotal : projTotal;
             return (
               <div className="text-right">
                 <p className="text-white font-semibold text-sm tabular-nums">{myWins}-{myLosses}</p>
                 <p className="text-gray-400 text-xs mt-0.5">
-                  {displayTotal.toFixed(1)} pts {anyActual ? "this event" : "projected"}
+                  {displayTotal.toFixed(1)} pts{" "}
+                  {mode === "past" ? `in week ${selectedWeek}` : anyActual ? "this event" : "projected"}
                 </p>
               </div>
             );
           })()}
         </div>
 
-        <div className="space-y-2 mb-6">
-          {mpoSlotArray.map((occupant: any, i: number) => (
-            <LineupSlot
-              key={`mpo-${i}`}
-              leagueId={Number(id)}
-              division="MPO"
-              slotIndex={i + 1}
-              occupant={occupant}
-              benchPlayers={mpoBench as any}
-              otherStarters={otherSlotsFor(mpoSlotArray, i)}
-              locked={lineupsDisabled}
-              weekPoints={occupant ? weekPointsByPlayer.get(occupant.player_id) ?? null : null}
-              pointsByPlayerId={pointsByPlayerId}
-            />
-          ))}
-          {fpoSlotArray.map((occupant: any, i: number) => (
-            <LineupSlot
-              key={`fpo-${i}`}
-              leagueId={Number(id)}
-              division="FPO"
-              slotIndex={i + 1}
-              occupant={occupant}
-              benchPlayers={fpoBench as any}
-              otherStarters={otherSlotsFor(fpoSlotArray, i)}
-              locked={lineupsDisabled}
-              weekPoints={occupant ? weekPointsByPlayer.get(occupant.player_id) ?? null : null}
-              pointsByPlayerId={pointsByPlayerId}
-            />
-          ))}
-        </div>
-
-        {bench.length > 0 && (
+        {mode === "past" && (
           <>
-            <h3 className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-2">Bench</h3>
-            <div className="space-y-2">
-              {bench.map((spot) => {
-                const div = (spot.players as any)?.division ?? "MPO";
-                return (
-                  <BenchSlot
-                    key={spot.id}
-                    leagueId={Number(id)}
-                    benchSpot={spot as any}
-                    starterSlots={div === "MPO" ? mpoSlotArray : fpoSlotArray}
-                    locked={lineupsDisabled}
-                    weekPoints={weekPointsByPlayer.get(spot.player_id) ?? null}
-                    pointsByPlayerId={pointsByPlayerId}
-                  />
-                );
-              })}
+            <div className="space-y-2 mb-6">
+              {historyStarters.length > 0
+                ? historyStarters.map((r, i) => historyRow(r, historySlotLabels[i] ?? null, true))
+                : <p className="text-gray-400 text-sm italic">No lineup recorded for this week.</p>}
             </div>
+            {historyBench.length > 0 && (
+              <>
+                <h3 className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-2">Bench</h3>
+                <div className="space-y-2">
+                  {historyBench.map((r) => historyRow(r, null, false))}
+                </div>
+              </>
+            )}
           </>
         )}
 
-        {roster.length === 0 && (
+        {mode === "future" && (
+          <WeekLineupEditor
+            leagueId={Number(id)}
+            week={selectedWeek}
+            mpoSlots={mpoSlots}
+            fpoSlots={fpoSlots}
+            players={editorPlayers}
+            initialStarters={planStarters}
+            canSave={planSavable}
+          />
+        )}
+
+        {mode === "current" && (
+          <>
+            <div className="space-y-2 mb-6">
+              {mpoSlotArray.map((occupant: any, i: number) => (
+                <LineupSlot
+                  key={`mpo-${i}`}
+                  leagueId={Number(id)}
+                  division="MPO"
+                  slotIndex={i + 1}
+                  occupant={occupant}
+                  benchPlayers={mpoBench as any}
+                  otherStarters={otherSlotsFor(mpoSlotArray, i)}
+                  locked={lineupsDisabled}
+                  weekPoints={occupant ? weekPointsByPlayer.get(occupant.player_id) ?? null : null}
+                  pointsByPlayerId={pointsByPlayerId}
+                />
+              ))}
+              {fpoSlotArray.map((occupant: any, i: number) => (
+                <LineupSlot
+                  key={`fpo-${i}`}
+                  leagueId={Number(id)}
+                  division="FPO"
+                  slotIndex={i + 1}
+                  occupant={occupant}
+                  benchPlayers={fpoBench as any}
+                  otherStarters={otherSlotsFor(fpoSlotArray, i)}
+                  locked={lineupsDisabled}
+                  weekPoints={occupant ? weekPointsByPlayer.get(occupant.player_id) ?? null : null}
+                  pointsByPlayerId={pointsByPlayerId}
+                />
+              ))}
+            </div>
+
+            {bench.length > 0 && (
+              <>
+                <h3 className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-2">Bench</h3>
+                <div className="space-y-2">
+                  {bench.map((spot) => {
+                    const div = (spot.players as any)?.division ?? "MPO";
+                    return (
+                      <BenchSlot
+                        key={spot.id}
+                        leagueId={Number(id)}
+                        benchSpot={spot as any}
+                        starterSlots={div === "MPO" ? mpoSlotArray : fpoSlotArray}
+                        locked={lineupsDisabled}
+                        weekPoints={weekPointsByPlayer.get(spot.player_id) ?? null}
+                        pointsByPlayerId={pointsByPlayerId}
+                      />
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {roster.length === 0 && mode !== "past" && (
           <p className="text-gray-400 text-sm text-center py-4">
             No players on your roster yet. Add players in Free Agency.
           </p>

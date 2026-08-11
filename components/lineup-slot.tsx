@@ -12,7 +12,7 @@ type RosterSpot = {
 };
 
 /** Player headshot, or an initial circle when they have no photo. */
-function PlayerPhoto({ player }: { player: { name?: string | null; avatar_url?: string | null } | null }) {
+export function PlayerPhoto({ player }: { player: { name?: string | null; avatar_url?: string | null } | null }) {
   if (player?.avatar_url) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
@@ -37,9 +37,9 @@ function divColor(div: string) {
   return div === "MPO" ? "#4B3DFF" : "#36D7B7";
 }
 
-type WeekPoints = { projected: number | null; actual: number | null; isOut?: boolean } | null;
+export type WeekPoints = { projected: number | null; actual: number | null; isOut?: boolean } | null;
 
-function WeekPointsBadge({ wp }: { wp: WeekPoints }) {
+export function WeekPointsBadge({ wp }: { wp: WeekPoints }) {
   if (!wp || (wp.actual == null && wp.projected == null && !wp.isOut)) return null;
   if (wp.actual != null) {
     return (

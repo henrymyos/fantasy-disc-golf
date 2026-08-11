@@ -91,6 +91,31 @@ export function featuredWeekFor(
   return nowMs < handoff.getTime() ? currentWeek - 1 : currentWeek;
 }
 
+/** Week-strip tabs for the WeekSwitcher, one per league week. */
+export function weekTabsFor(schedule: LeagueSchedule): Array<{
+  week: number;
+  eventName: string;
+  dateLabel: string;
+  isPlayoff: boolean;
+}> {
+  const fmt = (d: string) =>
+    new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    });
+  return schedule.weeks.map((w) => {
+    const s = fmt(w.event.startDate);
+    const e = fmt(w.event.endDate);
+    return {
+      week: w.week,
+      eventName: w.event.name,
+      dateLabel: s === e ? s : `${s} – ${e}`,
+      isPlayoff: w.isPlayoff,
+    };
+  });
+}
+
 export async function getLeagueSchedule(
   supabase: SupabaseClient,
   leagueId: number,
