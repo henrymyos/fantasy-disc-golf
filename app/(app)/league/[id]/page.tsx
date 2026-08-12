@@ -9,6 +9,7 @@ import {
   playoffCountForTeams,
 } from "@/lib/dgpt-2026-schedule";
 import { cappedStarterIds, type StarterRow } from "@/lib/lineup-slots";
+import { playoffBracketSize } from "@/lib/playoffs";
 import { getScheduleEvents, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
 import { isSeasonOver } from "@/lib/season-status";
 import { getPlayoffOutcome } from "@/lib/playoff-outcome";
@@ -217,7 +218,12 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   const myMembership = (members ?? []).find((m) => m.user_id === user.id);
 
   // How many teams make the playoffs — used to draw the cut line in standings.
-  const playoffTeamCount = playoffCountForTeams((league as any).max_teams);
+  // playoffCountForTeams gives the number of playoff EVENTS (rounds);
+  // playoffBracketSize turns that into the seeded team count.
+  const playoffTeamCount = playoffBracketSize(
+    playoffCountForTeams((league as any).max_teams),
+    (members ?? []).length,
+  );
 
   // ── Lineup alert: problems with MY lineup for the CURRENT (actionable) week —
   // empty starter slots, or starters not registered for that week's event.
