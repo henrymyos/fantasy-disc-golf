@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToUser } from "@/lib/push";
 import { buildLeagueSystemFeed, type SystemEvent } from "@/lib/chat-feed";
+import { CHAT_REACTION_EMOJIS } from "@/lib/chat-reactions";
 
 /** Post a chat message in this league. recipientMemberId === null is a
  *  league-wide broadcast; otherwise it's a 1:1 DM. */
@@ -130,6 +131,111 @@ export async function getVisibleChatMessages(leagueId: number): Promise<ChatMess
     .limit(200);
 
   return ((data ?? []) as ChatMessage[]).reverse();
+}
+
+export type ChatReaction = {
+  message_id: number;
+  member_id: number;
+  emoji: string;
+};
+
+/** Toggle the caller's emoji reaction on a chat message they can see. */
+export async function toggleChatReaction(
+  leagueId: number,
+  messageId: number,
+  emoji: string,
+): Promise<{ ok: boolean }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  if (!(CHAT_REACTION_EMOJIS as readonly string[]).includes(emoji)) return { ok: false };
+
+  const admin = createAdminClient();
+  const { data: member } = await admin
+    .from("league_members")
+    .select("id")
+    .eq("league_id", leagueId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!member) return { ok: false };
+
+  // The message must be in this league and visible to the caller (a league
+  // broadcast, or a DM they're a party to).
+  const { data: msg } = await admin
+    .from("chat_messages")
+    .select("id, sender_member_id, recipient_member_id")
+    .eq("id", messageId)
+    .eq("league_id", leagueId)
+    .maybeSingle();
+  if (!msg) return { ok: false };
+  const visible =
+    (msg as any).recipient_member_id == null ||
+    (msg as any).sender_member_id === member.id ||
+    (msg as any).recipient_member_id === member.id;
+  if (!visible) return { ok: false };
+
+  try {
+    const { data: existing, error: selErr } = await admin
+      .from("chat_reactions")
+      .select("id")
+      .eq("message_id", messageId)
+      .eq("member_id", member.id)
+      .eq("emoji", emoji)
+      .maybeSingle();
+    if (selErr) return { ok: false };
+    if (existing) {
+      await admin.from("chat_reactions").delete().eq("id", (existing as any).id);
+    } else {
+      const { error } = await admin.from("chat_reactions").insert({
+        league_id: leagueId,
+        message_id: messageId,
+        member_id: member.id,
+        emoji,
+      });
+      if (error) return { ok: false };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
+}
+
+/** All reactions on this league's messages that the caller can see. */
+export async function getChatReactions(leagueId: number): Promise<ChatReaction[]> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const admin = createAdminClient();
+  const { data: member } = await admin
+    .from("league_members")
+    .select("id")
+    .eq("league_id", leagueId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!member) return [];
+
+  try {
+    // Same visibility filter as getVisibleChatMessages, applied through the
+    // reaction's message join so DM reactions stay between the two parties.
+    const { data, error } = await admin
+      .from("chat_reactions")
+      .select("message_id, member_id, emoji, chat_messages!inner(sender_member_id, recipient_member_id)")
+      .eq("league_id", leagueId)
+      .or(
+        `recipient_member_id.is.null,sender_member_id.eq.${member.id},recipient_member_id.eq.${member.id}`,
+        { referencedTable: "chat_messages" },
+      )
+      .limit(2000);
+    if (error) return [];
+    return ((data ?? []) as any[]).map((r) => ({
+      message_id: r.message_id as number,
+      member_id: r.member_id as number,
+      emoji: r.emoji as string,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 /** Trade + roster-move events for the league chat's system messages. Only

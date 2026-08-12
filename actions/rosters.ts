@@ -4,8 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isLineupLocked, isFreeAgencyLocked } from "@/lib/lineup-lock";
+import { isLineupLocked, isFreeAgencyLocked, getActiveTournament } from "@/lib/lineup-lock";
 import { resetWaiverPriority, runWaiverProcessing } from "@/lib/waivers";
+import { applyProjectionVariance } from "@/lib/projections";
+import { getLeagueNextTournamentId } from "@/lib/league-schedule";
+import { getLineupIssues, type LineupIssues } from "@/lib/lineup-alert";
 
 export async function toggleStarter(leagueId: number, rosterSpotId: number, isStarter: boolean): Promise<void> {
   const supabase = await createClient();
@@ -631,5 +634,117 @@ export async function processWaivers(leagueId: number): Promise<void> {
   revalidatePath(`/league/${leagueId}/free-agency`);
   revalidatePath(`/league/${leagueId}/lineups`);
   revalidatePath(`/league/${leagueId}/settings`);
+  revalidatePath(`/league/${leagueId}`);
+}
+
+/** The caller's current-week lineup problems (for the mobile nav badge). */
+export async function getMyLineupAlert(leagueId: number): Promise<LineupIssues | null> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const admin = createAdminClient();
+  const { data: member } = await admin
+    .from("league_members")
+    .select("id")
+    .eq("league_id", leagueId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!member) return null;
+  return getLineupIssues(admin, leagueId, member.id);
+}
+
+/**
+ * One-tap lineup optimize: set the caller's starters to the highest-projected
+ * eligible players for the current week's event — players not registered for
+ * it (OUT) project 0 and get benched. No-op while the lineup is locked.
+ */
+export async function optimizeLineup(leagueId: number): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (await isLineupLocked(supabase, leagueId)) return;
+
+  const admin = createAdminClient();
+
+  const { data: league } = await admin
+    .from("leagues")
+    .select("mpo_starters, fpo_starters")
+    .eq("id", leagueId)
+    .single();
+  if (!league) return;
+  const mpoSlots = (league as any).mpo_starters ?? 4;
+  const fpoSlots = (league as any).fpo_starters ?? 2;
+
+  const { data: member } = await admin
+    .from("league_members")
+    .select("id")
+    .eq("league_id", leagueId)
+    .eq("user_id", user.id)
+    .single();
+  if (!member) return;
+
+  const { data: roster } = await admin
+    .from("rosters")
+    .select("id, player_id, players(division)")
+    .eq("league_id", leagueId)
+    .eq("team_id", member.id);
+  if (!roster || roster.length === 0) return;
+
+  // Season-average projection per player (same variance-seeded number the
+  // lineup pages show), zeroed for players not registered for the target event.
+  const playerIds = roster.map((r: any) => r.player_id as number);
+  const { data: results } = await admin
+    .from("tournament_results")
+    .select("player_id, fantasy_points")
+    .in("player_id", playerIds);
+  const totals = new Map<number, { sum: number; count: number }>();
+  (results ?? []).forEach((r: any) => {
+    const cur = totals.get(r.player_id) ?? { sum: 0, count: 0 };
+    cur.sum += Number(r.fantasy_points ?? 0);
+    cur.count += 1;
+    totals.set(r.player_id, cur);
+  });
+
+  const activeT = await getActiveTournament(admin, leagueId);
+  const targetTid = activeT?.id ?? (await getLeagueNextTournamentId(admin, leagueId));
+  let regSet: Set<number> | null = null;
+  if (targetTid != null) {
+    const { data: regRow } = await admin
+      .from("tournaments")
+      .select("registered_player_ids")
+      .eq("id", targetTid)
+      .maybeSingle();
+    const ids = (regRow as any)?.registered_player_ids as number[] | null;
+    if (ids && ids.length > 0) regSet = new Set(ids);
+  }
+
+  const projFor = (pid: number): number => {
+    if (regSet != null && !regSet.has(pid)) return 0;
+    const t = totals.get(pid);
+    if (!t || t.count === 0) return 0.01; // unproven beats a confirmed OUT (0)
+    return applyProjectionVariance(t.sum / t.count, pid, 3);
+  };
+
+  const byDivision = (div: string) =>
+    roster
+      .filter((r: any) => (r.players?.division ?? "MPO") === div)
+      .sort((a: any, b: any) => projFor(b.player_id) - projFor(a.player_id));
+  const picked = [
+    ...byDivision("MPO").slice(0, mpoSlots).map((r: any, i: number) => ({ id: r.id as number, order: i + 1 })),
+    ...byDivision("FPO").slice(0, fpoSlots).map((r: any, i: number) => ({ id: r.id as number, order: i + 1 })),
+  ];
+  if (picked.length === 0) return;
+
+  await admin
+    .from("rosters")
+    .update({ is_starter: false, lineup_order: null })
+    .eq("league_id", leagueId)
+    .eq("team_id", member.id);
+  for (const p of picked) {
+    await admin.from("rosters").update({ is_starter: true, lineup_order: p.order }).eq("id", p.id);
+  }
+
+  revalidatePath(`/league/${leagueId}/lineups`);
   revalidatePath(`/league/${leagueId}`);
 }

@@ -3,12 +3,36 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { getMyLineupAlert } from "@/actions/rosters";
 
 type LeagueLink = { id: number; name: string; logoUrl: string | null };
 
 export function MobileBottomNav({ leagues = [] }: { leagues?: LeagueLink[] }) {
   const pathname = usePathname();
   const [sheetOpen, setSheetOpen] = useState(false);
+
+  // Inside a league the bar becomes Sleeper-style league tabs; the current
+  // league id comes straight off the path.
+  const leagueId = pathname.match(/^\/league\/(\d+)/)?.[1] ?? null;
+
+  // Red badge on the Team tab while the current-week lineup has problems
+  // (OUT starters / empty slots). Re-checked on league or route change.
+  const [lineupBadge, setLineupBadge] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    if (!leagueId) {
+      setLineupBadge(false);
+      return;
+    }
+    getMyLineupAlert(Number(leagueId))
+      .then((issues) => {
+        if (!cancelled) setLineupBadge(issues != null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [leagueId, pathname]);
 
   // Lock body scroll while the leagues sheet is open. (Selecting a league or
   // tapping the backdrop closes the sheet directly, so no route-change effect
@@ -99,33 +123,103 @@ export function MobileBottomNav({ leagues = [] }: { leagues?: LeagueLink[] }) {
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#13151c]/95 backdrop-blur border-t border-white/5 flex justify-around pb-[max(env(safe-area-inset-bottom),0.25rem)] pt-1"
         aria-label="Primary"
       >
-        <Link href="/dashboard?home=1" className={tabClass(onHome)}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 11l9-8 9 8" />
-            <path d="M5 9v11h14V9" />
-          </svg>
-          <span>Home</span>
-        </Link>
+        {leagueId ? (
+          // ── In a league: Sleeper-style league tabs ──────────────────────────
+          <>
+            <Link
+              href={`/league/${leagueId}`}
+              className={tabClass(pathname === `/league/${leagueId}`)}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 21h8M12 17v4" />
+                <path d="M7 4h10v6a5 5 0 0 1-10 0V4z" />
+                <path d="M7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3" />
+              </svg>
+              <span>League</span>
+            </Link>
 
-        <button type="button" onClick={() => setSheetOpen((o) => !o)} className={tabClass(onLeagues || sheetOpen)}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="8" y1="6" x2="21" y2="6" />
-            <line x1="8" y1="12" x2="21" y2="12" />
-            <line x1="8" y1="18" x2="21" y2="18" />
-            <line x1="3" y1="6" x2="3.01" y2="6" />
-            <line x1="3" y1="12" x2="3.01" y2="12" />
-            <line x1="3" y1="18" x2="3.01" y2="18" />
-          </svg>
-          <span>Leagues</span>
-        </button>
+            <Link
+              href={`/league/${leagueId}/lineups`}
+              className={`relative ${tabClass(pathname.startsWith(`/league/${leagueId}/lineups`))}`}
+            >
+              <span className="relative">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" />
+                </svg>
+                {lineupBadge && (
+                  <span className="absolute -top-0.5 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-[#13151c]" />
+                )}
+              </span>
+              <span>Team</span>
+            </Link>
 
-        <Link href="/pro-tour" className={tabClass(onProTour)}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 3v18M3 12h18" />
-          </svg>
-          <span>Pro Tour</span>
-        </Link>
+            <Link
+              href={`/league/${leagueId}/matchup`}
+              className={tabClass(pathname.startsWith(`/league/${leagueId}/matchup`))}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M13 5l6 6M5 13l6 6" />
+                <path d="M3 21l4-1 12-12-3-3L4 17l-1 4z" />
+              </svg>
+              <span>Matchup</span>
+            </Link>
+
+            <Link
+              href={`/league/${leagueId}/free-agency`}
+              className={tabClass(pathname.startsWith(`/league/${leagueId}/free-agency`))}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="10" cy="10" r="6" />
+                <path d="M20 20l-5.5-5.5" />
+              </svg>
+              <span>Players</span>
+            </Link>
+
+            <button type="button" onClick={() => setSheetOpen((o) => !o)} className={tabClass(sheetOpen)}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="8" y1="6" x2="21" y2="6" />
+                <line x1="8" y1="12" x2="21" y2="12" />
+                <line x1="8" y1="18" x2="21" y2="18" />
+                <line x1="3" y1="6" x2="3.01" y2="6" />
+                <line x1="3" y1="12" x2="3.01" y2="12" />
+                <line x1="3" y1="18" x2="3.01" y2="18" />
+              </svg>
+              <span>Leagues</span>
+            </button>
+          </>
+        ) : (
+          // ── Outside a league: the global tabs ───────────────────────────────
+          <>
+            <Link href="/dashboard?home=1" className={tabClass(onHome)}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 11l9-8 9 8" />
+                <path d="M5 9v11h14V9" />
+              </svg>
+              <span>Home</span>
+            </Link>
+
+            <button type="button" onClick={() => setSheetOpen((o) => !o)} className={tabClass(onLeagues || sheetOpen)}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="8" y1="6" x2="21" y2="6" />
+                <line x1="8" y1="12" x2="21" y2="12" />
+                <line x1="8" y1="18" x2="21" y2="18" />
+                <line x1="3" y1="6" x2="3.01" y2="6" />
+                <line x1="3" y1="12" x2="3.01" y2="12" />
+                <line x1="3" y1="18" x2="3.01" y2="18" />
+              </svg>
+              <span>Leagues</span>
+            </button>
+
+            <Link href="/pro-tour" className={tabClass(onProTour)}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 3v18M3 12h18" />
+              </svg>
+              <span>Pro Tour</span>
+            </Link>
+          </>
+        )}
       </nav>
     </>
   );

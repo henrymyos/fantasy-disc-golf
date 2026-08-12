@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { sendChatMessage, getLeagueSystemFeed, getVisibleChatMessages } from "@/actions/chat";
+import { sendChatMessage, getLeagueSystemFeed, getVisibleChatMessages, getChatReactions, toggleChatReaction, type ChatReaction } from "@/actions/chat";
+import { CHAT_REACTION_EMOJIS } from "@/lib/chat-reactions";
 import type { SystemEvent, NoticeEvent, FeedAsset } from "@/lib/chat-feed";
 
 type Member = {
@@ -62,6 +63,9 @@ export function LeagueChat({
 }) {
   const [channel, setChannel] = useState<Channel>({ kind: "league" });
   const [messages, setMessages] = useState<Message[]>([]);
+  const [reactions, setReactions] = useState<ChatReaction[]>([]);
+  // Message id whose emoji picker is open (tap a message to open it).
+  const [pickerFor, setPickerFor] = useState<number | null>(null);
   const [systemEvents, setSystemEvents] = useState<SystemEvent[]>([]);
   const [body, setBody] = useState("");
   const [pending, startTransition] = useTransition();
@@ -103,9 +107,46 @@ export function LeagueChat({
   // in JS). Re-run on every realtime INSERT so the DM filtering stays
   // server-side rather than trusting the realtime payload.
   const refreshMessages = useCallback(async () => {
-    const msgs = await getVisibleChatMessages(leagueId).catch(() => [] as Message[]);
+    const [msgs, reax] = await Promise.all([
+      getVisibleChatMessages(leagueId).catch(() => [] as Message[]),
+      getChatReactions(leagueId).catch(() => [] as ChatReaction[]),
+    ]);
     setMessages(msgs as Message[]);
+    setReactions(reax);
   }, [leagueId]);
+
+  // messageId → emoji → member ids, for the reaction chips.
+  const reactionsByMessage = useMemo(() => {
+    const map = new Map<number, Map<string, number[]>>();
+    for (const r of reactions) {
+      if (!map.has(r.message_id)) map.set(r.message_id, new Map());
+      const byEmoji = map.get(r.message_id)!;
+      byEmoji.set(r.emoji, [...(byEmoji.get(r.emoji) ?? []), r.member_id]);
+    }
+    return map;
+  }, [reactions]);
+
+  const onToggleReaction = useCallback(
+    (messageId: number, emoji: string) => {
+      setPickerFor(null);
+      // Optimistic flip; a failed persist (e.g. migration not run) re-syncs.
+      setReactions((prev) => {
+        const mine = prev.find(
+          (r) => r.message_id === messageId && r.member_id === myMemberId && r.emoji === emoji,
+        );
+        if (mine) return prev.filter((r) => r !== mine);
+        return [...prev, { message_id: messageId, member_id: myMemberId, emoji }];
+      });
+      toggleChatReaction(leagueId, messageId, emoji).then((res) => {
+        if (!res.ok) {
+          getChatReactions(leagueId)
+            .then(setReactions)
+            .catch(() => {});
+        }
+      });
+    },
+    [leagueId, myMemberId],
+  );
 
   // The rarely-changing bits: the system feed (trades / roster moves) and the
   // member list (team-name edits, new joiners). Polled on a slow interval.
@@ -513,13 +554,32 @@ export function LeagueChat({
               // avatar/name header and just show the text, indented.
               const prev = timeline[idx - 1];
               const grouped = prev?.type === "msg" && prev.message.sender_member_id === m.sender_member_id;
+              const reactionBar = (
+                <ReactionBar
+                  byEmoji={reactionsByMessage.get(m.id) ?? null}
+                  myMemberId={myMemberId}
+                  memberById={memberById}
+                  pickerOpen={pickerFor === m.id}
+                  onPick={(emoji) => onToggleReaction(m.id, emoji)}
+                />
+              );
+              const bodyEl = (
+                <p
+                  className="text-gray-200 text-sm leading-snug break-words whitespace-pre-wrap cursor-pointer"
+                  onClick={() => setPickerFor((cur) => (cur === m.id ? null : m.id))}
+                  title="Tap to react"
+                >
+                  {m.body}
+                </p>
+              );
               if (grouped) {
                 return (
                   <div key={item.key} className="flex gap-2.5">
                     <div className="w-8 shrink-0" />
-                    <p className="min-w-0 flex-1 text-gray-200 text-sm leading-snug break-words whitespace-pre-wrap">
-                      {m.body}
-                    </p>
+                    <div className="min-w-0 flex-1">
+                      {bodyEl}
+                      {reactionBar}
+                    </div>
                   </div>
                 );
               }
@@ -536,9 +596,8 @@ export function LeagueChat({
                         {time}
                       </span>
                     </div>
-                    <p className="text-gray-200 text-sm leading-snug break-words whitespace-pre-wrap">
-                      {m.body}
-                    </p>
+                    {bodyEl}
+                    {reactionBar}
                   </div>
                 </div>
               );
@@ -582,6 +641,65 @@ export function LeagueChat({
         </div>
       </div>
     </>
+  );
+}
+
+/** Reaction chips + tap-to-react picker under a chat message. */
+function ReactionBar({
+  byEmoji,
+  myMemberId,
+  memberById,
+  pickerOpen,
+  onPick,
+}: {
+  byEmoji: Map<string, number[]> | null;
+  myMemberId: number;
+  memberById: Map<number, Member>;
+  pickerOpen: boolean;
+  onPick: (emoji: string) => void;
+}) {
+  const chips = byEmoji ? [...byEmoji.entries()].filter(([, ids]) => ids.length > 0) : [];
+  if (chips.length === 0 && !pickerOpen) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1 mt-1">
+      {chips.map(([emoji, memberIds]) => {
+        const mine = memberIds.includes(myMemberId);
+        const names = memberIds
+          .map((id) => memberById.get(id)?.team_name ?? "Team")
+          .join(", ");
+        return (
+          <button
+            key={emoji}
+            type="button"
+            onClick={() => onPick(emoji)}
+            title={names}
+            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs border transition ${
+              mine
+                ? "bg-[#4B3DFF]/25 border-[#4B3DFF]/50 text-white"
+                : "bg-white/5 border-white/10 text-gray-300 hover:border-white/25"
+            }`}
+          >
+            <span>{emoji}</span>
+            <span className="tabular-nums font-semibold">{memberIds.length}</span>
+          </button>
+        );
+      })}
+      {pickerOpen && (
+        <span className="inline-flex items-center gap-0.5 bg-[#0f1117] border border-white/10 rounded-full px-1 py-0.5">
+          {CHAT_REACTION_EMOJIS.map((e) => (
+            <button
+              key={e}
+              type="button"
+              onClick={() => onPick(e)}
+              className="w-7 h-7 flex items-center justify-center rounded-full text-base hover:bg-white/10 transition"
+              aria-label={`React ${e}`}
+            >
+              {e}
+            </button>
+          ))}
+        </span>
+      )}
+    </div>
   );
 }
 

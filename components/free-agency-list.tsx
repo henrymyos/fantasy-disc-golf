@@ -5,6 +5,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AddWithDropModal } from "@/components/add-with-drop-modal";
 import { cancelWaiverClaim } from "@/actions/rosters";
+import { toggleWatchlist } from "@/actions/watchlist";
+
+type LastEvent = { name: string; pts: number; finish: number | null } | null;
 
 type Player = {
   id: number;
@@ -14,6 +17,9 @@ type Player = {
   overallRank: number | null;
   pdgaRating: number | null;
   avatarUrl?: string | null;
+  lastEvent?: LastEvent;
+  formDelta?: number | null;
+  outNext?: boolean;
 };
 
 type FreeAgent = Player & { totalPoints: number; nextWeekPoints: number | null };
@@ -32,9 +38,9 @@ type RosterPlayer = {
   players: { id: number; name: string; division: string } | null;
 };
 
-type DivisionTab = "all" | "mpo" | "fpo";
+type DivisionTab = "all" | "mpo" | "fpo" | "watch";
 type ViewTab = "available" | "leaders";
-type SortKey = "points" | "projected" | "rank";
+type SortKey = "points" | "projected" | "rank" | "hot";
 
 type PendingClaim = {
   id: number;
@@ -56,6 +62,7 @@ type Props = {
   seasonStarted: boolean;
   waiversLocked?: boolean;
   pendingClaims?: PendingClaim[];
+  initialWatchlist?: number[];
 };
 
 export function FreeAgencyList({
@@ -70,8 +77,31 @@ export function FreeAgencyList({
   seasonStarted,
   waiversLocked = false,
   pendingClaims = [],
+  initialWatchlist = [],
 }: Props) {
   const claimedPlayerIds = new Set(pendingClaims.map((c) => c.playerId));
+
+  // Starred players — optimistic local state, persisted via toggleWatchlist.
+  const [starred, setStarred] = useState<Set<number>>(() => new Set(initialWatchlist));
+  function toggleStar(playerId: number) {
+    setStarred((prev) => {
+      const next = new Set(prev);
+      if (next.has(playerId)) next.delete(playerId);
+      else next.add(playerId);
+      return next;
+    });
+    toggleWatchlist(leagueId, playerId).then((res) => {
+      if (!res.ok) {
+        // Persist failed (e.g. migration not run) — revert the optimistic flip.
+        setStarred((prev) => {
+          const next = new Set(prev);
+          if (next.has(playerId)) next.delete(playerId);
+          else next.add(playerId);
+          return next;
+        });
+      }
+    });
+  }
 
   function actionButton(player: { id: number; name: string; division: string }) {
     if (overLimit || addsDisabled) {
@@ -142,11 +172,23 @@ export function FreeAgencyList({
         : "rank";
   });
 
-  const divisionFilter = (p: { division: string }) =>
-    tab === "all" || (tab === "mpo" ? p.division === "MPO" : p.division === "FPO");
+  const divisionFilter = (p: { division: string; id: number }) =>
+    tab === "all"
+      ? true
+      : tab === "watch"
+        ? starred.has(p.id)
+        : tab === "mpo"
+          ? p.division === "MPO"
+          : p.division === "FPO";
 
-  function compareBySort<T extends { totalPoints: number; nextWeekPoints: number | null; overallRank: number | null; worldRanking: number | null; name: string }>(a: T, b: T): number {
+  function compareBySort<T extends { totalPoints: number; nextWeekPoints: number | null; overallRank: number | null; worldRanking: number | null; name: string; formDelta?: number | null }>(a: T, b: T): number {
     if (sort === "points") return b.totalPoints - a.totalPoints;
+    if (sort === "hot") {
+      const av = a.formDelta ?? -999;
+      const bv = b.formDelta ?? -999;
+      if (av !== bv) return bv - av;
+      return b.totalPoints - a.totalPoints;
+    }
     if (sort === "projected") {
       const av = a.nextWeekPoints ?? -1;
       const bv = b.nextWeekPoints ?? -1;
@@ -154,7 +196,7 @@ export function FreeAgencyList({
       return b.totalPoints - a.totalPoints;
     }
     // sort === "rank"
-    if (tab === "all") return (a.overallRank ?? 9999) - (b.overallRank ?? 9999);
+    if (tab !== "mpo" && tab !== "fpo") return (a.overallRank ?? 9999) - (b.overallRank ?? 9999);
     if (a.worldRanking == null && b.worldRanking == null) return a.name.localeCompare(b.name);
     if (a.worldRanking == null) return 1;
     if (b.worldRanking == null) return -1;
@@ -189,7 +231,7 @@ export function FreeAgencyList({
       {/* Division filter + sort selector */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex gap-1 bg-[#1a1d23] border border-white/5 rounded-xl p-1 w-fit">
-          {(["all", "mpo", "fpo"] as DivisionTab[]).map((t) => (
+          {(["all", "mpo", "fpo", "watch"] as DivisionTab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -199,11 +241,14 @@ export function FreeAgencyList({
                     ? "bg-[#4B3DFF] text-white"
                     : t === "fpo"
                     ? "bg-[#36D7B7] text-black"
+                    : t === "watch"
+                    ? "bg-[#F5A623] text-black"
                     : "bg-white/10 text-white"
                   : "text-gray-400 hover:text-gray-300"
               }`}
+              title={t === "watch" ? "Your watchlist" : undefined}
             >
-              {t}
+              {t === "watch" ? "★" : t}
             </button>
           ))}
         </div>
@@ -215,6 +260,7 @@ export function FreeAgencyList({
               { key: "points", label: "Points" },
               { key: "projected", label: "Projected" },
               { key: "rank", label: "Ranking" },
+              { key: "hot", label: "Hot" },
             ] as { key: SortKey; label: string }[]).map((opt) => (
               <button
                 key={opt.key}
@@ -236,25 +282,43 @@ export function FreeAgencyList({
       {view === "available" ? (
         filteredAgents.length === 0 ? (
           <div className="bg-[#1a1d23] rounded-2xl p-12 border border-white/5 text-center">
-            <p className="text-gray-400 text-sm">No free agents in this division.</p>
+            <p className="text-gray-400 text-sm">
+              {tab === "watch"
+                ? "No starred players yet — tap the ☆ on a player to watch them."
+                : "No free agents in this division."}
+            </p>
           </div>
         ) : (
           <div className="space-y-1">
             {filteredAgents.map((player) => {
               const primary = sort === "projected"
                 ? (player.nextWeekPoints != null ? player.nextWeekPoints.toFixed(1) : "—")
+                : sort === "hot"
+                ? (player.formDelta != null
+                    ? `${player.formDelta > 0 ? "+" : ""}${player.formDelta.toFixed(1)}`
+                    : "—")
                 : sort === "rank"
-                ? (tab === "all"
+                ? (tab !== "mpo" && tab !== "fpo"
                     ? (player.overallRank != null ? `#${player.overallRank}` : "—")
                     : (player.worldRanking != null ? `#${player.worldRanking}` : "—"))
                 : seasonStarted
                 ? player.totalPoints.toFixed(1)
-                : (tab === "all"
+                : (tab !== "mpo" && tab !== "fpo"
                     ? (player.overallRank != null ? `#${player.overallRank}` : "—")
                     : (player.worldRanking != null ? `#${player.worldRanking}` : "—"));
               const rightSlot = (
                 <div className="flex flex-col items-end shrink-0 w-16 text-right">
-                  <span className="text-white font-bold text-sm tabular-nums leading-tight">
+                  <span
+                    className={`font-bold text-sm tabular-nums leading-tight ${
+                      sort === "hot" && player.formDelta != null
+                        ? player.formDelta > 0
+                          ? "text-[#36D7B7]"
+                          : player.formDelta < 0
+                            ? "text-red-400"
+                            : "text-white"
+                        : "text-white"
+                    }`}
+                  >
                     {primary}
                   </span>
                 </div>
@@ -267,6 +331,8 @@ export function FreeAgencyList({
                   rank={null}
                   rightSlot={rightSlot}
                   addControl={actionButton(player)}
+                  starred={starred.has(player.id)}
+                  onToggleStar={() => toggleStar(player.id)}
                 />
               );
             })}
@@ -294,14 +360,28 @@ export function FreeAgencyList({
 
             const primary = sort === "projected"
               ? (player.nextWeekPoints != null ? player.nextWeekPoints.toFixed(1) : "—")
+              : sort === "hot"
+              ? (player.formDelta != null
+                  ? `${player.formDelta > 0 ? "+" : ""}${player.formDelta.toFixed(1)}`
+                  : "—")
               : sort === "rank"
-              ? (tab === "all"
+              ? (tab !== "mpo" && tab !== "fpo"
                   ? (player.overallRank != null ? `#${player.overallRank}` : "—")
                   : (player.worldRanking != null ? `#${player.worldRanking}` : "—"))
               : player.totalPoints.toFixed(1);
             const rightSlot = (
               <div className="flex flex-col items-end shrink-0 w-16 text-right">
-                <span className="text-white font-bold text-sm tabular-nums leading-tight">
+                <span
+                  className={`font-bold text-sm tabular-nums leading-tight ${
+                    sort === "hot" && player.formDelta != null
+                      ? player.formDelta > 0
+                        ? "text-[#36D7B7]"
+                        : player.formDelta < 0
+                          ? "text-red-400"
+                          : "text-white"
+                      : "text-white"
+                  }`}
+                >
                   {primary}
                 </span>
               </div>
@@ -316,6 +396,8 @@ export function FreeAgencyList({
                 addControl={addControl}
                 rightSlot={rightSlot}
                 ownerName={isFreeAgent ? null : player.ownerTeamName}
+                starred={starred.has(player.id)}
+                onToggleStar={() => toggleStar(player.id)}
               />
             );
           })}
@@ -332,6 +414,8 @@ function PlayerRow({
   addControl,
   rightSlot,
   ownerName = null,
+  starred = false,
+  onToggleStar,
 }: {
   player: Player;
   leagueId: number;
@@ -339,9 +423,12 @@ function PlayerRow({
   addControl: React.ReactNode;
   rightSlot: React.ReactNode;
   ownerName?: string | null;
+  starred?: boolean;
+  onToggleStar?: () => void;
 }) {
   const isMpo = player.division === "MPO";
   const accentColor = isMpo ? "#4B3DFF" : "#36D7B7";
+  const lastEvent = player.lastEvent ?? null;
 
   return (
     <div className="bg-[#1a1d23] border border-white/5 rounded-xl px-3 py-2.5 flex items-center gap-2 sm:gap-3">
@@ -366,34 +453,63 @@ function PlayerRow({
         </div>
       )}
 
-      <div className="flex-1 min-w-0 flex items-baseline gap-1.5 overflow-hidden">
-        <Link
-          href={`/league/${leagueId}/player/${player.id}`}
-          className="text-white font-medium text-sm truncate hover:underline"
-        >
-          {player.name}
-        </Link>
-        {player.pdgaRating != null && (
-          <span
-            className="text-[11px] font-semibold tabular-nums text-gray-400 shrink-0"
-            title="Current PDGA Rating"
+      <div className="flex-1 min-w-0 overflow-hidden">
+        <div className="flex items-baseline gap-1.5 min-w-0">
+          <Link
+            href={`/league/${leagueId}/player/${player.id}`}
+            className="text-white font-medium text-sm truncate hover:underline"
           >
-            {player.pdgaRating}
-          </span>
-        )}
-        {ownerName && (
-          <span className="text-gray-400 text-xs truncate">→ {ownerName}</span>
+            {player.name}
+          </Link>
+          {player.pdgaRating != null && (
+            <span
+              className="text-[11px] font-semibold tabular-nums text-gray-400 shrink-0"
+              title="Current PDGA Rating"
+            >
+              {player.pdgaRating}
+            </span>
+          )}
+          {player.outNext && (
+            <span
+              className="text-[9px] font-bold uppercase px-1 py-0.5 rounded shrink-0 text-red-400 bg-red-500/15"
+              title="Not registered for the upcoming event"
+            >
+              OUT
+            </span>
+          )}
+          {ownerName && (
+            <span className="text-gray-400 text-xs truncate">→ {ownerName}</span>
+          )}
+        </div>
+        {lastEvent && (
+          <p className="text-gray-500 text-[11px] truncate leading-tight mt-0.5" title="Last event">
+            {lastEvent.finish != null ? `#${lastEvent.finish}` : "DNF"} · {lastEvent.name} ·{" "}
+            {lastEvent.pts.toFixed(1)} pts
+          </p>
         )}
       </div>
 
       <span
-        className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0"
+        className="hidden sm:inline text-[10px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0"
         style={{ color: accentColor, background: `${accentColor}20` }}
       >
         {player.division}
       </span>
 
       {rightSlot}
+
+      {onToggleStar && (
+        <button
+          type="button"
+          onClick={onToggleStar}
+          aria-label={starred ? "Remove from watchlist" : "Add to watchlist"}
+          className={`shrink-0 w-7 h-7 -mr-1 flex items-center justify-center rounded-lg text-base transition ${
+            starred ? "text-[#F5A623]" : "text-gray-600 hover:text-gray-300"
+          }`}
+        >
+          {starred ? "★" : "☆"}
+        </button>
+      )}
     </div>
   );
 }

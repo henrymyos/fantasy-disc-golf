@@ -8,8 +8,9 @@ import {
   formatEventLocation,
   playoffCountForTeams,
 } from "@/lib/dgpt-2026-schedule";
-import { cappedStarterIds, type StarterRow } from "@/lib/lineup-slots";
 import { playoffBracketSize } from "@/lib/playoffs";
+import { getLineupIssues } from "@/lib/lineup-alert";
+import { optimizeLineup } from "@/actions/rosters";
 import { getScheduleEvents, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
 import { isSeasonOver } from "@/lib/season-status";
 import { getPlayoffOutcome } from "@/lib/playoff-outcome";
@@ -227,51 +228,12 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   // ── Lineup alert: problems with MY lineup for the CURRENT (actionable) week —
   // empty starter slots, or starters not registered for that week's event.
-  const mpoSlots: number = (league as any).mpo_starters ?? 4;
-  const fpoSlots: number = (league as any).fpo_starters ?? 2;
-  let lineupAlert: { outNames: string[]; emptySlots: number; eventName: string | null } | null = null;
-  if (!preDraft && myMembership) {
-    const currentWeekTid: number | null =
-      leagueSchedule?.weekToTournamentIds.get(league.current_week)?.[0]
-      ?? (await getLeagueNextTournamentId(supabase, Number(id)));
-    let currentRegSet: Set<number> | null = null;
-    let currentEventName: string | null =
-      leagueSchedule?.weeks.find((w) => w.week === league.current_week)?.event.name ?? null;
-    if (currentWeekTid != null) {
-      const { data: tRow } = await supabase
-        .from("tournaments")
-        .select("name, registered_player_ids")
-        .eq("id", currentWeekTid)
-        .maybeSingle();
-      const ids = (tRow as any)?.registered_player_ids as number[] | null;
-      if (ids && ids.length > 0) currentRegSet = new Set(ids);
-      currentEventName = (tRow as any)?.name ?? currentEventName;
-    }
-    const { data: myRosterRows } = await supabase
-      .from("rosters")
-      .select("player_id, is_starter, lineup_order, players(name, division)")
-      .eq("league_id", id)
-      .eq("team_id", myMembership.id);
-    const starterRows: StarterRow[] = (myRosterRows ?? [])
-      .filter((r: any) => r.is_starter)
-      .map((r: any) => ({
-        player_id: r.player_id,
-        division: r.players?.division ?? "MPO",
-        lineup_order: r.lineup_order ?? null,
-      }));
-    const cappedIds = cappedStarterIds(starterRows, mpoSlots, fpoSlots);
-    const nameByPlayer = new Map<number, string>(
-      (myRosterRows ?? []).map((r: any) => [r.player_id as number, (r.players?.name as string) ?? "Unknown"]),
-    );
-    const emptySlots = Math.max(0, mpoSlots + fpoSlots - cappedIds.length);
-    const outNames =
-      currentRegSet != null
-        ? cappedIds.filter((pid) => !currentRegSet!.has(pid)).map((pid) => nameByPlayer.get(pid) ?? "Unknown")
-        : [];
-    if ((myRosterRows ?? []).length > 0 && (emptySlots > 0 || outNames.length > 0)) {
-      lineupAlert = { outNames, emptySlots, eventName: currentEventName };
-    }
-  }
+  const lineupAlert =
+    !preDraft && myMembership
+      ? await getLineupIssues(supabase, Number(id), myMembership.id)
+      : null;
+  // The one-tap fix only works while lineups aren't locked.
+  const canOptimize = lineupAlert != null && activeTournament === null;
 
   // My featured-week matchup, for the hero card.
   const myHeroMatchup = myMembership
@@ -459,10 +421,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
       )}
 
       {lineupAlert && (
-        <Link
-          href={`/league/${id}/lineups?week=${league.current_week}`}
-          className="flex items-center justify-between gap-3 rounded-2xl border border-red-500/40 bg-red-500/10 hover:bg-red-500/15 px-5 py-4 transition group"
-        >
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-4 flex-wrap">
           <div className="flex items-start gap-3 min-w-0">
             <span className="text-red-400 text-lg leading-none mt-0.5">⚠</span>
             <div className="min-w-0">
@@ -479,10 +438,26 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
               </p>
             </div>
           </div>
-          <span className="text-red-400 font-semibold text-sm group-hover:text-white transition shrink-0">
-            Fix lineup →
-          </span>
-        </Link>
+          <div className="flex items-center gap-2 shrink-0">
+            {canOptimize && (
+              <form action={optimizeLineup.bind(null, Number(id))}>
+                <button
+                  type="submit"
+                  className="bg-red-500/90 hover:bg-red-500 text-white text-xs font-bold px-3.5 py-2 rounded-full transition"
+                  title="Start your highest-projected eligible players"
+                >
+                  Optimize
+                </button>
+              </form>
+            )}
+            <Link
+              href={`/league/${id}/lineups?week=${league.current_week}`}
+              className="text-red-400 hover:text-white font-semibold text-sm transition"
+            >
+              Fix lineup →
+            </Link>
+          </div>
+        </div>
       )}
 
       {!preDraft && myMembership && (

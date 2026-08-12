@@ -71,7 +71,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
 
   const { data: resultRows } = await supabase
     .from("tournament_results")
-    .select("player_id, fantasy_points, tournament_id");
+    .select("player_id, fantasy_points, finishing_position, tournament_id");
 
   const pointsByPlayer = new Map<number, number>();
   const eventsPlayedByPlayer = new Map<number, number>();
@@ -82,6 +82,45 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
     );
     eventsPlayedByPlayer.set(r.player_id, (eventsPlayedByPlayer.get(r.player_id) ?? 0) + 1);
   });
+
+  // Per-player event history in chronological order → last-event line
+  // ("#5 · Ledgestone Open · 30.7 pts") and a recent-form delta (avg of the
+  // last two events vs season average) that powers the Hot sort.
+  const { data: tournamentRows } = await supabase
+    .from("tournaments")
+    .select("id, name, start_date");
+  const tournamentById = new Map<number, { name: string; startDate: string }>(
+    (tournamentRows ?? []).map((t: any) => [t.id as number, { name: t.name as string, startDate: (t.start_date as string) ?? "" }]),
+  );
+  const historyByPlayer = new Map<number, Array<{ startDate: string; name: string; pts: number; finish: number | null }>>();
+  (resultRows ?? []).forEach((r: any) => {
+    const t = tournamentById.get(r.tournament_id);
+    if (!t) return;
+    const list = historyByPlayer.get(r.player_id) ?? [];
+    list.push({
+      startDate: t.startDate,
+      name: t.name,
+      pts: Number(r.fantasy_points ?? 0),
+      finish: (r.finishing_position as number | null) ?? null,
+    });
+    historyByPlayer.set(r.player_id, list);
+  });
+  function lastEventFor(playerId: number): { name: string; pts: number; finish: number | null } | null {
+    const list = historyByPlayer.get(playerId);
+    if (!list || list.length === 0) return null;
+    list.sort((a, b) => a.startDate.localeCompare(b.startDate));
+    const last = list[list.length - 1];
+    return { name: last.name, pts: Math.round(last.pts * 10) / 10, finish: last.finish };
+  }
+  function formDeltaFor(playerId: number): number | null {
+    const list = historyByPlayer.get(playerId);
+    if (!list || list.length < 2) return null;
+    list.sort((a, b) => a.startDate.localeCompare(b.startDate));
+    const seasonAvg = list.reduce((acc, e) => acc + e.pts, 0) / list.length;
+    const recent = list.slice(-2);
+    const recentAvg = recent.reduce((acc, e) => acc + e.pts, 0) / recent.length;
+    return Math.round((recentAvg - seasonAvg) * 10) / 10;
+  }
 
   const seasonStarted = (resultRows ?? []).length > 0;
 
@@ -122,6 +161,9 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
     return applyProjectionVariance(total / played, playerId, 3);
   }
 
+  const outNextFor = (playerId: number) =>
+    nextRegisteredSet != null && !nextRegisteredSet.has(playerId);
+
   const freeAgents = (allPlayers ?? [])
     .filter((p) => !rosteredIds.has(p.id))
     .map((p) => ({
@@ -134,6 +176,9 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
       avatarUrl: (p as any).avatar_url as string | null,
       totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
       nextWeekPoints: nextProjectionFor(p.id),
+      lastEvent: lastEventFor(p.id),
+      formDelta: formDeltaFor(p.id),
+      outNext: outNextFor(p.id),
     }));
 
   const leaderboard = (allPlayers ?? [])
@@ -150,11 +195,26 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
         totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
         projectedPoints: projectionFor(p.id),
         nextWeekPoints: nextProjectionFor(p.id),
+        lastEvent: lastEventFor(p.id),
+        formDelta: formDeltaFor(p.id),
+        outNext: outNextFor(p.id),
         ownerTeamId: owner?.teamId ?? null,
         ownerTeamName: owner?.teamName ?? null,
       };
     })
     .sort((a, b) => b.totalPoints - a.totalPoints);
+
+  // My starred players (empty until the watchlist migration runs).
+  let watchlistIds: number[] = [];
+  try {
+    const { data: watchRows, error: watchErr } = await supabase
+      .from("player_watchlist")
+      .select("player_id")
+      .eq("team_id", myMember.id);
+    if (!watchErr) watchlistIds = (watchRows ?? []).map((w: any) => w.player_id as number);
+  } catch {
+    // table missing — stars just start unsaved
+  }
 
   const { data: myRosterRows } = await supabase
     .from("rosters")
@@ -323,6 +383,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
         seasonStarted={seasonStarted}
         waiversLocked={waiversLocked}
         pendingClaims={pendingClaims}
+        initialWatchlist={watchlistIds}
       />
     </div>
   );
