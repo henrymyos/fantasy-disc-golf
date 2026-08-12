@@ -480,6 +480,39 @@ export default async function LineupsPage({
         <LiveScoreRefresher tournamentName={pollableTournament.name} />
       )}
 
+      {mode === "current" && (() => {
+        // Sleeper-style lineup alert: starters who are OUT for this week's
+        // event (not registered, no score yet) or unfilled starter slots.
+        const starterSpots = [...mpoSlotArray, ...fpoSlotArray];
+        const emptyCount = starterSpots.filter((s) => !s).length;
+        const outNames = starterSpots
+          .filter(Boolean)
+          .filter((s: any) => weekPointsByPlayer.get(s.player_id)?.isOut)
+          .map((s: any) => (s.players as any)?.name ?? "Unknown");
+        if (emptyCount === 0 && outNames.length === 0) return null;
+        const eventName = weekTabs.find((t) => t.week === selectedWeek)?.eventName ?? null;
+        return (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex items-start gap-3">
+            <span className="text-red-400 text-lg leading-none mt-0.5">⚠</span>
+            <div className="min-w-0">
+              <p className="text-red-400 font-semibold text-sm">
+                {outNames.length > 0
+                  ? `${outNames.length} starter${outNames.length !== 1 ? "s" : ""} OUT${eventName ? ` for ${eventName}` : " this week"}`
+                  : `${emptyCount} empty lineup slot${emptyCount !== 1 ? "s" : ""}`}
+              </p>
+              <p className="text-red-300/80 text-xs mt-0.5">
+                {outNames.length > 0 && outNames.join(", ")}
+                {outNames.length > 0 && emptyCount > 0 && " · "}
+                {emptyCount > 0 && `${emptyCount} empty slot${emptyCount !== 1 ? "s" : ""}`}
+                {lineupsDisabled
+                  ? " — lineup is locked, but you can still set future weeks above."
+                  : " — swap them out below before lock."}
+              </p>
+            </div>
+          </div>
+        );
+      })()}
+
       {mode === "current" && overRoster && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex items-start gap-3">
           <span className="text-red-400 text-lg leading-none mt-0.5">⚠</span>

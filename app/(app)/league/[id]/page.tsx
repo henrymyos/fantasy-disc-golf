@@ -6,7 +6,9 @@ import {
   effectiveSelection,
   formatEventDateRange,
   formatEventLocation,
+  playoffCountForTeams,
 } from "@/lib/dgpt-2026-schedule";
+import { cappedStarterIds, type StarterRow } from "@/lib/lineup-slots";
 import { getScheduleEvents, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
 import { isSeasonOver } from "@/lib/season-status";
 import { getPlayoffOutcome } from "@/lib/playoff-outcome";
@@ -48,7 +50,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, name, current_week, starters_count, selected_event_slugs, waivers_locked, scoring_mode, scoring_rules, invite_code, max_teams, commissioner_id, season_year, dues_amount")
+    .select("id, name, current_week, starters_count, mpo_starters, fpo_starters, selected_event_slugs, waivers_locked, scoring_mode, scoring_rules, invite_code, max_teams, commissioner_id, season_year, dues_amount")
     .eq("id", id)
     .single();
 
@@ -124,7 +126,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   // Compute standings from all matchups
   const { data: allMatchups } = await supabase
     .from("matchups")
-    .select("team1_id, team2_id, team1_score, team2_score, is_final")
+    .select("week, team1_id, team2_id, team1_score, team2_score, is_final")
     .eq("league_id", id)
     .eq("is_final", true);
 
@@ -136,25 +138,50 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   const winsMap: Record<number, { wins: number; losses: number; ties: number; points: number }> = {};
   (members ?? []).forEach((m) => { winsMap[m.id] = { wins: 0, losses: 0, ties: 0, points: 0 }; });
 
+  // Points-against + week-by-week results (for the streak chip), H2H only.
+  const pointsAgainst = new Map<number, number>();
+  const resultsByTeam = new Map<number, Array<{ week: number; r: "W" | "L" | "T" }>>();
+  const pushResult = (teamId: number, week: number, r: "W" | "L" | "T") => {
+    if (!resultsByTeam.has(teamId)) resultsByTeam.set(teamId, []);
+    resultsByTeam.get(teamId)!.push({ week, r });
+  };
+
   // Total points always come from finalized matchups (or the alt total below).
   (allMatchups ?? []).forEach((m) => {
     if (!winsMap[m.team1_id]) winsMap[m.team1_id] = { wins: 0, losses: 0, ties: 0, points: 0 };
     if (!winsMap[m.team2_id]) winsMap[m.team2_id] = { wins: 0, losses: 0, ties: 0, points: 0 };
     winsMap[m.team1_id].points += m.team1_score;
     winsMap[m.team2_id].points += m.team2_score;
+    pointsAgainst.set(m.team1_id, (pointsAgainst.get(m.team1_id) ?? 0) + m.team2_score);
+    pointsAgainst.set(m.team2_id, (pointsAgainst.get(m.team2_id) ?? 0) + m.team1_score);
     if (scoringMode === "head_to_head") {
       if (m.team1_score > m.team2_score) {
         winsMap[m.team1_id].wins++;
         winsMap[m.team2_id].losses++;
+        pushResult(m.team1_id, (m as any).week, "W");
+        pushResult(m.team2_id, (m as any).week, "L");
       } else if (m.team2_score > m.team1_score) {
         winsMap[m.team2_id].wins++;
         winsMap[m.team1_id].losses++;
+        pushResult(m.team2_id, (m as any).week, "W");
+        pushResult(m.team1_id, (m as any).week, "L");
       } else {
         winsMap[m.team1_id].ties++;
         winsMap[m.team2_id].ties++;
+        pushResult(m.team1_id, (m as any).week, "T");
+        pushResult(m.team2_id, (m as any).week, "T");
       }
     }
   });
+
+  // "W2" / "L3" — consecutive same results counting back from the latest week.
+  const streakFor = (teamId: number): string | null => {
+    const rs = (resultsByTeam.get(teamId) ?? []).sort((a, b) => b.week - a.week);
+    if (rs.length === 0) return null;
+    let n = 1;
+    while (n < rs.length && rs[n].r === rs[0].r) n++;
+    return `${rs[0].r}${n}`;
+  };
 
   // For non-H2H modes, derive W/L (and supplement points) from the per-week
   // team totals computed on the fly from rosters + tournament_results.
@@ -188,6 +215,64 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
     .filter((x): x is NonNullable<typeof x> => x !== null);
 
   const myMembership = (members ?? []).find((m) => m.user_id === user.id);
+
+  // How many teams make the playoffs — used to draw the cut line in standings.
+  const playoffTeamCount = playoffCountForTeams((league as any).max_teams);
+
+  // ── Lineup alert: problems with MY lineup for the CURRENT (actionable) week —
+  // empty starter slots, or starters not registered for that week's event.
+  const mpoSlots: number = (league as any).mpo_starters ?? 4;
+  const fpoSlots: number = (league as any).fpo_starters ?? 2;
+  let lineupAlert: { outNames: string[]; emptySlots: number; eventName: string | null } | null = null;
+  if (!preDraft && myMembership) {
+    const currentWeekTid: number | null =
+      leagueSchedule?.weekToTournamentIds.get(league.current_week)?.[0]
+      ?? (await getLeagueNextTournamentId(supabase, Number(id)));
+    let currentRegSet: Set<number> | null = null;
+    let currentEventName: string | null =
+      leagueSchedule?.weeks.find((w) => w.week === league.current_week)?.event.name ?? null;
+    if (currentWeekTid != null) {
+      const { data: tRow } = await supabase
+        .from("tournaments")
+        .select("name, registered_player_ids")
+        .eq("id", currentWeekTid)
+        .maybeSingle();
+      const ids = (tRow as any)?.registered_player_ids as number[] | null;
+      if (ids && ids.length > 0) currentRegSet = new Set(ids);
+      currentEventName = (tRow as any)?.name ?? currentEventName;
+    }
+    const { data: myRosterRows } = await supabase
+      .from("rosters")
+      .select("player_id, is_starter, lineup_order, players(name, division)")
+      .eq("league_id", id)
+      .eq("team_id", myMembership.id);
+    const starterRows: StarterRow[] = (myRosterRows ?? [])
+      .filter((r: any) => r.is_starter)
+      .map((r: any) => ({
+        player_id: r.player_id,
+        division: r.players?.division ?? "MPO",
+        lineup_order: r.lineup_order ?? null,
+      }));
+    const cappedIds = cappedStarterIds(starterRows, mpoSlots, fpoSlots);
+    const nameByPlayer = new Map<number, string>(
+      (myRosterRows ?? []).map((r: any) => [r.player_id as number, (r.players?.name as string) ?? "Unknown"]),
+    );
+    const emptySlots = Math.max(0, mpoSlots + fpoSlots - cappedIds.length);
+    const outNames =
+      currentRegSet != null
+        ? cappedIds.filter((pid) => !currentRegSet!.has(pid)).map((pid) => nameByPlayer.get(pid) ?? "Unknown")
+        : [];
+    if ((myRosterRows ?? []).length > 0 && (emptySlots > 0 || outNames.length > 0)) {
+      lineupAlert = { outNames, emptySlots, eventName: currentEventName };
+    }
+  }
+
+  // My featured-week matchup, for the hero card.
+  const myHeroMatchup = myMembership
+    ? ((matchups ?? []) as any[]).find(
+        (m) => m.team1_id === myMembership.id || m.team2_id === myMembership.id,
+      ) ?? null
+    : null;
 
   // Year-end review: once the season is over, the playoff bracket crowns the
   // champion (decided from real weekly scores during the playoff events).
@@ -367,6 +452,146 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
         </Link>
       )}
 
+      {lineupAlert && (
+        <Link
+          href={`/league/${id}/lineups?week=${league.current_week}`}
+          className="flex items-center justify-between gap-3 rounded-2xl border border-red-500/40 bg-red-500/10 hover:bg-red-500/15 px-5 py-4 transition group"
+        >
+          <div className="flex items-start gap-3 min-w-0">
+            <span className="text-red-400 text-lg leading-none mt-0.5">⚠</span>
+            <div className="min-w-0">
+              <p className="text-white font-bold text-sm leading-tight">
+                {lineupAlert.outNames.length > 0
+                  ? `${lineupAlert.outNames.length} starter${lineupAlert.outNames.length !== 1 ? "s" : ""} OUT${lineupAlert.eventName ? ` for ${lineupAlert.eventName}` : ""}`
+                  : `${lineupAlert.emptySlots} empty lineup slot${lineupAlert.emptySlots !== 1 ? "s" : ""}`}
+              </p>
+              <p className="text-red-300/80 text-xs mt-0.5 truncate">
+                {lineupAlert.outNames.length > 0 && lineupAlert.outNames.slice(0, 3).join(", ")}
+                {lineupAlert.outNames.length > 3 && ` +${lineupAlert.outNames.length - 3} more`}
+                {lineupAlert.outNames.length > 0 && lineupAlert.emptySlots > 0 && " · "}
+                {lineupAlert.emptySlots > 0 && `${lineupAlert.emptySlots} empty slot${lineupAlert.emptySlots !== 1 ? "s" : ""}`}
+              </p>
+            </div>
+          </div>
+          <span className="text-red-400 font-semibold text-sm group-hover:text-white transition shrink-0">
+            Fix lineup →
+          </span>
+        </Link>
+      )}
+
+      {!preDraft && myMembership && (
+        <div className="bg-[#1a1d23] rounded-2xl border border-white/5 overflow-hidden">
+          {myHeroMatchup && (() => {
+            const m = myHeroMatchup;
+            const meLeft = m.team1_id === myMembership.id;
+            const t1WinPct = winPctFor(m.team1_id, m.team2_id);
+            const scoreFor = (teamId: number, stored: number) =>
+              m.is_final || !showActuals
+                ? stored
+                : Math.round((actualScoreByTeam.get(teamId) ?? 0) * 10) / 10;
+            const side = (teamId: number, stored: number, right?: boolean) => {
+              const member = membersById.get(teamId);
+              const winPct = teamId === m.team1_id ? t1WinPct : 100 - t1WinPct;
+              const winner =
+                m.is_final &&
+                (teamId === m.team1_id
+                  ? m.team1_score > m.team2_score
+                  : m.team2_score > m.team1_score);
+              return (
+                <div className={`min-w-0 flex-1 ${right ? "text-right" : ""}`}>
+                  <div className={`flex items-center gap-2.5 ${right ? "flex-row-reverse" : ""}`}>
+                    <div className={winner ? "rounded-full ring-2 ring-[#36D7B7]" : ""}>
+                      <TeamAvatar
+                        name={member?.team_name ?? "TBD"}
+                        avatarUrl={(member?.profiles as any)?.avatar_url}
+                        avatarColor={(member?.profiles as any)?.avatar_color}
+                        seed={teamId}
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-white font-bold text-sm truncate">
+                        {member?.team_name ?? "TBD"}
+                        {teamId === myMembership.id && (
+                          <span className="text-gray-400 text-xs font-normal ml-1.5">(you)</span>
+                        )}
+                      </p>
+                      <p className="text-gray-400 text-[11px]">
+                        Win {winPct}%
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-white text-2xl font-black tabular-nums mt-2">
+                    {scoreFor(teamId, stored).toFixed(1)}
+                  </p>
+                </div>
+              );
+            };
+            return (
+              <Link
+                href={`/league/${id}/matchups/${m.id}`}
+                className="block px-5 pt-4 pb-4 hover:bg-white/[0.02] transition"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide">
+                    Your Matchup · Week {featuredWeek}
+                  </p>
+                  <span
+                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                      m.is_final
+                        ? "text-gray-300 bg-white/10"
+                        : inProgress
+                          ? "text-[#36D7B7] bg-[#36D7B7]/15"
+                          : settled
+                            ? "text-yellow-300 bg-yellow-400/15"
+                            : "text-gray-400 bg-white/5"
+                    }`}
+                  >
+                    {m.is_final ? "Final" : inProgress ? "● Live" : settled ? "Unofficial" : "Upcoming"}
+                  </span>
+                </div>
+                <div className="flex items-end justify-between gap-4">
+                  {side(meLeft ? m.team1_id : m.team2_id, meLeft ? m.team1_score : m.team2_score)}
+                  <span className="text-gray-500 text-xs font-bold uppercase pb-2 shrink-0">vs</span>
+                  {side(meLeft ? m.team2_id : m.team1_id, meLeft ? m.team2_score : m.team1_score, true)}
+                </div>
+                {!m.is_final && (
+                  <div className="h-1.5 rounded-full bg-white/5 overflow-hidden flex mt-3">
+                    <div
+                      className="h-full bg-[#4B3DFF]"
+                      style={{ width: `${meLeft ? t1WinPct : 100 - t1WinPct}%` }}
+                    />
+                    <div
+                      className="h-full bg-[#36D7B7]"
+                      style={{ width: `${meLeft ? 100 - t1WinPct : t1WinPct}%` }}
+                    />
+                  </div>
+                )}
+              </Link>
+            );
+          })()}
+          {(() => {
+            const rec = winsMap[myMembership.id];
+            const rank = standings.findIndex((t) => t.id === myMembership.id) + 1;
+            const pa = pointsAgainst.get(myMembership.id) ?? 0;
+            const waiver = (myMembership as any).waiver_priority as number | null;
+            const chip = (label: string, value: string) => (
+              <div className="min-w-0">
+                <p className="text-gray-400 text-[10px] uppercase tracking-wider font-semibold">{label}</p>
+                <p className="text-white text-sm font-bold tabular-nums mt-0.5 truncate">{value}</p>
+              </div>
+            );
+            return (
+              <div className="grid grid-cols-4 gap-3 px-5 py-3 border-t border-white/5 bg-[#0f1117]/60">
+                {chip("Record", rec ? `${rec.wins}-${rec.losses}${rec.ties ? `-${rec.ties}` : ""}` : "—")}
+                {chip("Rank", rank > 0 ? `#${rank} of ${standings.length}` : "—")}
+                {chip("Pts For / Ag", rec ? `${rec.points.toFixed(0)} / ${pa.toFixed(0)}` : "—")}
+                {chip("Waiver", waiver != null ? `#${waiver}` : "—")}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
       <div className="grid lg:grid-cols-3 gap-6">
       {/* Standings (or team roster before the draft) */}
       <div className="lg:col-span-1 min-w-0 bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
@@ -419,53 +644,85 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
               {standings.map((t, i) => {
                 const isMe = t.user_id === user.id;
                 const href = isMe ? `/league/${id}/lineups` : `/league/${id}/team/${t.id}`;
+                const streak = scoringMode === "head_to_head" ? streakFor(t.id) : null;
+                const pa = pointsAgainst.get(t.id) ?? 0;
+                const showCutLine =
+                  playoffTeamCount > 0 &&
+                  standings.length > playoffTeamCount &&
+                  i + 1 === playoffTeamCount;
                 return (
-                  <Link
-                    key={t.id}
-                    href={href}
-                    className={`flex items-center justify-between py-2 px-3 rounded-lg transition ${
-                      isMe
-                        ? "bg-[#4B3DFF]/15 border border-[#4B3DFF]/30 hover:bg-[#4B3DFF]/20"
-                        : "hover:bg-white/5"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="text-gray-400 text-sm w-4">{i + 1}</span>
-                      <TeamAvatar
-                        name={t.team_name}
-                        avatarUrl={(t.profiles as any)?.avatar_url}
-                        avatarColor={(t.profiles as any)?.avatar_color}
-                        seed={t.id}
-                      />
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-white text-sm font-medium truncate">{t.team_name}</p>
-                          {draft?.status === "complete" && waiversActive && (t as any).waiver_priority != null && (
+                  <div key={t.id}>
+                    <Link
+                      href={href}
+                      className={`flex items-center justify-between py-2 px-3 rounded-lg transition ${
+                        isMe
+                          ? "bg-[#4B3DFF]/15 border border-[#4B3DFF]/30 hover:bg-[#4B3DFF]/20"
+                          : "hover:bg-white/5"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="text-gray-400 text-sm w-4">{i + 1}</span>
+                        <TeamAvatar
+                          name={t.team_name}
+                          avatarUrl={(t.profiles as any)?.avatar_url}
+                          avatarColor={(t.profiles as any)?.avatar_color}
+                          seed={t.id}
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-white text-sm font-medium truncate">{t.team_name}</p>
+                            {draft?.status === "complete" && waiversActive && (t as any).waiver_priority != null && (
+                              <span
+                                className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded text-yellow-300 bg-yellow-400/15"
+                                title={`Next waiver pick: #${(t as any).waiver_priority}`}
+                              >
+                                W#{(t as any).waiver_priority}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-gray-400 text-xs">{(t.profiles as any)?.username}</p>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-white text-sm font-semibold">
+                          {t.wins}-{t.losses}
+                          {streak && (
                             <span
-                              className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded text-yellow-300 bg-yellow-400/15"
-                              title={`Next waiver pick: #${(t as any).waiver_priority}`}
+                              className={`ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded align-middle ${
+                                streak.startsWith("W")
+                                  ? "text-[#36D7B7] bg-[#36D7B7]/15"
+                                  : streak.startsWith("L")
+                                    ? "text-red-400 bg-red-500/15"
+                                    : "text-gray-300 bg-white/10"
+                              }`}
+                              title={`${streak.startsWith("W") ? "Won" : streak.startsWith("L") ? "Lost" : "Tied"} last ${streak.slice(1)}`}
                             >
-                              W#{(t as any).waiver_priority}
+                              {streak}
                             </span>
                           )}
-                        </div>
-                        <p className="text-gray-400 text-xs">{(t.profiles as any)?.username}</p>
+                        </p>
+                        <p
+                          className="text-gray-400 text-xs tabular-nums"
+                          title={`${t.points.toFixed(1)} points for · ${pa.toFixed(1)} points against${
+                            (t as any).strengthOfSchedule >= 0
+                              ? ` · SoS ${Math.round((t as any).strengthOfSchedule * 100)}%`
+                              : ""
+                          }`}
+                        >
+                          {t.points.toFixed(0)} PF · {pa.toFixed(0)} PA
+                        </p>
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-white text-sm font-semibold">{t.wins}-{t.losses}</p>
-                      <p
-                        className="text-gray-400 text-xs"
-                        title={
-                          (t as any).strengthOfSchedule >= 0
-                            ? `Strength of schedule: ${Math.round((t as any).strengthOfSchedule * 100)}% (avg opponent win rate)`
-                            : "Strength of schedule: —"
-                        }
-                      >
-                        {t.points.toFixed(0)} pts
-                      </p>
-                    </div>
-                  </Link>
+                    </Link>
+                    {showCutLine && (
+                      <div className="flex items-center gap-2 px-3 pt-2 pb-1" title={`Top ${playoffTeamCount} make the playoffs`}>
+                        <div className="flex-1 border-t border-dashed border-[#F5A623]/40" />
+                        <span className="text-[#F5A623]/80 text-[10px] font-bold uppercase tracking-wider">
+                          Playoff line
+                        </span>
+                        <div className="flex-1 border-t border-dashed border-[#F5A623]/40" />
+                      </div>
+                    )}
+                  </div>
                 );
               })}
               {standings.length === 0 && (
