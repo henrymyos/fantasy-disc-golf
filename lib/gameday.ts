@@ -9,8 +9,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getLeagueSchedule } from "@/lib/league-schedule";
-import { applyProjectionVariance, winProbability } from "@/lib/projections";
-import { fantasyPointsFromResult, resolveScoringRules } from "@/lib/scoring-rules";
+import { buildWeekProjections } from "@/lib/matchup-projections";
 import { enqueueNotification } from "@/lib/notifications";
 import type { LiveDelta } from "@/lib/pdga-import";
 
@@ -49,7 +48,9 @@ export async function runGamedayPass(
       (players ?? []).forEach((p: any) => nameByPlayer.set(p.id, p.name));
     }
 
-    const { data: leagues } = await admin.from("leagues").select("id, scoring_rules");
+      const { data: leagues } = await admin
+      .from("leagues")
+      .select("id, scoring_rules, mpo_starters, fpo_starters");
 
     for (const league of leagues ?? []) {
       try {
@@ -65,7 +66,7 @@ export async function runGamedayPass(
 
 async function runLeaguePass(
   admin: SupabaseClient,
-  league: { id: number; scoring_rules: unknown },
+  league: { id: number; scoring_rules: unknown; mpo_starters?: number | null; fpo_starters?: number | null },
   liveTournaments: Array<{ id: number; name: string; lock_at: string | null; start_date: string; end_date: string; registered_player_ids: number[] | null }>,
   hotDeltas: LiveDelta[],
   nameByPlayer: Map<number, string>,
@@ -76,8 +77,6 @@ async function runLeaguePass(
   if (!liveT) return; // league is off this week
   const week = schedule.tournamentIdToWeek.get(liveT.id)!;
   const weekIds = schedule.weekToTournamentIds.get(week) ?? [liveT.id];
-
-  const rules = resolveScoringRules(league.scoring_rules);
 
   const { data: roster } = await admin
     .from("rosters")
@@ -130,72 +129,20 @@ async function runLeaguePass(
     .eq("is_final", false);
   if (!matchups || matchups.length === 0) return;
 
-  const starterRows = rosterRows.filter((r) => r.is_starter);
-  const starterIds = [...new Set(starterRows.map((r) => r.player_id))];
-  const { data: results } = starterIds.length > 0
-    ? await admin
-        .from("tournament_results")
-        .select("player_id, tournament_id, finishing_position, hot_round_count, bogey_free_count, ace_count, under_par_strokes, over_par_strokes, eagle_count, players(division)")
-        .in("player_id", starterIds)
-    : { data: [] as any[] };
-
-  const totals = new Map<number, { sum: number; count: number }>();
-  const weekActual = new Map<number, number>();
-  (results ?? []).forEach((r: any) => {
-    const pts = fantasyPointsFromResult(rules, {
-      finishing_position: r.finishing_position,
-      hot_round_count: r.hot_round_count,
-      bogey_free_count: r.bogey_free_count,
-      ace_count: r.ace_count,
-      under_par_strokes: r.under_par_strokes,
-      over_par_strokes: r.over_par_strokes,
-      eagle_count: r.eagle_count,
-      division: r.players?.division ?? "MPO",
-    });
-    const cur = totals.get(r.player_id) ?? { sum: 0, count: 0 };
-    cur.sum += pts;
-    cur.count += 1;
-    totals.set(r.player_id, cur);
-    if (weekIdSet.has(r.tournament_id)) {
-      weekActual.set(r.player_id, (weekActual.get(r.player_id) ?? 0) + pts);
-    }
+  // Snapshot exactly what the matchup pages show: same scoring rules, same
+  // starter slots, same pace math — otherwise the win-probability chart drifts
+  // away from the live win bar drawn above it.
+  const wk = await buildWeekProjections(admin, {
+    leagueId: league.id,
+    week,
+    schedule,
+    league,
   });
 
-  let progressFrac = 0;
-  const startMs = liveT.lock_at
-    ? Date.parse(liveT.lock_at)
-    : Date.parse(`${liveT.start_date}T00:00:00Z`);
-  const endMs = Date.parse(`${liveT.end_date}T23:59:59Z`);
-  const span = endMs - startMs;
-  if (Number.isFinite(span) && span > 0) {
-    progressFrac = Math.min(1, Math.max(0, (Date.now() - startMs) / span));
-  }
-  const paceDivisor = Math.max(progressFrac, 0.1);
-  const regIds = liveT.registered_player_ids;
-  const registeredSet = regIds && regIds.length > 0 ? new Set(regIds) : null;
-
-  const teamNumbers = (teamId: number): { actual: number; finishing: number } => {
-    let actual = 0;
-    let finishing = 0;
-    for (const r of starterRows) {
-      if (r.team_id !== teamId) continue;
-      const a = weekActual.get(r.player_id);
-      if (a != null) {
-        actual += a;
-        finishing += a / paceDivisor;
-        continue;
-      }
-      if (registeredSet != null && !registeredSet.has(r.player_id)) continue; // OUT → 0
-      const t = totals.get(r.player_id);
-      if (t && t.count > 0) finishing += applyProjectionVariance(t.sum / t.count, r.player_id, 3);
-    }
-    return { actual: Math.round(actual * 10) / 10, finishing };
-  };
-
   for (const m of matchups as any[]) {
-    const t1 = teamNumbers(m.team1_id);
-    const t2 = teamNumbers(m.team2_id);
-    const t1WinPct = winProbability(t1.finishing, t2.finishing, progressFrac);
+    const t1 = wk.teamNumbers(m.team1_id);
+    const t2 = wk.teamNumbers(m.team2_id);
+    const t1WinPct = wk.winPctFor(m.team1_id, m.team2_id);
 
     const { data: prev } = await admin
       .from("matchup_prob_snapshots")

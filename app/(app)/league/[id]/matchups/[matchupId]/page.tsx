@@ -1,56 +1,19 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { applyProjectionVariance, winProbability } from "@/lib/projections";
 import { LIVE_END_GRACE_MS } from "@/lib/live-window";
-import { getLeagueSchedule } from "@/lib/league-schedule";
-import { fantasyPointsFromResult, resolveScoringRules, describeScoreContributions } from "@/lib/scoring-rules";
+import { buildWeekProjections, type MatchupPlayerRow } from "@/lib/matchup-projections";
+import { resolveScoringRules, describeScoreContributions } from "@/lib/scoring-rules";
 import { LiveScoreRefresher } from "@/components/live-score-refresher";
 import { WinProbChart } from "@/components/win-prob-chart";
 import { LiveEventFeed, type LiveFeedRow } from "@/components/live-event-feed";
 import { MatchupWrapup } from "@/components/matchup-wrapup";
 
-type PlayerRow = {
-  rosterId: number;
-  playerId: number;
-  name: string;
+/** Shared week row + the two per-team display extras this page adds. */
+type PlayerRow = MatchupPlayerRow & {
   nickname: string | null;
-  division: "MPO" | "FPO";
-  slotLabel: string;
-  actual: number | null;
-  projected: number | null;
-  paceProjected: number | null;
-  isOut: boolean;
   breakdown: string | null;
 };
-
-type WeekStat = {
-  finishing_position: number | null;
-  hot_round_count: number;
-  bogey_free_count: number;
-  ace_count: number;
-  under_par_strokes: number;
-  over_par_strokes: number;
-  eagle_count: number;
-};
-
-function buildSlotArray(starters: any[], numSlots: number): (any | null)[] {
-  const result: (any | null)[] = new Array(numSlots).fill(null);
-  const unordered: any[] = [];
-  for (const s of starters) {
-    const o = s.lineup_order;
-    if (o != null && o >= 1 && o <= numSlots && result[o - 1] === null) {
-      result[o - 1] = s;
-    } else {
-      unordered.push(s);
-    }
-  }
-  let ui = 0;
-  for (let i = 0; i < numSlots && ui < unordered.length; i++) {
-    if (result[i] === null) result[i] = unordered[ui++];
-  }
-  return result;
-}
 
 export default async function MatchupDetailPage({
   params,
@@ -79,78 +42,30 @@ export default async function MatchupDetailPage({
     .select("mpo_starters, fpo_starters, scoring_rules")
     .eq("id", id)
     .single();
-  const mpoSlots: number = (league as any)?.mpo_starters ?? 4;
-  const fpoSlots: number = (league as any)?.fpo_starters ?? 2;
   const rules = resolveScoringRules((league as any)?.scoring_rules);
 
   const team1 = matchup.team1 as any;
   const team2 = matchup.team2 as any;
 
-  // This matchup belongs to a specific LEAGUE week → resolve that week's event
-  // through the league schedule (matchup.week is the league's own week index;
-  // the global tournaments.week column is a per-import counter and maps to the
-  // wrong event), so every matchup in a week scores against the same event.
-  const schedule = await getLeagueSchedule(supabase, Number(id));
-  const scheduleWeek = schedule?.weeks.find((w) => w.week === matchup.week) ?? null;
-  const weekIds = scheduleWeek?.tournamentIds ?? [];
-  const { data: weekTournaments } = weekIds.length > 0
-    ? await supabase
-        .from("tournaments")
-        .select("id, name, start_date, end_date, lock_at, registered_player_ids")
-        .in("id", weekIds)
-        .order("start_date", { ascending: true })
-    : { data: [] as any[] };
-  const weekTournamentIds = new Set((weekTournaments ?? []).map((t: any) => t.id as number));
-  const primaryTournament = (weekTournaments ?? [])[0] as any | undefined;
-  const weekTournamentName: string | null =
-    primaryTournament?.name ?? scheduleWeek?.event.name ?? null;
-  const weekDateLabel: string | null = (() => {
-    const start = primaryTournament?.start_date ?? scheduleWeek?.event.startDate;
-    const end = primaryTournament?.end_date ?? scheduleWeek?.event.endDate;
-    if (!start) return null;
-    const fmt = (d: string) =>
-      new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-    const s = fmt(start);
-    const e = end ? fmt(end) : s;
-    return s === e ? s : `${s} – ${e}`;
-  })();
-
-  // The week's event is "in progress" when now is between its lock/start and end.
-  let inProgress = false;
-  let ended = false;
-  let pollLive = false;
-  let progressFrac = 0;
-  if (primaryTournament) {
-    const startMs = primaryTournament.lock_at
-      ? Date.parse(primaryTournament.lock_at)
-      : Date.parse(`${primaryTournament.start_date}T00:00:00Z`);
-    const endMs = Date.parse(`${primaryTournament.end_date}T23:59:59Z`);
-    const now = Date.now();
-    inProgress = now >= startMs && now <= endMs;
-    ended = Number.isFinite(endMs) && now > endMs;
-    // Keep polling for a grace window past the UTC end so late-posted Sunday
-    // final-round results still flow in before the Monday finalize.
-    pollLive = inProgress || (ended && now <= endMs + LIVE_END_GRACE_MS);
-    const span = endMs - startMs;
-    if (inProgress && span > 0) {
-      progressFrac = Math.min(1, Math.max(0, (now - startMs) / span));
-    }
-  }
-  const paceDivisor = Math.max(progressFrac, 0.1);
-
-  // Players not registered for this week's event are OUT (projected 0).
-  let registeredSet: Set<number> | null = null;
-  const regIds = primaryTournament?.registered_player_ids as number[] | null | undefined;
-  if (regIds && regIds.length > 0) registeredSet = new Set(regIds);
-
-  const { data: roster } = await supabase
-    .from("rosters")
-    .select("id, team_id, player_id, is_starter, lineup_order, players(name, division)")
-    .eq("league_id", id)
-    .in("team_id", [matchup.team1_id, matchup.team2_id])
-    .order("lineup_order", { ascending: true, nullsFirst: false })
-    .order("id", { ascending: true });
-  const allRoster = (roster ?? []) as any[];
+  // Every matchup surface (dashboard, matchups list, this page) reads its
+  // numbers from buildWeekProjections so the same matchup can't project or
+  // win-percentage differently depending on where you look at it. `matchup.week`
+  // is the league's own week index — the helper resolves it to the week's event
+  // through the league schedule.
+  const wk = await buildWeekProjections(supabase, {
+    leagueId: Number(id),
+    week: matchup.week,
+    league: league as any,
+    teamIds: [matchup.team1_id, matchup.team2_id],
+  });
+  const { inProgress, ended, settled } = wk;
+  const weekTournamentName = wk.eventName;
+  const weekDateLabel = wk.eventDateLabel;
+  const weekIds = wk.tournamentIds;
+  // Keep polling for a grace window past the UTC end so late-posted Sunday
+  // final-round results still flow in before the Monday finalize.
+  const pollLive =
+    inProgress || (ended && wk.eventEndMs != null && Date.now() <= wk.eventEndMs + LIVE_END_GRACE_MS);
 
   // Per-team player nicknames (shown under each name on this matchup).
   const { data: nickRows } = await supabase
@@ -161,142 +76,41 @@ export default async function MatchupDetailPage({
     (nickRows ?? []).map((n: any) => [`${n.team_id}:${n.player_id}`, n.nickname as string]),
   );
 
-  const playerIds = allRoster.map((r) => r.player_id);
-  const { data: results } = playerIds.length > 0
-    ? await supabase
-        .from("tournament_results")
-        .select("player_id, tournament_id, finishing_position, hot_round_count, bogey_free_count, ace_count, under_par_strokes, over_par_strokes, eagle_count, players(division)")
-        .in("player_id", playerIds)
-    : { data: [] };
-
-  const totals = new Map<number, { sum: number; count: number }>();
-  const actuals = new Map<number, number>();
-  const weekStats = new Map<number, WeekStat>();
-  (results ?? []).forEach((r: any) => {
-    const pts = fantasyPointsFromResult(rules, {
-      finishing_position: r.finishing_position,
-      hot_round_count: r.hot_round_count,
-      bogey_free_count: r.bogey_free_count,
-      ace_count: r.ace_count,
-      under_par_strokes: r.under_par_strokes,
-      over_par_strokes: r.over_par_strokes,
-      eagle_count: r.eagle_count,
-      division: r.players?.division ?? "MPO",
-    });
-    const cur = totals.get(r.player_id) ?? { sum: 0, count: 0 };
-    cur.sum += pts;
-    cur.count += 1;
-    totals.set(r.player_id, cur);
-    if (weekTournamentIds.has(r.tournament_id)) {
-      actuals.set(r.player_id, (actuals.get(r.player_id) ?? 0) + pts);
-      const ws = weekStats.get(r.player_id) ?? {
-        finishing_position: null, hot_round_count: 0, bogey_free_count: 0,
-        ace_count: 0, under_par_strokes: 0, over_par_strokes: 0, eagle_count: 0,
-      };
-      ws.finishing_position = r.finishing_position ?? ws.finishing_position;
-      ws.hot_round_count += Number(r.hot_round_count ?? 0);
-      ws.bogey_free_count += Number(r.bogey_free_count ?? 0);
-      ws.ace_count += Number(r.ace_count ?? 0);
-      ws.under_par_strokes += Number(r.under_par_strokes ?? 0);
-      ws.over_par_strokes += Number(r.over_par_strokes ?? 0);
-      ws.eagle_count += Number(r.eagle_count ?? 0);
-      weekStats.set(r.player_id, ws);
-    }
-  });
-
-  function rowFor(s: any, slotLabel: string): PlayerRow {
-    const t = totals.get(s.player_id);
-    const actual = actuals.has(s.player_id)
-      ? Math.round(actuals.get(s.player_id)! * 10) / 10
+  // Decorate the shared rows with this page's nickname + score-breakdown lines.
+  const decorate = (teamId: number, row: MatchupPlayerRow | null): PlayerRow | null =>
+    row
+      ? {
+          ...row,
+          nickname: nickByTeamPlayer.get(`${teamId}:${row.playerId}`) ?? null,
+          breakdown:
+            row.actual != null && row.weekStat
+              ? describeScoreContributions(rules, row.weekStat)
+              : null,
+        }
       : null;
-    const seasonProjected = t && t.count > 0
-      ? applyProjectionVariance(t.sum / t.count, s.player_id, 3)
-      : null;
-    const isOut =
-      registeredSet != null
-      && !registeredSet.has(s.player_id)
-      && actual == null;
-    const projected = isOut ? 0 : seasonProjected;
-    let paceProjected: number | null = null;
-    if (inProgress && actual != null) {
-      paceProjected = Math.round((actual / paceDivisor) * 10) / 10;
-    }
-    const ws = weekStats.get(s.player_id);
-    const breakdown = actual != null && ws ? describeScoreContributions(rules, ws) : null;
+  const buildTeam = (teamId: number) => {
+    const t = wk.teamNumbers(teamId);
     return {
-      rosterId: s.id,
-      playerId: s.player_id,
-      name: s.players?.name ?? "Unknown",
-      nickname: nickByTeamPlayer.get(`${s.team_id}:${s.player_id}`) ?? null,
-      division: (s.players?.division as "MPO" | "FPO") ?? "MPO",
-      slotLabel,
-      actual,
-      projected,
-      paceProjected,
-      isOut,
-      breakdown,
+      starterRows: t.starters.map((r) => decorate(teamId, r)),
+      benchRows: t.bench.map((r) => decorate(teamId, r)!) as PlayerRow[],
+      actual: t.actual,
+      finishing: t.finishing,
     };
-  }
-
-  function buildTeam(teamId: number) {
-    const teamRoster = allRoster.filter((r) => r.team_id === teamId);
-    const mpoStarters = teamRoster.filter(
-      (r) => r.is_starter && r.players?.division === "MPO",
-    );
-    const fpoStarters = teamRoster.filter(
-      (r) => r.is_starter && r.players?.division === "FPO",
-    );
-    const mpoSlotArr = buildSlotArray(mpoStarters, mpoSlots);
-    const fpoSlotArr = buildSlotArray(fpoStarters, fpoSlots);
-
-    const starterRows: (PlayerRow | null)[] = [];
-    mpoSlotArr.forEach((spot, i) => {
-      starterRows.push(spot ? rowFor(spot, `MPO${i + 1}`) : null);
-    });
-    fpoSlotArr.forEach((spot, i) => {
-      starterRows.push(spot ? rowFor(spot, `FPO${i + 1}`) : null);
-    });
-
-    const starterIds = new Set(
-      [...mpoSlotArr, ...fpoSlotArr].filter(Boolean).map((r: any) => r.id),
-    );
-    const benchRows: PlayerRow[] = teamRoster
-      .filter((r) => !starterIds.has(r.id))
-      .sort((a, b) => {
-        const da = a.players?.division === "MPO" ? 0 : 1;
-        const db = b.players?.division === "MPO" ? 0 : 1;
-        if (da !== db) return da - db;
-        return a.id - b.id;
-      })
-      .map((r) => rowFor(r, "BN"));
-
-    return { starterRows, benchRows };
-  }
+  };
 
   const t1Team = buildTeam(matchup.team1_id);
   const t2Team = buildTeam(matchup.team2_id);
 
-  const starterTotal = (rows: (PlayerRow | null)[], pick: (r: PlayerRow) => number | null) =>
-    rows.reduce((acc, r) => acc + (r ? (pick(r) ?? 0) : 0), 0);
-
-  const team1Actual = starterTotal(t1Team.starterRows, (r) => r.actual);
-  const team2Actual = starterTotal(t2Team.starterRows, (r) => r.actual);
-  // Once the event has ended with scores on the board (but before the
-  // Monday finalize), each player's "finishing" total IS their actual —
-  // the win bar must track the real result, not the pre-event projections.
-  const settled = ended && actuals.size > 0;
-  const finishingFor = (r: PlayerRow) =>
-    r.paceProjected ?? (settled ? (r.actual ?? 0) : (r.projected ?? 0));
-  const team1Finishing = starterTotal(t1Team.starterRows, finishingFor);
-  const team2Finishing = starterTotal(t2Team.starterRows, finishingFor);
+  const team1Finishing = t1Team.finishing;
+  const team2Finishing = t2Team.finishing;
   const isFinal = !!matchup.is_final;
   // The headline number is always points actually scored this week (0.0 until
   // the event starts); the projection lives in the ~X line below it.
-  const team1Display = isFinal ? matchup.team1_score : team1Actual;
-  const team2Display = isFinal ? matchup.team2_score : team2Actual;
+  const team1Display = isFinal ? matchup.team1_score : t1Team.actual;
+  const team2Display = isFinal ? matchup.team2_score : t2Team.actual;
 
   // Win %: residual variance shrinks as the tournament progresses.
-  const t1WinPct = winProbability(team1Finishing, team2Finishing, settled ? 1 : progressFrac);
+  const t1WinPct = wk.winPctFor(matchup.team1_id, matchup.team2_id);
   const t2WinPct = 100 - t1WinPct;
 
   const benchPairCount = Math.max(t1Team.benchRows.length, t2Team.benchRows.length);
@@ -314,6 +128,16 @@ export default async function MatchupDetailPage({
   }));
 
   // Live play-by-play for the players in this matchup.
+  const teamNameByPlayer = new Map<number, string>();
+  for (const [team, name] of [
+    [t1Team, team1?.team_name as string],
+    [t2Team, team2?.team_name as string],
+  ] as const) {
+    for (const r of [...team.starterRows, ...team.benchRows]) {
+      if (r) teamNameByPlayer.set(r.playerId, name);
+    }
+  }
+  const playerIds = [...teamNameByPlayer.keys()];
   let feedRows: LiveFeedRow[] = [];
   if (inProgress && weekIds.length > 0 && playerIds.length > 0) {
     const { data: feed } = await supabase
@@ -323,12 +147,6 @@ export default async function MatchupDetailPage({
       .in("player_id", playerIds)
       .order("created_at", { ascending: false })
       .limit(30);
-    const teamNameByPlayer = new Map<number, string>(
-      allRoster.map((r) => [
-        r.player_id as number,
-        r.team_id === matchup.team1_id ? (team1?.team_name as string) : (team2?.team_name as string),
-      ]),
-    );
     feedRows = (feed ?? []).map((f: any) => ({
       id: f.id,
       playerName: f.players?.name ?? "Unknown",
@@ -347,8 +165,8 @@ export default async function MatchupDetailPage({
     bench: team.benchRows.map((r) => ({
       name: r.name, division: r.division, actual: r.actual, projected: r.projected,
     })),
-    mpoSlots,
-    fpoSlots,
+    mpoSlots: wk.mpoSlots,
+    fpoSlots: wk.fpoSlots,
   });
 
   return (

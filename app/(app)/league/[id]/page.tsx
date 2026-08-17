@@ -17,9 +17,9 @@ import { getPlayoffOutcome } from "@/lib/playoff-outcome";
 import { SeasonReview } from "@/components/season-review";
 import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
 import { rankTeams } from "@/lib/standings";
-import { applyProjectionVariance } from "@/lib/projections";
+import { buildWeekProjections } from "@/lib/matchup-projections";
 import { getActiveTournament } from "@/lib/lineup-lock";
-import { featuredWeekFor, getLeagueNextTournamentId, getLeagueSchedule } from "@/lib/league-schedule";
+import { featuredWeekFor, getLeagueSchedule } from "@/lib/league-schedule";
 import { CopyButton } from "@/components/copy-button";
 import { InviteLink } from "@/components/invite-link";
 import { getActivityFeed } from "@/lib/activity-feed";
@@ -28,21 +28,6 @@ import { computeSetupSteps, setupProgress } from "@/lib/league-setup";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { stripeEnabled } from "@/lib/stripe";
 import { createDuesCheckout } from "@/actions/dues";
-
-// Standard-normal CDF via Abramowitz & Stegun 7.1.26 approximation.
-function normalCdfOnDashboard(x: number): number {
-  const a1 = 0.254829592;
-  const a2 = -0.284496736;
-  const a3 = 1.421413741;
-  const a4 = -1.453152027;
-  const a5 = 1.061405429;
-  const p = 0.3275911;
-  const sign = x < 0 ? -1 : 1;
-  const ax = Math.abs(x) / Math.SQRT2;
-  const t = 1 / (1 + p * ax);
-  const y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-ax * ax);
-  return 0.5 * (1 + sign * y);
-}
 
 export default async function LeagueDashboard({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -283,119 +268,23 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
     .limit(1)
     .maybeSingle();
 
-  // Compute each team's projected total + pace-adjusted finishing estimate
-  // for the active/upcoming event so we can surface them on each matchup row
-  // along with a win-percentage gauge.
-  let projectedByTeam = new Map<number, number>();
-  let finishingByTeam = new Map<number, number>();
-  let actualScoreByTeam = new Map<number, number>();
-  let inProgress = false;
-  let ended = false;
-  let settled = false;
-  let progressFrac = 0;
-  if ((matchups ?? []).length > 0) {
-    // Resolve the FEATURED week's event through the league schedule — the
-    // same source the matchup pages use. The globally active/next tournament
-    // points at the wrong event between an event's Sunday finish and the
-    // Monday finalize.
-    const targetTournamentId: number | null =
-      leagueSchedule?.weekToTournamentIds.get(featuredWeek)?.[0]
-      ?? (await getLeagueNextTournamentId(supabase, Number(id)));
-
-    // Registered players for the target tournament (non-registered = OUT) +
-    // its start/end window for the live/ended state.
-    let registeredSet: Set<number> | null = null;
-    if (targetTournamentId != null) {
-      const { data: tRow } = await supabase
-        .from("tournaments")
-        .select("start_date, end_date, lock_at, registered_player_ids")
-        .eq("id", targetTournamentId)
-        .maybeSingle();
-      const ids = (tRow as any)?.registered_player_ids as number[] | null;
-      if (ids && ids.length > 0) registeredSet = new Set(ids);
-      if (tRow) {
-        const startMs = (tRow as any).lock_at
-          ? Date.parse((tRow as any).lock_at)
-          : Date.parse(`${(tRow as any).start_date}T00:00:00Z`);
-        const endMs = Date.parse(`${(tRow as any).end_date}T23:59:59Z`);
-        const now = Date.now();
-        inProgress = Number.isFinite(startMs) && Number.isFinite(endMs) && now >= startMs && now <= endMs;
-        ended = Number.isFinite(endMs) && now > endMs;
-        const span = endMs - startMs;
-        if (inProgress && span > 0) {
-          progressFrac = Math.min(1, Math.max(0, (now - startMs) / span));
-        }
-      }
-    }
-    const paceDivisor = Math.max(progressFrac, 0.1);
-
-    const { data: starters } = await supabase
-      .from("rosters")
-      .select("team_id, player_id")
-      .eq("league_id", id)
-      .eq("is_starter", true);
-    const { data: allResults } = await supabase
-      .from("tournament_results")
-      .select("player_id, tournament_id, fantasy_points");
-    const totalByPlayer = new Map<number, { sum: number; count: number }>();
-    const weekActualByPlayer = new Map<number, number>();
-    (allResults ?? []).forEach((r: any) => {
-      const cur = totalByPlayer.get(r.player_id) ?? { sum: 0, count: 0 };
-      cur.sum += Number(r.fantasy_points ?? 0);
-      cur.count += 1;
-      totalByPlayer.set(r.player_id, cur);
-      if (targetTournamentId != null && r.tournament_id === targetTournamentId) {
-        weekActualByPlayer.set(r.player_id, (weekActualByPlayer.get(r.player_id) ?? 0) + Number(r.fantasy_points ?? 0));
-      }
-    });
-    // Event over with scores on the board (awaiting the Monday finalize):
-    // the win % must track the real result, not projections.
-    settled = ended && weekActualByPlayer.size > 0;
-    if (settled) progressFrac = 1;
-
-    for (const s of starters ?? []) {
-      const pid = (s as any).player_id;
-      const tid = (s as any).team_id;
-      const actual = weekActualByPlayer.get(pid);
-      const t = totalByPlayer.get(pid);
-      const seasonProj = t && t.count > 0
-        ? applyProjectionVariance(t.sum / t.count, pid, 3)
-        : 0;
-      // Players not on the registered list (and who haven't already scored)
-      // are OUT — they contribute 0, matching the matchup pages.
-      const isOut = registeredSet != null && !registeredSet.has(pid) && actual == null;
-      const effectiveProj = isOut ? 0 : seasonProj;
-
-      // For the matchup row display: actual when in-progress, else projection.
-      const displayPts = actual != null ? actual : effectiveProj;
-      projectedByTeam.set(tid, (projectedByTeam.get(tid) ?? 0) + displayPts);
-      if (actual != null) {
-        actualScoreByTeam.set(tid, (actualScoreByTeam.get(tid) ?? 0) + actual);
-      }
-
-      // For win %: the real result once the event has ended, pace
-      // extrapolation while live, otherwise the pre-event projection (0 when
-      // OUT).
-      const finishingPts = settled
-        ? (actual ?? 0)
-        : inProgress && actual != null
-          ? actual / paceDivisor
-          : effectiveProj;
-      finishingByTeam.set(tid, (finishingByTeam.get(tid) ?? 0) + finishingPts);
-    }
-  }
-  const showActuals = inProgress || settled;
-
-  // Residual variance shrinks as the active tournament progresses.
-  const baseSigma = 28;
-  const sigma = baseSigma * Math.sqrt(Math.max(0.05, 1 - progressFrac));
-  const matchupSpread = Math.sqrt(2 * sigma * sigma);
-  function winPctFor(t1Id: number, t2Id: number): number {
-    const t1 = finishingByTeam.get(t1Id) ?? 0;
-    const t2 = finishingByTeam.get(t2Id) ?? 0;
-    if (t1 === 0 && t2 === 0) return 50;
-    return Math.round(normalCdfOnDashboard((t1 - t2) / matchupSpread) * 100);
-  }
+  // Each team's numbers for the featured week — same helper the matchups list
+  // and matchup pages use, so the dashboard cards can't disagree with the
+  // matchup they link to.
+  const wk = (matchups ?? []).length > 0
+    ? await buildWeekProjections(supabase, {
+        leagueId: Number(id),
+        week: featuredWeek,
+        schedule: leagueSchedule,
+        league: league as any,
+      })
+    : null;
+  const inProgress = wk?.inProgress ?? false;
+  const settled = wk?.settled ?? false;
+  const showActuals = (inProgress || settled) && (wk?.hasActuals ?? false);
+  const finishingFor = (teamId: number) => wk?.teamNumbers(teamId).finishing ?? null;
+  const actualFor = (teamId: number) => wk?.teamNumbers(teamId).actual ?? 0;
+  const winPctFor = (t1Id: number, t2Id: number) => wk?.winPctFor(t1Id, t2Id) ?? 50;
 
   return (
     <div className="space-y-6">
@@ -469,7 +358,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
             const scoreFor = (teamId: number, stored: number) =>
               m.is_final || !showActuals
                 ? stored
-                : Math.round((actualScoreByTeam.get(teamId) ?? 0) * 10) / 10;
+                : actualFor(teamId);
             const side = (teamId: number, stored: number, right?: boolean) => {
               const member = membersById.get(teamId);
               const winPct = teamId === m.team1_id ? t1WinPct : 100 - t1WinPct;
@@ -865,16 +754,16 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                     team1Score={
                       m.is_final || !showActuals
                         ? m.team1_score
-                        : Math.round((actualScoreByTeam.get(m.team1_id) ?? 0) * 10) / 10
+                        : actualFor(m.team1_id)
                     }
                     team2Score={
                       m.is_final || !showActuals
                         ? m.team2_score
-                        : Math.round((actualScoreByTeam.get(m.team2_id) ?? 0) * 10) / 10
+                        : actualFor(m.team2_id)
                     }
                     settled={settled}
-                    team1Projected={projectedByTeam.get(m.team1_id) ?? null}
-                    team2Projected={projectedByTeam.get(m.team2_id) ?? null}
+                    team1Projected={finishingFor(m.team1_id)}
+                    team2Projected={finishingFor(m.team2_id)}
                     team1WinPct={t1WinPct}
                     team2WinPct={100 - t1WinPct}
                   />

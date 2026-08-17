@@ -1,14 +1,12 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { getActiveTournament } from "@/lib/lineup-lock";
 import { getPollableTournament } from "@/lib/live-window";
 import { featuredWeekFor, getLeagueSchedule, weekTabsFor } from "@/lib/league-schedule";
 import { buildSeasonSchedule } from "@/lib/matchup-scheduler";
 import { LiveScoreRefresher } from "@/components/live-score-refresher";
 import { WeekSwitcher } from "@/components/week-switcher";
-import { applyProjectionVariance, winProbability } from "@/lib/projections";
-import { fantasyPointsFromResult, resolveScoringRules } from "@/lib/scoring-rules";
+import { buildWeekProjections } from "@/lib/matchup-projections";
 
 export default async function MatchupsPage({
   params,
@@ -25,7 +23,7 @@ export default async function MatchupsPage({
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, current_week, scoring_rules")
+    .select("id, current_week, scoring_rules, mpo_starters, fpo_starters")
     .eq("id", id)
     .single();
 
@@ -56,120 +54,19 @@ export default async function MatchupsPage({
     .eq("league_id", id)
     .eq("week", selectedWeek);
 
-  const activeTournament = await getActiveTournament(supabase, Number(id));
   // Live or recently-ended: keeps the score poller running through the
   // post-event grace window (see lib/live-window.ts).
   const pollableTournament = await getPollableTournament(supabase, Number(id));
 
-  // Project every team against the SELECTED week's event under this league's
-  // scoring rules, with players not registered for that event contributing 0.
-  const today = new Date().toISOString().slice(0, 10);
-  const targetTournamentId: number | null =
-    scheduleWeek?.tournamentIds[0] ??
-    (selectedWeek === currentWeek
-      ? activeTournament?.id ??
-        (schedule?.weeks ?? []).find((w) => w.endDate >= today && w.tournamentIds.length > 0)
-          ?.tournamentIds[0] ??
-        null
-      : null);
-  let registeredSet: Set<number> | null = null;
-  if (targetTournamentId != null) {
-    const { data: regRow } = await supabase
-      .from("tournaments")
-      .select("registered_player_ids")
-      .eq("id", targetTournamentId)
-      .maybeSingle();
-    const ids = (regRow as any)?.registered_player_ids as number[] | null;
-    if (ids && ids.length > 0) registeredSet = new Set(ids);
-  }
-
-  const rules = resolveScoringRules((league as any).scoring_rules);
-  const projectedByTeam = new Map<number, number>();
-  const { data: starters } = await supabase
-    .from("rosters")
-    .select("team_id, player_id")
-    .eq("league_id", id)
-    .eq("is_starter", true);
-  const starterPlayerIds = [...new Set((starters ?? []).map((s: any) => s.player_id as number))];
-  const { data: allResults } = starterPlayerIds.length > 0
-    ? await supabase
-        .from("tournament_results")
-        .select("player_id, tournament_id, finishing_position, hot_round_count, bogey_free_count, ace_count, under_par_strokes, over_par_strokes, eagle_count, players(division)")
-        .in("player_id", starterPlayerIds)
-    : { data: [] as any[] };
-  const totalByPlayer = new Map<number, { sum: number; count: number }>();
-  // Actual points per player per event, so weeks whose event has started show
-  // real scores on the cards instead of the stored 0.0 (which only updates at
-  // the Monday finalize).
-  const ptsByTournamentPlayer = new Map<number, Map<number, number>>();
-  (allResults ?? []).forEach((r: any) => {
-    const pts = fantasyPointsFromResult(rules, {
-      finishing_position: r.finishing_position,
-      hot_round_count: r.hot_round_count,
-      bogey_free_count: r.bogey_free_count,
-      ace_count: r.ace_count,
-      under_par_strokes: r.under_par_strokes,
-      over_par_strokes: r.over_par_strokes,
-      eagle_count: r.eagle_count,
-      division: r.players?.division ?? "MPO",
-    });
-    const cur = totalByPlayer.get(r.player_id) ?? { sum: 0, count: 0 };
-    cur.sum += pts;
-    cur.count += 1;
-    totalByPlayer.set(r.player_id, cur);
-    const tid = r.tournament_id as number;
-    if (!ptsByTournamentPlayer.has(tid)) ptsByTournamentPlayer.set(tid, new Map());
-    const byPlayer = ptsByTournamentPlayer.get(tid)!;
-    byPlayer.set(r.player_id, (byPlayer.get(r.player_id) ?? 0) + pts);
+  // Every team's numbers for the SELECTED week, from the same helper the
+  // matchup detail page uses — so a card here and the matchup it links to
+  // always show the same projection and win %.
+  const wk = await buildWeekProjections(supabase, {
+    leagueId: Number(id),
+    week: selectedWeek,
+    schedule,
+    league: league as any,
   });
-  const startersByTeam = new Map<number, number[]>();
-  for (const s of starters ?? []) {
-    const teamId = (s as any).team_id as number;
-    if (!startersByTeam.has(teamId)) startersByTeam.set(teamId, []);
-    startersByTeam.get(teamId)!.push((s as any).player_id as number);
-  }
-
-  // Live/unofficial scores for a non-final matchup whose week's event has
-  // begun: sum each team's starters' actual points for that event. Returns
-  // null when the event hasn't started or has no scores yet (fall back to
-  // projections).
-  const liveScoreFor = (m: { week: number; team1_id: number; team2_id: number }) => {
-    const w = (schedule?.weeks ?? []).find((x) => x.week === m.week);
-    const tid = w?.tournamentIds[0];
-    if (!w || tid == null) return null;
-    const byPlayer = ptsByTournamentPlayer.get(tid);
-    if (!byPlayer || byPlayer.size === 0) return null;
-    const now = Date.now();
-    const startMs = Date.parse(`${w.event.startDate}T00:00:00Z`);
-    const endMs = Date.parse(`${w.event.endDate}T23:59:59Z`);
-    if (!Number.isFinite(startMs) || now < startMs) return null;
-    const ended = Number.isFinite(endMs) && now > endMs;
-    const frac = ended || !Number.isFinite(endMs) || endMs <= startMs
-      ? 1
-      : Math.min(1, Math.max(0, (now - startMs) / (endMs - startMs)));
-    const sumFor = (teamId: number) =>
-      Math.round(
-        (startersByTeam.get(teamId) ?? []).reduce((acc, pid) => acc + (byPlayer.get(pid) ?? 0), 0) * 10,
-      ) / 10;
-    const s1 = sumFor(m.team1_id);
-    const s2 = sumFor(m.team2_id);
-    // Ended: win % from the real result. Live: from each team's pace.
-    const paceDivisor = Math.max(frac, 0.1);
-    const win1 = ended
-      ? winProbability(s1, s2, 1)
-      : winProbability(s1 / paceDivisor, s2 / paceDivisor, frac);
-    return { s1, s2, ended, win1 };
-  };
-  for (const s of starters ?? []) {
-    const pid = (s as any).player_id as number;
-    const teamId = (s as any).team_id as number;
-    if (!projectedByTeam.has(teamId)) projectedByTeam.set(teamId, 0);
-    if (registeredSet != null && !registeredSet.has(pid)) continue; // OUT → 0
-    const t = totalByPlayer.get(pid);
-    if (!t || t.count === 0) continue;
-    const perEvent = applyProjectionVariance(t.sum / t.count, pid, 3);
-    projectedByTeam.set(teamId, (projectedByTeam.get(teamId) ?? 0) + perEvent);
-  }
 
   const { data: myMembership } = await supabase
     .from("league_members")
@@ -254,15 +151,20 @@ export default async function MatchupsPage({
               const t1 = m.team1 as any;
               const t2 = m.team2 as any;
               const isMine = t1?.id === myMembership?.id || t2?.id === myMembership?.id;
-              const live = m.is_final ? null : liveScoreFor(m);
-              const score1 = m.is_final ? m.team1_score : live ? live.s1 : m.team1_score;
-              const score2 = m.is_final ? m.team2_score : live ? live.s2 : m.team2_score;
-              const proj1 = projectedByTeam.get(m.team1_id) ?? 0;
-              const proj2 = projectedByTeam.get(m.team2_id) ?? 0;
-              // Projection line only before the week's event has scores;
-              // once live/ended, the win % comes from the actual points.
-              const hasProj = !m.is_final && !live && (proj1 > 0 || proj2 > 0);
-              const win1 = live ? live.win1 : winProbability(proj1, proj2);
+              const n1 = wk.teamNumbers(m.team1_id);
+              const n2 = wk.teamNumbers(m.team2_id);
+              // The week's event has scores on the board → the card shows them
+              // live/unofficial; otherwise the stored (finalized) score.
+              const live = !m.is_final && wk.hasActuals && (wk.inProgress || wk.settled);
+              const score1 = m.is_final ? m.team1_score : live ? n1.actual : m.team1_score;
+              const score2 = m.is_final ? m.team2_score : live ? n2.actual : m.team2_score;
+              // Second line: the finishing estimate — pre-event projection,
+              // live pace, or the real result once settled (same as the
+              // matchup page's line under each score).
+              const proj1 = n1.finishing;
+              const proj2 = n2.finishing;
+              const showFinishing = !m.is_final && !wk.settled && (proj1 > 0 || proj2 > 0);
+              const win1 = wk.winPctFor(m.team1_id, m.team2_id);
               const win2 = 100 - win1;
               const card = (
                 <>
@@ -293,22 +195,17 @@ export default async function MatchupsPage({
                     <div>
                       <p className="text-white text-sm font-medium">{t1?.team_name}</p>
                       <p className="text-xl font-bold text-white">{score1.toFixed(1)}</p>
-                      {hasProj && (
+                      {!m.is_final && (
                         <p className="text-gray-400 text-xs">
-                          {proj1.toFixed(1)} ·{" "}
+                          {showFinishing && <>{proj1.toFixed(1)} · </>}
                           <span className={win1 >= win2 ? "text-white font-semibold" : ""}>{win1}%</span>
-                        </p>
-                      )}
-                      {live && !live.ended && (
-                        <p className="text-gray-400 text-xs">
-                          <span className={win1 >= win2 ? "text-white font-semibold" : ""}>{win1}%</span> to win
                         </p>
                       )}
                     </div>
                   </div>
 
                   <span className="text-gray-400 text-xs font-medium">
-                    {m.is_final ? "FINAL" : live?.ended ? "UNOFFICIAL" : live ? "LIVE" : "vs"}
+                    {m.is_final ? "FINAL" : wk.settled && live ? "UNOFFICIAL" : live ? "LIVE" : "vs"}
                   </span>
 
                   <div className="flex items-center gap-3 flex-row-reverse">
@@ -338,15 +235,10 @@ export default async function MatchupsPage({
                     <div className="text-right">
                       <p className="text-white text-sm font-medium">{t2?.team_name}</p>
                       <p className="text-xl font-bold text-white">{score2.toFixed(1)}</p>
-                      {hasProj && (
+                      {!m.is_final && (
                         <p className="text-gray-400 text-xs">
-                          {proj2.toFixed(1)} ·{" "}
+                          {showFinishing && <>{proj2.toFixed(1)} · </>}
                           <span className={win2 > win1 ? "text-white font-semibold" : ""}>{win2}%</span>
-                        </p>
-                      )}
-                      {live && !live.ended && (
-                        <p className="text-gray-400 text-xs">
-                          <span className={win2 > win1 ? "text-white font-semibold" : ""}>{win2}%</span> to win
                         </p>
                       )}
                     </div>
