@@ -15,6 +15,7 @@ import {
   type LeagueSchedule,
 } from "@/lib/league-schedule";
 import { applyProjectionVariance, winProbability } from "@/lib/projections";
+import { selectAllRows } from "@/lib/supabase/select-all";
 import { fantasyPointsFromResult, resolveScoringRules } from "@/lib/scoring-rules";
 
 export type MatchupWeekStat = {
@@ -83,7 +84,12 @@ export type WeekProjections = {
   winPctFor: (team1Id: number, team2Id: number) => number;
 };
 
-function buildSlotArray<T extends { lineup_order: number | null }>(
+// Mirrors cappedStarterIds (lib/lineup-slots.ts), which is what the official
+// weekly finalize scores: same players, just kept in slot order for display.
+// The unordered tiebreak is player_id there, so it is here too — otherwise a
+// team with more flagged starters than slots (all with a null lineup_order)
+// could project one player and score a different one.
+function buildSlotArray<T extends { lineup_order: number | null; player_id: number }>(
   starters: T[],
   numSlots: number,
 ): (T | null)[] {
@@ -97,6 +103,7 @@ function buildSlotArray<T extends { lineup_order: number | null }>(
       unordered.push(s);
     }
   }
+  unordered.sort((a, b) => a.player_id - b.player_id);
   let ui = 0;
   for (let i = 0; i < numSlots && ui < unordered.length; i++) {
     if (result[i] === null) result[i] = unordered[ui++];
@@ -209,12 +216,17 @@ export async function buildWeekProjections(
   const allRoster = (roster ?? []) as any[];
 
   const playerIds = [...new Set(allRoster.map((r) => r.player_id as number))];
-  const { data: results } = playerIds.length > 0
-    ? await supabase
-        .from("tournament_results")
-        .select("player_id, tournament_id, finishing_position, hot_round_count, bogey_free_count, ace_count, under_par_strokes, over_par_strokes, eagle_count, players(division)")
-        .in("player_id", playerIds)
-    : { data: [] as any[] };
+  // Paged: a whole league's rostered players cross the 1000-row select cap
+  // partway through a season, and the truncated page comes back without an
+  // error — every projection built from it would quietly drift low.
+  const results = playerIds.length > 0
+    ? await selectAllRows<any>(() =>
+        supabase
+          .from("tournament_results")
+          .select("player_id, tournament_id, finishing_position, hot_round_count, bogey_free_count, ace_count, under_par_strokes, over_par_strokes, eagle_count, players(division)")
+          .in("player_id", playerIds) as any,
+      )
+    : [];
 
   // Season average per player (the projection base) + this week's actuals,
   // both recomputed under the league's own scoring rules — never the stored
@@ -222,7 +234,7 @@ export async function buildWeekProjections(
   const totals = new Map<number, { sum: number; count: number }>();
   const actuals = new Map<number, number>();
   const weekStats = new Map<number, MatchupWeekStat>();
-  (results ?? []).forEach((r: any) => {
+  results.forEach((r: any) => {
     const pts = fantasyPointsFromResult(rules, {
       finishing_position: r.finishing_position,
       hot_round_count: r.hot_round_count,

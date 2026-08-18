@@ -8,7 +8,7 @@ import { buildSeasonSchedule } from "@/lib/matchup-scheduler";
 import { effectiveSelection } from "@/lib/dgpt-2026-schedule";
 import { regularSeasonWeekCount } from "@/lib/season-weeks";
 import { getLeagueSchedule } from "@/lib/league-schedule";
-import { applyLineupPlansForWeek, type PlannedStarter } from "@/lib/lineup-plans";
+import { applyLineupPlansForWeek, getLineupSnapshot, type PlannedStarter } from "@/lib/lineup-plans";
 
 /** Round-robin pairing for a given week (used when next week's matchups don't
  *  already exist). */
@@ -102,12 +102,24 @@ export async function finalizeWeekScoresCore(
     allByTeam.set(s.team_id, all);
   });
 
+  // RE-finalizing a week that already has a snapshot scores the lineup that was
+  // actually in place that week, not today's roster. Without this, re-running a
+  // past week (the /api/refinalize maintenance route, or a commissioner
+  // correcting results) rescored it with whatever trades and waiver claims have
+  // happened since and silently rewrote history. The FIRST finalize has no
+  // snapshot yet, so it uses the live roster as before.
   const teamScores: Record<number, number> = {};
   const starterIdsByTeam = new Map<number, number[]>();
-  for (const [teamId, rows] of rowsByTeam) {
-    let sum = 0;
-    const ids = cappedStarterIds(rows, mpoSlots, fpoSlots);
+  const teamIds = new Set<number>([...rowsByTeam.keys(), ...allByTeam.keys()]);
+  const scoredFromSnapshot = new Set<number>();
+  for (const teamId of teamIds) {
+    const snapshot = await getLineupSnapshot(admin, leagueId, teamId, week);
+    if (snapshot) scoredFromSnapshot.add(teamId);
+    const ids = snapshot
+      ? snapshot.starters.map((s) => s.player_id)
+      : cappedStarterIds(rowsByTeam.get(teamId) ?? [], mpoSlots, fpoSlots);
     starterIdsByTeam.set(teamId, ids);
+    let sum = 0;
     for (const pid of ids) sum += playerPoints[pid] ?? 0;
     teamScores[teamId] = sum;
   }
@@ -117,6 +129,9 @@ export async function finalizeWeekScoresCore(
   // exist until the 2026-08 migration runs.
   try {
     for (const [teamId, all] of allByTeam) {
+      // Already have the historical lineup for this team — leave it alone
+      // rather than rewriting its bench from today's roster.
+      if (scoredFromSnapshot.has(teamId)) continue;
       const ids = starterIdsByTeam.get(teamId) ?? [];
       const idSet = new Set(ids);
       const divByPlayer = new Map(all.map((p) => [p.player_id, p.division]));

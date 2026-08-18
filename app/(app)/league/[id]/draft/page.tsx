@@ -8,6 +8,8 @@ import { setSecondsPerPick } from "@/actions/draft-config";
 import { DraftTypeForm } from "@/components/draft-type-form";
 import { DurationPicker } from "@/components/duration-picker";
 import { AuctionPanel } from "@/components/auction-panel";
+import { loadPlayerPoints } from "@/lib/player-points";
+import { selectAllRows } from "@/lib/supabase/select-all";
 
 export default async function DraftPage({
   params,
@@ -101,9 +103,11 @@ export default async function DraftPage({
 
   const draftedIds = new Set((rosteredSpots ?? []).map((r) => r.player_id));
 
-  const { data: allPlayers } = await supabase
-    .from("players")
-    .select("id, name, division, world_ranking, overall_rank, pdga_rating");
+  const allPlayers = await selectAllRows<any>(() =>
+    supabase
+      .from("players")
+      .select("id, name, division, world_ranking, overall_rank, pdga_rating") as any,
+  );
 
   // This user's personal player rankings for this league (set on the
   // rankings page). When present, the available-players panel can sort by
@@ -131,16 +135,12 @@ export default async function DraftPage({
 
   // Sum each player's fantasy points this season so the available list can
   // be ordered like the points leaders view (highest first).
-  const { data: resultRows } = await supabase
-    .from("tournament_results")
-    .select("player_id, fantasy_points");
-  const pointsByPlayer = new Map<number, number>();
-  (resultRows ?? []).forEach((r: any) => {
-    pointsByPlayer.set(
-      r.player_id,
-      (pointsByPlayer.get(r.player_id) ?? 0) + Number(r.fantasy_points ?? 0),
-    );
-  });
+  // League-rule points, paged past the 1000-row select cap (a plain select
+  // silently truncates once the season passes 1000 result rows).
+  const seasonPoints = await loadPlayerPoints(supabase, { leagueId: Number(id) });
+  const pointsByPlayer = {
+    get: (playerId: number) => seasonPoints.totalFor(playerId),
+  };
 
   const members = (memberRows ?? []).map((m) => ({
     id: m.id,

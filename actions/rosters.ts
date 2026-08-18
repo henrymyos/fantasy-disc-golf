@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isLineupLocked, isFreeAgencyLocked, getActiveTournament } from "@/lib/lineup-lock";
 import { resetWaiverPriority, runWaiverProcessing } from "@/lib/waivers";
-import { applyProjectionVariance } from "@/lib/projections";
+import { loadPlayerPoints } from "@/lib/player-points";
 import { getLeagueNextTournamentId } from "@/lib/league-schedule";
 import { getLineupIssues, type LineupIssues } from "@/lib/lineup-alert";
 
@@ -669,7 +669,7 @@ export async function optimizeLineup(leagueId: number): Promise<void> {
 
   const { data: league } = await admin
     .from("leagues")
-    .select("mpo_starters, fpo_starters")
+    .select("mpo_starters, fpo_starters, scoring_rules")
     .eq("id", leagueId)
     .single();
   if (!league) return;
@@ -691,19 +691,15 @@ export async function optimizeLineup(leagueId: number): Promise<void> {
     .eq("team_id", member.id);
   if (!roster || roster.length === 0) return;
 
-  // Season-average projection per player (same variance-seeded number the
-  // lineup pages show), zeroed for players not registered for the target event.
+  // Season-average projection per player — the SAME number the lineup and
+  // matchup pages show (league scoring rules, not the default-rule
+  // fantasy_points column), zeroed for players not registered for the target
+  // event. Optimizing off a different projection would bench a player the UI
+  // ranks higher.
   const playerIds = roster.map((r: any) => r.player_id as number);
-  const { data: results } = await admin
-    .from("tournament_results")
-    .select("player_id, fantasy_points")
-    .in("player_id", playerIds);
-  const totals = new Map<number, { sum: number; count: number }>();
-  (results ?? []).forEach((r: any) => {
-    const cur = totals.get(r.player_id) ?? { sum: 0, count: 0 };
-    cur.sum += Number(r.fantasy_points ?? 0);
-    cur.count += 1;
-    totals.set(r.player_id, cur);
+  const points = await loadPlayerPoints(admin, {
+    rules: (league as any).scoring_rules,
+    playerIds,
   });
 
   const activeT = await getActiveTournament(admin, leagueId);
@@ -721,9 +717,9 @@ export async function optimizeLineup(leagueId: number): Promise<void> {
 
   const projFor = (pid: number): number => {
     if (regSet != null && !regSet.has(pid)) return 0;
-    const t = totals.get(pid);
-    if (!t || t.count === 0) return 0.01; // unproven beats a confirmed OUT (0)
-    return applyProjectionVariance(t.sum / t.count, pid, 3);
+    const proj = points.projectionFor(pid, 3);
+    if (proj == null) return 0.01; // unproven beats a confirmed OUT (0)
+    return proj;
   };
 
   const byDivision = (div: string) =>

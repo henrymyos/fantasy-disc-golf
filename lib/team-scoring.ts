@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { fantasyPointsFromResult, resolveScoringRules } from "@/lib/scoring-rules";
 import { cappedStarterIds, type StarterRow } from "@/lib/lineup-slots";
 import { getLeagueSchedule, type LeagueSchedule } from "@/lib/league-schedule";
+import { selectAllRows } from "@/lib/supabase/select-all";
 
 /**
  * For each (team, week) pair in the league, sum the fantasy_points of the team's
@@ -75,11 +76,16 @@ export async function getTeamWeeklyTotals(
   // league's custom rules.
   const ptsByPlayerTournament = new Map<string, number>();
   if (tournamentIds.length > 0) {
-    const { data: results } = await supabase
-      .from("tournament_results")
-      .select("player_id, tournament_id, finishing_position, hot_round_count, bogey_free_count, ace_count, under_par_strokes, over_par_strokes, eagle_count, players(division)")
-      .in("tournament_id", tournamentIds);
-    (results ?? []).forEach((r: any) => {
+    // Paged: a full season's events cross the 1000-row select cap, and the
+    // truncated page comes back without an error — every weekly total (and the
+    // all-play / points-mode records built on them) would quietly run low.
+    const results = await selectAllRows<any>(() =>
+      supabase
+        .from("tournament_results")
+        .select("player_id, tournament_id, finishing_position, hot_round_count, bogey_free_count, ace_count, under_par_strokes, over_par_strokes, eagle_count, players(division)")
+        .in("tournament_id", tournamentIds) as any,
+    );
+    results.forEach((r: any) => {
       const pts = fantasyPointsFromResult(rules, {
         finishing_position: r.finishing_position,
         hot_round_count: r.hot_round_count,

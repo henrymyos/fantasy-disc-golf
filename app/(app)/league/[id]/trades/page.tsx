@@ -35,6 +35,8 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
   const [draftStatus, setDraftStatus] = useState<string | null>(null);
   const [draftNumTeams, setDraftNumTeams] = useState(0);
   const [message, setMessage] = useState("");
+  // Why an accept was refused (e.g. an event is live), shown above the list.
+  const [respondError, setRespondError] = useState<string | null>(null);
   const [submitting, startSubmitTransition] = useTransition();
   // True when this trades page was entered via ?with=&want= from another
   // page (e.g. a player profile). Used to route "← Back" buttons through
@@ -356,7 +358,8 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
   }
 
   async function handleRespond(tradeId: number, accept: boolean) {
-    await respondToTrade(tradeId, accept);
+    const res = await respondToTrade(tradeId, accept);
+    setRespondError(res?.error ?? null);
     if (leagueId) load(leagueId);
   }
 
@@ -395,6 +398,12 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
     const selectionCount = selectedTeamIds.size;
     return (
       <div className="max-w-3xl space-y-6 pb-[calc(env(safe-area-inset-bottom)+9rem)] md:pb-24">
+        {respondError && (
+          <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            {respondError}
+          </p>
+        )}
+
         {pendingTrades.length > 0 && (
           <div className="space-y-3">
             <h2 className="text-white font-bold">Pending Trades</h2>

@@ -91,7 +91,11 @@ export function LeagueChat({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const lastKeyRef = useRef<string>("");
-  const seenTsRef = useRef<string>("");
+  // Timestamp of the newest item the user has actually seen. State, not a ref:
+  // the unread dot is rendered from it, and a ref read during render doesn't
+  // re-render when a new message lands (the dot only appeared on the next
+  // unrelated render).
+  const [seenTs, setSeenTs] = useState<string>("");
   // Pointer-drag bookkeeping (shared by the open-sheet and collapsed-bar gestures).
   const dragStartRef = useRef<{ y: number; moved: boolean } | null>(null);
 
@@ -236,7 +240,7 @@ export function LeagueChat({
   }, [messages, systemEvents, channel, myMemberId]);
 
   const latestItem = timeline.length > 0 ? timeline[timeline.length - 1] : null;
-  const hasUnread = latestItem != null && latestItem.ts > seenTsRef.current && !open;
+  const hasUnread = latestItem != null && latestItem.ts > seenTs && !open;
 
   // Track the desktop breakpoint (matches the xl:pr added to the league layout).
   useEffect(() => {
@@ -292,7 +296,7 @@ export function LeagueChat({
   // Opening clears the unread marker and snaps the history to the bottom.
   const expand = useCallback(() => {
     setOpen(true);
-    if (latestItem) seenTsRef.current = latestItem.ts;
+    if (latestItem) setSeenTs(latestItem.ts);
     requestAnimationFrame(() => {
       const el = scrollRef.current;
       if (el) el.scrollTop = el.scrollHeight;

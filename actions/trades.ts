@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getActiveTournament } from "@/lib/lineup-lock";
 import { enqueueNotification } from "@/lib/notifications";
 import { resolvePickOwnerId } from "@/lib/draft-pick-owners";
 
@@ -180,7 +181,10 @@ export async function proposeTrade(
   revalidatePath(`/league/${leagueId}/trades`);
 }
 
-export async function respondToTrade(tradeId: number, accept: boolean): Promise<void> {
+export async function respondToTrade(
+  tradeId: number,
+  accept: boolean,
+): Promise<{ error?: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -193,7 +197,7 @@ export async function respondToTrade(tradeId: number, accept: boolean): Promise<
     .eq("id", tradeId)
     .single();
 
-  if (!trade || trade.status !== "pending") return;
+  if (!trade || trade.status !== "pending") return {};
 
   const { data: member } = await admin
     .from("league_members")
@@ -201,7 +205,7 @@ export async function respondToTrade(tradeId: number, accept: boolean): Promise<
     .eq("league_id", trade.league_id)
     .eq("user_id", user.id)
     .single();
-  if (!member) return;
+  if (!member) return {};
 
   // The current user must be a pending participant on this trade.
   const { data: myParticipant } = await admin
@@ -211,7 +215,16 @@ export async function respondToTrade(tradeId: number, accept: boolean): Promise<
     .eq("team_id", member.id)
     .single();
 
-  if (!myParticipant || myParticipant.status !== "pending") return;
+  if (!myParticipant || myParticipant.status !== "pending") return {};
+
+  // Trades can't EXECUTE while an event on the league's schedule is live:
+  // scoring reads the current roster, so moving a player mid-event would hand
+  // the points they already carded to their new team (and take them off the
+  // old one's live score). Lineup changes and free-agent adds are locked for
+  // the same reason — accepting a trade is just a slower way to do both.
+  if (accept && (await getActiveTournament(supabase, trade.league_id)) !== null) {
+    return { error: "Trades can't be accepted while an event is live. Try again once it wraps up." };
+  }
 
   // Best-effort: tell the other involved teams (at minimum the proposer) how a
   // trade resolved, using the same notification mechanism proposeTrade uses.
@@ -232,7 +245,7 @@ export async function respondToTrade(tradeId: number, accept: boolean): Promise<
       }
       // The team acting now already knows the outcome.
       involved.delete(myMemberId);
-      if (involved.size === 0) return;
+      if (involved.size === 0) return {};
       const { data: people } = await admin
         .from("league_members")
         .select("user_id")
@@ -271,7 +284,7 @@ export async function respondToTrade(tradeId: number, accept: boolean): Promise<
 
     await notifyTradeOutcome("rejected");
     revalidatePath(`/league/${trade.league_id}/trades`);
-    return;
+    return {};
   }
 
   // Code-side trade expiry (no schema change): a trade older than 7 days can no
@@ -285,7 +298,7 @@ export async function respondToTrade(tradeId: number, accept: boolean): Promise<
       .eq("id", tradeId);
     await notifyTradeOutcome("rejected");
     revalidatePath(`/league/${trade.league_id}/trades`);
-    return;
+    return {};
   }
 
   await admin
@@ -302,7 +315,7 @@ export async function respondToTrade(tradeId: number, accept: boolean): Promise<
   const allAccepted = (allParticipants ?? []).every((p) => p.status === "accepted");
   if (!allAccepted) {
     revalidatePath(`/league/${trade.league_id}/trades`);
-    return;
+    return {};
   }
 
   const { data: tradePlayers } = await admin
@@ -331,7 +344,7 @@ export async function respondToTrade(tradeId: number, accept: boolean): Promise<
         .eq("id", tradeId);
       await notifyTradeOutcome("rejected");
       revalidatePath(`/league/${trade.league_id}/trades`);
-      return;
+      return {};
     }
   }
 
@@ -370,7 +383,7 @@ export async function respondToTrade(tradeId: number, accept: boolean): Promise<
           .eq("id", tradeId);
         await notifyTradeOutcome("rejected");
         revalidatePath(`/league/${trade.league_id}/trades`);
-        return;
+        return {};
       }
     }
   }
@@ -446,6 +459,7 @@ export async function respondToTrade(tradeId: number, accept: boolean): Promise<
   await notifyTradeOutcome("accepted");
   revalidatePath(`/league/${trade.league_id}/trades`);
   revalidatePath(`/league/${trade.league_id}/lineups`);
+  return {};
 }
 
 export async function cancelTrade(tradeId: number): Promise<void> {

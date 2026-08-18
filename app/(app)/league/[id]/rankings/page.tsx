@@ -2,6 +2,8 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { RankingsEditor } from "@/components/rankings-editor";
+import { loadPlayerPoints } from "@/lib/player-points";
+import { selectAllRows } from "@/lib/supabase/select-all";
 
 export default async function RankingsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -24,9 +26,11 @@ export default async function RankingsPage({ params }: { params: Promise<{ id: s
     .single();
   if (!member) redirect(`/league/${id}`);
 
-  const { data: players } = await supabase
-    .from("players")
-    .select("id, name, division, world_ranking, overall_rank");
+  const players = await selectAllRows<any>(() =>
+    supabase
+      .from("players")
+      .select("id, name, division, world_ranking, overall_rank") as any,
+  );
 
   const { data: rankings } = await supabase
     .from("user_player_rankings")
@@ -38,16 +42,12 @@ export default async function RankingsPage({ params }: { params: Promise<{ id: s
   // Total fantasy points this season — used as the primary sort for
   // unranked players so the starting order matches the draft board's
   // available-players list.
-  const { data: resultRows } = await supabase
-    .from("tournament_results")
-    .select("player_id, fantasy_points");
-  const pointsByPlayer = new Map<number, number>();
-  (resultRows ?? []).forEach((r: any) => {
-    pointsByPlayer.set(
-      r.player_id,
-      (pointsByPlayer.get(r.player_id) ?? 0) + Number(r.fantasy_points ?? 0),
-    );
-  });
+  // League-rule points, paged past the 1000-row select cap (a plain select
+  // silently truncates once the season passes 1000 result rows).
+  const seasonPoints = await loadPlayerPoints(supabase, { leagueId: Number(id) });
+  const pointsByPlayer = {
+    get: (playerId: number) => seasonPoints.totalFor(playerId),
+  };
 
   const playerById = new Map<number, { id: number; name: string; division: string; overallRank: number | null; worldRanking: number | null }>();
   (players ?? []).forEach((p: any) => {

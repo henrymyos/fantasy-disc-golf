@@ -179,16 +179,24 @@ function PickCountdown({
     return () => clearInterval(id);
   }, [pickNumber, startedAt]);
 
-  if (!startedAt) return null;
-  const startedMs = Date.parse(startedAt);
-  if (!Number.isFinite(startedMs)) return null;
-  const remaining = Math.max(0, secondsPerPick - Math.floor((now - startedMs) / 1000));
+  const startedMs = startedAt ? Date.parse(startedAt) : NaN;
+  const hasClock = Number.isFinite(startedMs);
+  const remaining = hasClock
+    ? Math.max(0, secondsPerPick - Math.floor((now - startedMs) / 1000))
+    : null;
 
-  // Auto-fire the expire action once per pick when the timer hits zero.
-  if (autoFire && remaining === 0 && firedRef.current !== pickNumber) {
+  // Auto-fire the expire action once per pick when the timer hits zero. This
+  // has to happen in an effect: firing it during render ran the server action
+  // on every re-render that reached zero (and twice under StrictMode), racing
+  // duplicate auto-picks.
+  useEffect(() => {
+    if (!autoFire || remaining !== 0) return;
+    if (firedRef.current === pickNumber) return;
     firedRef.current = pickNumber;
     void autoPickExpired(leagueId);
-  }
+  }, [autoFire, remaining, pickNumber, leagueId]);
+
+  if (!hasClock || remaining == null) return null;
 
   // Compact countdown that scales: mm:ss under an hour, "2h 15m" under a day,
   // "3d 5h" for multi-day async drafts.

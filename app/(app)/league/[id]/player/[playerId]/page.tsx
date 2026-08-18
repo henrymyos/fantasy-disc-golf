@@ -6,6 +6,8 @@ import { AddWithDropModal } from "@/components/add-with-drop-modal";
 import { ConfirmDropButton } from "@/components/confirm-drop-button";
 import { placeWaiverClaim } from "@/actions/rosters";
 import { applyProjectionVariance } from "@/lib/projections";
+import { loadPlayerPoints } from "@/lib/player-points";
+import { selectAllRows } from "@/lib/supabase/select-all";
 import { getActiveTournament } from "@/lib/lineup-lock";
 import { getPollableTournament } from "@/lib/live-window";
 import { getLeagueNextTournamentId } from "@/lib/league-schedule";
@@ -53,7 +55,7 @@ export default async function PlayerPage({
   // and the user's current roster.
   const { data: league } = await supabase
     .from("leagues")
-    .select("roster_size, waivers_locked, selected_event_slugs")
+    .select("roster_size, waivers_locked, selected_event_slugs, scoring_rules")
     .eq("id", id)
     .single();
   const { data: draft } = await supabase
@@ -90,24 +92,13 @@ export default async function PlayerPage({
     const ids = (regRow as any)?.registered_player_ids as number[] | null;
     if (ids && ids.length > 0) nextRegisteredSet = new Set(ids);
   }
-  const { data: rosterResults } = rosterPlayerIds.length > 0
-    ? await supabase
-        .from("tournament_results")
-        .select("player_id, fantasy_points")
-        .in("player_id", rosterPlayerIds)
-    : { data: [] as any[] };
-  const rosterTotals = new Map<number, { total: number; played: number }>();
-  for (const r of rosterResults ?? []) {
-    const cur = rosterTotals.get((r as any).player_id) ?? { total: 0, played: 0 };
-    cur.total += Number((r as any).fantasy_points ?? 0);
-    cur.played += 1;
-    rosterTotals.set((r as any).player_id, cur);
-  }
+  const rosterPoints = await loadPlayerPoints(supabase, {
+    rules: (league as any)?.scoring_rules,
+    playerIds: rosterPlayerIds,
+  });
   const rosterProjectionFor = (pid: number): number | null => {
     if (nextRegisteredSet != null && !nextRegisteredSet.has(pid)) return 0;
-    const t = rosterTotals.get(pid);
-    if (!t || t.played === 0) return null;
-    return applyProjectionVariance(t.total / t.played, pid, 3);
+    return rosterPoints.projectionFor(pid, 3);
   };
 
   const myRoster = (myRosterRows ?? []).map((r: any) => ({
@@ -139,21 +130,33 @@ export default async function PlayerPage({
   // All result rows for players in this player's division — used both to
   // compute event-level field sizes and to tier this player's season totals
   // and average finish against same-division peers.
-  const { data: divResults } = await supabase
-    .from("tournament_results")
-    .select("tournament_id, player_id, finishing_position, fantasy_points, players!inner(division)")
-    .eq("players.division", player.division);
+  const divPlayerRows = await selectAllRows<any>(() =>
+    supabase.from("players").select("id").eq("division", player.division) as any,
+  );
+  const divPlayerIds = divPlayerRows.map((p: any) => p.id as number);
+  // League-rule points (not the default-rule fantasy_points column) and paged,
+  // so peer tiers and this player's totals match every other surface.
+  const divPoints = await loadPlayerPoints(supabase, {
+    rules: (league as any)?.scoring_rules,
+    playerIds: divPlayerIds,
+  });
 
   const fieldSizeByTournament = new Map<number, number>();
   const peerTotals = new Map<number, number>();
   const peerFinishes = new Map<number, number[]>();
-  (divResults ?? []).forEach((r: any) => {
-    fieldSizeByTournament.set(r.tournament_id, (fieldSizeByTournament.get(r.tournament_id) ?? 0) + 1);
-    peerTotals.set(r.player_id, (peerTotals.get(r.player_id) ?? 0) + Number(r.fantasy_points ?? 0));
-    const arr = peerFinishes.get(r.player_id) ?? [];
-    arr.push(Number(r.finishing_position));
-    peerFinishes.set(r.player_id, arr);
-  });
+  for (const pid of divPlayerIds) {
+    const evs = divPoints.eventsOf(pid);
+    if (evs.length === 0) continue;
+    let total = 0;
+    const finishes: number[] = [];
+    for (const e of evs) {
+      fieldSizeByTournament.set(e.tournamentId, (fieldSizeByTournament.get(e.tournamentId) ?? 0) + 1);
+      total += e.points;
+      if (e.finishingPosition != null) finishes.push(e.finishingPosition);
+    }
+    peerTotals.set(pid, total);
+    if (finishes.length > 0) peerFinishes.set(pid, finishes);
+  }
 
   const GREEN = "#4ade80";
   const YELLOW = "#facc15";
@@ -202,10 +205,10 @@ export default async function PlayerPage({
 
   const playedEvents = (events ?? []).filter((e) => ((e.tournament_results as any[]) ?? []).length > 0);
 
-  const totalPts = playedEvents.reduce((sum, e) => {
-    const r = (e.tournament_results as any)[0];
-    return sum + (r?.fantasy_points ?? 0);
-  }, 0);
+  const totalPts = playedEvents.reduce(
+    (sum, e) => sum + (divPoints.pointsAt(player.id, e.id) ?? 0),
+    0,
+  );
 
   const avgFinish = playedEvents.length > 0
     ? Math.round(
@@ -379,7 +382,7 @@ export default async function PlayerPage({
 
             {(events ?? []).map((event, i) => {
               const r = (event.tournament_results as any)[0];
-              const pts: number = r?.fantasy_points ?? 0;
+              const pts: number = divPoints.pointsAt(player.id, event.id) ?? 0;
               const finish: number | null = r?.finishing_position ?? null;
               const hot: number = r?.hot_round_count ?? 0;
               const clean: number = r?.bogey_free_count ?? 0;

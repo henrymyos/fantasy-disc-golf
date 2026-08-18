@@ -10,7 +10,7 @@ import { getLineupPlan, getLineupSnapshot, lineupPlansAvailable, type PlannedSta
 import { LiveScoreRefresher } from "@/components/live-score-refresher";
 import { WeekSwitcher } from "@/components/week-switcher";
 import { WeekLineupEditor, type EditorPlayer } from "@/components/week-lineup-editor";
-import { applyProjectionVariance } from "@/lib/projections";
+import { loadPlayerPoints } from "@/lib/player-points";
 import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
 import { optimizeLineup } from "@/actions/rosters";
 
@@ -29,7 +29,7 @@ export default async function LineupsPage({
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, starters_count, roster_size, current_week")
+    .select("id, starters_count, roster_size, current_week, scoring_rules")
     .eq("id", id)
     .single();
 
@@ -118,21 +118,11 @@ export default async function LineupsPage({
         ?? (await getLeagueNextTournamentId(supabase, Number(id)))
       : weekTid;
 
-  const { data: allResults } = playerIds.length > 0
-    ? await supabase
-        .from("tournament_results")
-        .select("player_id, tournament_id, fantasy_points")
-        .in("player_id", playerIds)
-    : { data: [] };
-  const totalsByPlayer = new Map<number, number>();
-  const eventsByPlayer = new Map<number, number>();
-  const weekActualByPlayer = new Map<number, number>();
-  (allResults ?? []).forEach((r: any) => {
-    totalsByPlayer.set(r.player_id, (totalsByPlayer.get(r.player_id) ?? 0) + Number(r.fantasy_points ?? 0));
-    eventsByPlayer.set(r.player_id, (eventsByPlayer.get(r.player_id) ?? 0) + 1);
-    if (nextTournamentId != null && r.tournament_id === nextTournamentId) {
-      weekActualByPlayer.set(r.player_id, (weekActualByPlayer.get(r.player_id) ?? 0) + Number(r.fantasy_points ?? 0));
-    }
+  // Scored under THIS league's rules (matching the matchup pages), paged past
+  // the 1000-row select cap.
+  const points = await loadPlayerPoints(supabase, {
+    rules: (league as any).scoring_rules,
+    playerIds,
   });
 
   // Registered set for the target tournament — anyone not in it is OUT.
@@ -152,12 +142,8 @@ export default async function LineupsPage({
   const pointsByPlayerId: Record<number, { projected: number | null; actual: number | null; isOut: boolean }> = {};
   const weekPointsByPlayer = new Map<number, { projected: number | null; actual: number | null; isOut: boolean }>();
   for (const pid of playerIds) {
-    const total = totalsByPlayer.get(pid) ?? 0;
-    const events = eventsByPlayer.get(pid) ?? 0;
-    const seasonProj = events > 0
-      ? applyProjectionVariance(total / events, pid, 3)
-      : null;
-    const actual = weekActualByPlayer.get(pid) ?? null;
+    const seasonProj = points.projectionFor(pid, 3);
+    const actual = points.pointsAt(pid, nextTournamentId);
     const isOut =
       registeredSet != null
       && !registeredSet.has(pid)
@@ -262,17 +248,20 @@ export default async function LineupsPage({
   let historyIsSnapshot = false;
   if (mode === "past") {
     const snapshot = await getLineupSnapshot(supabase, Number(id), myMember.id, selectedWeek);
+    // Past-week actuals under the league's rules, so a historical lineup adds
+    // up to the same total the matchup page shows for that week.
     const weekActualFor = async (ids: number[]) => {
-      if (weekTid == null || ids.length === 0) return new Map<number, number>();
-      const { data } = await supabase
-        .from("tournament_results")
-        .select("player_id, fantasy_points")
-        .eq("tournament_id", weekTid)
-        .in("player_id", ids);
       const m = new Map<number, number>();
-      (data ?? []).forEach((r: any) => {
-        m.set(r.player_id, (m.get(r.player_id) ?? 0) + Number(r.fantasy_points ?? 0));
+      if (weekTid == null || ids.length === 0) return m;
+      const weekPoints = await loadPlayerPoints(supabase, {
+        rules: (league as any).scoring_rules,
+        playerIds: ids,
+        tournamentIds: [weekTid],
       });
+      for (const pid of ids) {
+        const pts = weekPoints.pointsAt(pid, weekTid);
+        if (pts != null) m.set(pid, pts);
+      }
       return m;
     };
     if (snapshot) {

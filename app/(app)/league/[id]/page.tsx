@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import type { LeagueMember, Matchup } from "@/types";
+import type { Matchup } from "@/types";
 import {
   effectiveSelection,
   formatEventDateRange,

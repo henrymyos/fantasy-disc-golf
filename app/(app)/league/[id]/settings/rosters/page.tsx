@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { CommissionerRostersEditor } from "@/components/commissioner-rosters-editor";
+import { selectAllRows } from "@/lib/supabase/select-all";
 
 export default async function CommissionerRostersPage({
   params,
@@ -41,10 +42,12 @@ export default async function CommissionerRostersPage({
   }));
 
   // Free agents = players not rostered in this league.
-  const { data: allPlayers } = await supabase
-    .from("players")
-    .select("id, name, division")
-    .order("name");
+  const allPlayers = await selectAllRows<any>(() =>
+    supabase
+      .from("players")
+      .select("id, name, division")
+      .order("name") as any,
+  );
   const rosteredIds = new Set(rostered.map((r) => r.playerId));
   const freeAgents = (allPlayers ?? [])
     .filter((p: any) => !rosteredIds.has(p.id))

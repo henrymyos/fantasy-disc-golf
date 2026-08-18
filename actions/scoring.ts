@@ -5,7 +5,6 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { BONUS_POINTS, getPointsForDivision } from "@/lib/scoring-constants";
-import { enqueueNotification } from "@/lib/notifications";
 import { finalizeWeekScoresCore, advanceWeekCore } from "@/lib/scoring-finalize";
 
 export async function createTournament(leagueId: number, name: string, week: number): Promise<void> {

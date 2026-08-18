@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createTournament, finalizeWeekScores, advanceWeek } from "@/actions/scoring";
 import { setWaiversLocked, processWaivers } from "@/actions/rosters";
 import { EnterResultsForm } from "./enter-results-form";
+import { selectAllRows } from "@/lib/supabase/select-all";
 
 export default async function ScoringPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -24,13 +25,14 @@ export default async function ScoringPage({ params }: { params: Promise<{ id: st
     .select("id, name, week")
     .order("week", { ascending: false });
 
-  const { data: allPlayers } = await supabase
-    .from("players")
-    .select("id, name, division, pdga_number, avatar_url")
-    .order("name");
+  const allPlayers = await selectAllRows<any>(() =>
+    supabase
+      .from("players")
+      .select("id, name, division, pdga_number, avatar_url")
+      .order("name") as any,
+  );
 
   const currentWeekTournaments = (tournaments ?? []).filter((t) => t.week === league.current_week);
-  const hasCurrentWeekMatchups = await checkMatchupsExist(supabase, Number(id), league.current_week);
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -157,11 +159,3 @@ export default async function ScoringPage({ params }: { params: Promise<{ id: st
   );
 }
 
-async function checkMatchupsExist(supabase: any, leagueId: number, week: number) {
-  const { count } = await supabase
-    .from("matchups")
-    .select("id", { count: "exact", head: true })
-    .eq("league_id", leagueId)
-    .eq("week", week);
-  return (count ?? 0) > 0;
-}

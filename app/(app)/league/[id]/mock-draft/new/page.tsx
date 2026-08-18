@@ -2,6 +2,8 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { MockDraft } from "@/components/mock-draft";
 import { MockAuction } from "@/components/mock-auction";
+import { loadPlayerPoints } from "@/lib/player-points";
+import { selectAllRows } from "@/lib/supabase/select-all";
 
 export default async function MockDraftPage({
   params,
@@ -40,23 +42,21 @@ export default async function MockDraftPage({
   const auctionBudget = ((draft as any)?.auction_budget ?? 200) as number;
   const thirdRoundReversal = !!(draft as any)?.third_round_reversal;
 
-  const { data: players } = await supabase
-    .from("players")
-    .select("id, name, division, world_ranking, overall_rank")
-    .order("overall_rank", { ascending: true, nullsFirst: false });
+  const players = await selectAllRows<any>(() =>
+    supabase
+      .from("players")
+      .select("id, name, division, world_ranking, overall_rank")
+      .order("overall_rank", { ascending: true, nullsFirst: false }) as any,
+  );
 
   // Total fantasy points this season, used as the primary sort to match the
   // draft board's available-players ordering.
-  const { data: resultRows } = await supabase
-    .from("tournament_results")
-    .select("player_id, fantasy_points");
-  const pointsByPlayer = new Map<number, number>();
-  (resultRows ?? []).forEach((r: any) => {
-    pointsByPlayer.set(
-      r.player_id,
-      (pointsByPlayer.get(r.player_id) ?? 0) + Number(r.fantasy_points ?? 0),
-    );
-  });
+  // League-rule points, paged past the 1000-row select cap (a plain select
+  // silently truncates once the season passes 1000 result rows).
+  const seasonPoints = await loadPlayerPoints(supabase, { leagueId: Number(id) });
+  const pointsByPlayer = {
+    get: (playerId: number) => seasonPoints.totalFor(playerId),
+  };
 
   const mappedPlayers = (players ?? []).map((p) => ({
     id: p.id,

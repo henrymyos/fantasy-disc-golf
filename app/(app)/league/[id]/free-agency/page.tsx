@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { FreeAgencyList } from "@/components/free-agency-list";
 import { setWaiversLocked, processWaivers } from "@/actions/rosters";
 import { applyProjectionVariance } from "@/lib/projections";
+import { loadPlayerPoints } from "@/lib/player-points";
+import { selectAllRows } from "@/lib/supabase/select-all";
 import { getActiveTournament } from "@/lib/lineup-lock";
 import { getLeagueNextTournamentId } from "@/lib/league-schedule";
 
@@ -15,7 +17,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
 
   const { data: league } = await supabase
     .from("leagues")
-    .select("id, roster_size, waivers_locked, commissioner_id, selected_event_slugs")
+    .select("id, roster_size, waivers_locked, commissioner_id, selected_event_slugs, scoring_rules")
     .eq("id", id)
     .single();
 
@@ -65,23 +67,16 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
   });
   const rosteredIds = new Set(rosteredOwner.keys());
 
-  const { data: allPlayers } = await supabase
-    .from("players")
-    .select("id, name, division, world_ranking, overall_rank, pdga_rating, avatar_url");
+  const allPlayers = await selectAllRows<any>(() =>
+    supabase
+      .from("players")
+      .select("id, name, division, world_ranking, overall_rank, pdga_rating, avatar_url") as any,
+  );
 
-  const { data: resultRows } = await supabase
-    .from("tournament_results")
-    .select("player_id, fantasy_points, finishing_position, tournament_id");
-
-  const pointsByPlayer = new Map<number, number>();
-  const eventsPlayedByPlayer = new Map<number, number>();
-  (resultRows ?? []).forEach((r: any) => {
-    pointsByPlayer.set(
-      r.player_id,
-      (pointsByPlayer.get(r.player_id) ?? 0) + Number(r.fantasy_points ?? 0),
-    );
-    eventsPlayedByPlayer.set(r.player_id, (eventsPlayedByPlayer.get(r.player_id) ?? 0) + 1);
-  });
+  // Points under THIS league's scoring rules (never the default-rule
+  // fantasy_points column) and paged past the 1000-row select cap, so the
+  // numbers here match the matchup pages.
+  const points = await loadPlayerPoints(supabase, { rules: (league as any).scoring_rules });
 
   // Per-player event history in chronological order → last-event line
   // ("#5 · Ledgestone Open · 30.7 pts") and a recent-form delta (avg of the
@@ -93,18 +88,15 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
     (tournamentRows ?? []).map((t: any) => [t.id as number, { name: t.name as string, startDate: (t.start_date as string) ?? "" }]),
   );
   const historyByPlayer = new Map<number, Array<{ startDate: string; name: string; pts: number; finish: number | null }>>();
-  (resultRows ?? []).forEach((r: any) => {
-    const t = tournamentById.get(r.tournament_id);
-    if (!t) return;
-    const list = historyByPlayer.get(r.player_id) ?? [];
-    list.push({
-      startDate: t.startDate,
-      name: t.name,
-      pts: Number(r.fantasy_points ?? 0),
-      finish: (r.finishing_position as number | null) ?? null,
-    });
-    historyByPlayer.set(r.player_id, list);
-  });
+  for (const p of allPlayers) {
+    const list: Array<{ startDate: string; name: string; pts: number; finish: number | null }> = [];
+    for (const e of points.eventsOf(p.id)) {
+      const t = tournamentById.get(e.tournamentId);
+      if (!t) continue;
+      list.push({ startDate: t.startDate, name: t.name, pts: e.points, finish: e.finishingPosition });
+    }
+    if (list.length > 0) historyByPlayer.set(p.id, list);
+  }
   function lastEventFor(playerId: number): { name: string; pts: number; finish: number | null } | null {
     const list = historyByPlayer.get(playerId);
     if (!list || list.length === 0) return null;
@@ -122,16 +114,16 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
     return Math.round((recentAvg - seasonAvg) * 10) / 10;
   }
 
-  const seasonStarted = (resultRows ?? []).length > 0;
+  const seasonStarted = points.hasResults;
 
   // Total events in the league's selected season (fall back to whatever
   // tournaments exist in DB if no selection is stored).
   const selectedCount = ((league as any).selected_event_slugs?.length as number | undefined);
-  const totalEventsInSeason = selectedCount ?? new Set((resultRows ?? []).map((r: any) => r.tournament_id)).size;
+  const totalEventsInSeason = selectedCount ?? points.tournamentIds.size;
 
   function projectionFor(playerId: number): number | null {
-    const total = pointsByPlayer.get(playerId) ?? 0;
-    const played = eventsPlayedByPlayer.get(playerId) ?? 0;
+    const total = points.totalFor(playerId);
+    const played = points.eventCountFor(playerId);
     if (played === 0 || totalEventsInSeason === 0) return null;
     return applyProjectionVariance((total / played) * totalEventsInSeason, playerId);
   }
@@ -155,10 +147,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
 
   function nextProjectionFor(playerId: number): number | null {
     if (nextRegisteredSet != null && !nextRegisteredSet.has(playerId)) return 0;
-    const total = pointsByPlayer.get(playerId) ?? 0;
-    const played = eventsPlayedByPlayer.get(playerId) ?? 0;
-    if (played === 0) return null;
-    return applyProjectionVariance(total / played, playerId, 3);
+    return points.projectionFor(playerId, 3);
   }
 
   const outNextFor = (playerId: number) =>
@@ -174,7 +163,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
       overallRank: (p as any).overall_rank as number | null,
       pdgaRating: (p as any).pdga_rating as number | null,
       avatarUrl: (p as any).avatar_url as string | null,
-      totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
+      totalPoints: Math.round(points.totalFor(p.id) * 10) / 10,
       nextWeekPoints: nextProjectionFor(p.id),
       lastEvent: lastEventFor(p.id),
       formDelta: formDeltaFor(p.id),
@@ -192,7 +181,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
         overallRank: (p as any).overall_rank as number | null,
         pdgaRating: (p as any).pdga_rating as number | null,
         avatarUrl: (p as any).avatar_url as string | null,
-        totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
+        totalPoints: Math.round(points.totalFor(p.id) * 10) / 10,
         projectedPoints: projectionFor(p.id),
         nextWeekPoints: nextProjectionFor(p.id),
         lastEvent: lastEventFor(p.id),
