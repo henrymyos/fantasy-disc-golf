@@ -4,6 +4,7 @@ import { createTournament, finalizeWeekScores, advanceWeek } from "@/actions/sco
 import { setWaiversLocked, processWaivers } from "@/actions/rosters";
 import { EnterResultsForm } from "./enter-results-form";
 import { selectAllRows } from "@/lib/supabase/select-all";
+import { getLeagueSchedule } from "@/lib/league-schedule";
 
 export default async function ScoringPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -32,7 +33,14 @@ export default async function ScoringPage({ params }: { params: Promise<{ id: st
       .order("name") as any,
   );
 
-  const currentWeekTournaments = (tournaments ?? []).filter((t) => t.week === league.current_week);
+  // The league's current week maps to its Nth SELECTED event — not to the
+  // global tournaments.week counter, which belongs to the import and points at
+  // a different event entirely.
+  const leagueSchedule = await getLeagueSchedule(supabase, Number(id));
+  const currentWeekIds = new Set(
+    leagueSchedule?.weeks.find((w) => w.week === league.current_week)?.tournamentIds ?? [],
+  );
+  const currentWeekTournaments = (tournaments ?? []).filter((t) => currentWeekIds.has(t.id));
 
   return (
     <div className="max-w-3xl space-y-6">

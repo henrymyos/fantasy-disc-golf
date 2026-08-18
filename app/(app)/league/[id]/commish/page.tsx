@@ -6,6 +6,7 @@ import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { effectiveSelection } from "@/lib/dgpt-2026-schedule";
 import { getScheduleEvents, DEFAULT_SEASON_YEAR } from "@/lib/schedule";
 import { isSeasonOver } from "@/lib/season-status";
+import { getLeagueSchedule } from "@/lib/league-schedule";
 
 export default async function CommishDashboard({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -66,13 +67,21 @@ export default async function CommishDashboard({ params }: { params: Promise<{ i
   });
   const progress = setupProgress(steps);
 
-  // Current week's tournament name(s).
+  // Current week's event, resolved through the LEAGUE's selected-event order.
+  // tournaments.week is a global per-import counter, not this league's week
+  // index — filtering on it named a different event here than every matchup
+  // surface showed for the same week.
   const currentWeek = (league as any).current_week as number;
-  const { data: weekTournaments } = await supabase
-    .from("tournaments")
-    .select("name")
-    .eq("week", currentWeek);
-  const weekEventName = (weekTournaments ?? []).map((t: any) => t.name).join(", ") || "No event this week";
+  const leagueSchedule = await getLeagueSchedule(supabase, Number(id));
+  const currentLeagueWeek = leagueSchedule?.weeks.find((w) => w.week === currentWeek) ?? null;
+  const weekTournamentIds = currentLeagueWeek?.tournamentIds ?? [];
+  const { data: weekTournaments } = weekTournamentIds.length > 0
+    ? await supabase.from("tournaments").select("name").in("id", weekTournamentIds)
+    : { data: [] as any[] };
+  const weekEventName =
+    (weekTournaments ?? []).map((t: any) => t.name).join(", ")
+    || currentLeagueWeek?.event.name
+    || "No event this week";
 
   const draftStatus = (draft as any)?.status ?? "pending";
   const draftLabel =
