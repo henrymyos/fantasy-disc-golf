@@ -373,11 +373,39 @@ function feedKindFor(d: LiveDelta): string {
  * driven by the DB, not a hardcoded list — add a tournament row with a
  * pdga_event_id and it's automatically picked up.
  */
-export async function runPdgaImport(supabase: SupabaseClient): Promise<ImportResult> {
-  const { data: tournaments } = await supabase
+export async function runPdgaImport(
+  supabase: SupabaseClient,
+  opts: {
+    /**
+     * Which events to scrape. "all" walks the whole season (weekly cron,
+     * backfill scripts); "recent" limits it to events that are live or ended
+     * within `recentDays` (default 2), plus anything starting tomorrow.
+     *
+     * Scoping matters: one event costs ~4s of PDGA round fetches, so a full
+     * 20-event season takes ~80s — past the 60s maxDuration on the
+     * client-triggered /api/refresh-scores route, which meant a live event
+     * sitting late in the list never got scraped at all during play.
+     */
+    scope?: "all" | "recent";
+    recentDays?: number;
+  } = {},
+): Promise<ImportResult> {
+  const scope = opts.scope ?? "all";
+  const recentDays = opts.recentDays ?? 2;
+
+  let query = supabase
     .from("tournaments")
     .select("id, name, pdga_event_id, start_date, end_date")
     .not("pdga_event_id", "is", null);
+  if (scope === "recent") {
+    const day = 24 * 60 * 60 * 1000;
+    const from = new Date(Date.now() - recentDays * day).toISOString().slice(0, 10);
+    const to = new Date(Date.now() + day).toISOString().slice(0, 10);
+    query = query.gte("end_date", from).lte("start_date", to);
+  }
+  // Chronological so a partial run (timeout, PDGA throttling) is at least
+  // deterministic about what it covered.
+  const { data: tournaments } = await query.order("start_date", { ascending: true });
 
   const events = (tournaments ?? []).map((t: any) => ({
     dbId: t.id as number,

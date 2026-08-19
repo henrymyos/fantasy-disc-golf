@@ -62,7 +62,12 @@ export async function autoFinalizeDueWeeks(admin: SupabaseClient): Promise<strin
 
     if (!alreadyFinal) {
       if (!imported) {
-        try { await runPdgaImport(admin); } catch { /* fall back to stored results */ }
+        // Only the recently-concluded events: this runs inside the daily cron
+        // alongside waivers, lineup checks and draft timers, so a full-season
+        // scrape would dominate the request.
+        try {
+          await runPdgaImport(admin, { scope: "recent", recentDays: 10 });
+        } catch { /* fall back to stored results */ }
         imported = true;
       }
       // Graceful degradation: if the week's event still has no results (PDGA

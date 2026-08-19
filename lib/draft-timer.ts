@@ -19,6 +19,7 @@ export type DraftRow = {
   status: string;
   type: string;
   current_pick: number;
+  current_pick_started_at: string | null;
   total_rounds: number;
   seconds_per_pick: number;
   auction_budget: number;
@@ -35,7 +36,7 @@ export async function loadAuctionContext(admin: AdminClient, leagueId: number) {
   const { data: draft } = await admin
     .from("drafts")
     .select(
-      "id, status, type, current_pick, total_rounds, seconds_per_pick, auction_budget, auction_current_player_id, auction_current_bid, auction_high_bidder_team_id, auction_nominator_team_id, auction_ends_at",
+      "id, status, type, current_pick, current_pick_started_at, total_rounds, seconds_per_pick, auction_budget, auction_current_player_id, auction_current_bid, auction_high_bidder_team_id, auction_nominator_team_id, auction_ends_at",
     )
     .eq("league_id", leagueId)
     .single();
@@ -224,6 +225,22 @@ export async function runExpiredSnakePick(admin: AdminClient, leagueId: number):
   const onClock = (members as any[]).find((m) => m.id === onClockId);
   if (!onClock) return false;
 
+  // Claim this expiry before picking. Every client watching the board fires
+  // autoPickExpired when its own countdown hits zero, and the cron fires too.
+  // The claim RPC would reject the stragglers — except at a snake turn
+  // boundary, where the same team is on the clock for the next pick as well:
+  // there the second caller's pick sailed through, burning that team's next
+  // pick instantly instead of giving them their clock. The conditional UPDATE
+  // is atomic, so only one caller proceeds per pick.
+  const { data: claimedPick } = await admin
+    .from("drafts")
+    .update({ current_pick_started_at: new Date().toISOString() })
+    .eq("id", (draft as any).id)
+    .eq("current_pick", draft.current_pick)
+    .eq("current_pick_started_at", draft.current_pick_started_at)
+    .select("id");
+  if (!claimedPick || claimedPick.length === 0) return false;
+
   const pickedPlayerId = await pickBestAvailableForTeam(
     admin,
     leagueId,
@@ -266,9 +283,31 @@ export async function runExpiredAuctionFinalize(admin: AdminClient, leagueId: nu
   const endsMs = Date.parse(draft.auction_ends_at);
   if (!Number.isFinite(endsMs) || Date.now() < endsMs) return false; // still bidding
 
-  const winnerTeamId = draft.auction_high_bidder_team_id!;
+  const winnerTeamId = draft.auction_high_bidder_team_id;
   const playerId = draft.auction_current_player_id;
   const winningBid = draft.auction_current_bid ?? 0;
+  if (winnerTeamId == null) return false; // nomination with no bidder — nothing to award
+
+  // Claim this nomination before awarding anything. Every client with the
+  // auction panel open fires finalizeAuctionPick the moment its local timer
+  // hits zero, and the cron backstop fires too — without a claim they all ran
+  // the award: the duplicate roster/pick inserts bounced off their unique
+  // constraints (silently), but each one still deducted the winning bid from
+  // the budget and advanced the nominator. A conditional UPDATE is atomic in
+  // Postgres, so exactly one caller sees a row come back; the rest bail here.
+  const { data: claimedRows } = await admin
+    .from("drafts")
+    .update({
+      auction_current_player_id: null,
+      auction_current_bid: null,
+      auction_high_bidder_team_id: null,
+      auction_ends_at: null,
+    })
+    .eq("id", draft.id)
+    .eq("auction_current_player_id", playerId)
+    .eq("auction_ends_at", draft.auction_ends_at)
+    .select("id");
+  if (!claimedRows || claimedRows.length === 0) return false;
 
   const positionedCount = members.filter((m: any) => m.draft_position != null).length;
 
@@ -298,7 +337,10 @@ export async function runExpiredAuctionFinalize(admin: AdminClient, leagueId: nu
   let assignedOrder: number | null = null;
   for (let i = 1; i <= slotLimit; i++) { if (!taken.has(i)) { assignedOrder = i; break; } }
 
-  await admin.from("rosters").insert({
+  // If the award itself fails (e.g. the player was somehow rostered in
+  // between), stop before charging the budget — the nomination is already
+  // cleared, so the nominator can put someone else up.
+  const { error: awardErr } = await admin.from("rosters").insert({
     league_id: leagueId,
     team_id: winnerTeamId,
     player_id: playerId,
@@ -306,6 +348,10 @@ export async function runExpiredAuctionFinalize(admin: AdminClient, leagueId: nu
     is_starter: assignedOrder !== null,
     lineup_order: assignedOrder,
   });
+  if (awardErr) {
+    console.warn("auction award insert failed", awardErr);
+    return false;
+  }
   await admin.from("draft_picks").insert({
     draft_id: draft.id,
     pick_number: draft.current_pick,
@@ -390,6 +436,75 @@ export async function runExpiredAuctionFinalize(admin: AdminClient, leagueId: nu
 }
 
 /**
+ * Auction nomination backstop: when the team on the clock never puts anyone up,
+ * nominate their best available player at $1 on their behalf once the
+ * nomination clock has run out. Without this an auction stalls forever — the
+ * only auction timer that existed was `auction_ends_at`, which is null while
+ * nobody has been nominated, so an idle nominator froze the draft with no way
+ * to advance short of commissioner surgery.
+ *
+ * No auth checks — see the file note. Returns true when a nomination was made.
+ */
+export async function runExpiredAuctionNomination(
+  admin: AdminClient,
+  leagueId: number,
+): Promise<boolean> {
+  const { draft, members } = await loadAuctionContext(admin, leagueId);
+  if (!draft || draft.status !== "in_progress" || draft.type !== "auction") return false;
+  if (draft.auction_current_player_id != null) return false; // bidding is live
+  if (!draft.current_pick_started_at) return false;
+
+  const startedMs = Date.parse(draft.current_pick_started_at);
+  if (!Number.isFinite(startedMs)) return false;
+  if ((Date.now() - startedMs) / 1000 < (draft.seconds_per_pick ?? 60)) return false;
+
+  const nominator =
+    (draft.auction_nominator_team_id != null
+      ? members.find((m: any) => m.id === draft.auction_nominator_team_id)
+      : null) ?? currentNominator(members, draft.current_pick);
+  if (!nominator) return false;
+
+  // A full team can't nominate; the advance loop normally skips them.
+  const { count } = await admin
+    .from("rosters")
+    .select("id", { count: "exact", head: true })
+    .eq("league_id", leagueId)
+    .eq("team_id", (nominator as any).id);
+  const remainingSpots = draft.total_rounds - (count ?? 0);
+  if (remainingSpots <= 0) return false;
+  // Same reserve rule the bid actions use: $1 held back per future spot.
+  const budget = Number((nominator as any).auction_budget_remaining ?? 0);
+  if (budget - (remainingSpots - 1) < 1) return false;
+
+  const playerId = await pickBestAvailableForTeam(
+    admin,
+    leagueId,
+    (nominator as any).id,
+    (nominator as any).user_id ?? null,
+  );
+  if (playerId == null) return false;
+
+  // Atomic claim: only fills a slot that is still empty for this pick, so a
+  // real nomination landing at the same moment always wins.
+  const endsAt = new Date(Date.now() + (draft.seconds_per_pick ?? 60) * 1000).toISOString();
+  const { data: claimed } = await admin
+    .from("drafts")
+    .update({
+      auction_current_player_id: playerId,
+      auction_current_bid: 1,
+      auction_high_bidder_team_id: (nominator as any).id,
+      auction_nominator_team_id: (nominator as any).id,
+      auction_ends_at: endsAt,
+    })
+    .eq("id", draft.id)
+    .eq("current_pick", draft.current_pick)
+    .is("auction_current_player_id", null)
+    .select("id");
+
+  return !!claimed && claimed.length > 0;
+}
+
+/**
  * Backstop sweep over every in_progress draft, firing any timer whose deadline
  * has passed. Snake drafts whose current pick has run past seconds_per_pick get
  * an auto-pick; auctions whose nomination timer is past get finalized. The
@@ -399,7 +514,7 @@ export async function runExpiredAuctionFinalize(admin: AdminClient, leagueId: nu
  */
 export async function runDueDraftTimers(
   admin: AdminClient,
-): Promise<{ checked: number; snakePicks: number; auctionFinalizes: number }> {
+): Promise<{ checked: number; snakePicks: number; auctionFinalizes: number; autoNominations: number }> {
   const { data: drafts } = await admin
     .from("drafts")
     .select("league_id, type, status, seconds_per_pick, current_pick_started_at, auction_ends_at")
@@ -407,12 +522,21 @@ export async function runDueDraftTimers(
 
   let snakePicks = 0;
   let auctionFinalizes = 0;
+  let autoNominations = 0;
   const now = Date.now();
 
   for (const d of drafts ?? []) {
     const draft = d as any;
     if (draft.type === "auction") {
-      if (!draft.auction_ends_at) continue;
+      if (!draft.auction_ends_at) {
+        // No live nomination — nudge an idle nominator instead.
+        if (!draft.current_pick_started_at) continue;
+        const startedMs = Date.parse(draft.current_pick_started_at);
+        if (!Number.isFinite(startedMs)) continue;
+        if ((now - startedMs) / 1000 < (draft.seconds_per_pick ?? 60)) continue;
+        if (await runExpiredAuctionNomination(admin, draft.league_id)) autoNominations++;
+        continue;
+      }
       const endsMs = Date.parse(draft.auction_ends_at);
       if (!Number.isFinite(endsMs) || now < endsMs) continue;
       if (await runExpiredAuctionFinalize(admin, draft.league_id)) auctionFinalizes++;
@@ -425,5 +549,5 @@ export async function runDueDraftTimers(
     }
   }
 
-  return { checked: drafts?.length ?? 0, snakePicks, auctionFinalizes };
+  return { checked: drafts?.length ?? 0, snakePicks, auctionFinalizes, autoNominations };
 }

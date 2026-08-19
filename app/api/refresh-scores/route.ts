@@ -76,7 +76,9 @@ export async function POST() {
   }
 
   try {
-    const result = await runPdgaImport(admin);
+    // Only the live/just-ended events — the whole season takes longer than
+    // this route's 60s budget, and everything else already has final results.
+    const result = await runPdgaImport(admin, { scope: "recent" });
     // Snapshots, lead-change + hot-round alerts (best-effort, never throws).
     await runGamedayPass(admin, result.liveDeltas);
     // Deltas are one-refresh-only data — keep them out of the cached result.
