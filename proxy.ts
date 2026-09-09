@@ -71,8 +71,10 @@ export async function proxy(request: NextRequest) {
 export const config = {
   // Skip auth gating for public static assets. PWA files (manifest.json, sw.js)
   // and robots.txt must stay publicly fetchable or install / service-worker
-  // registration / audits break for cookieless requests.
+  // registration / audits break for cookieless requests. The generated
+  // opengraph-image / twitter-image routes must also be public, or link
+  // previews (LinkedIn, iMessage, Slack) get bounced to /login and show blank.
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|manifest.json|sw.js|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|webmanifest)$).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|manifest.json|sw.js|robots.txt|opengraph-image|twitter-image|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|webmanifest)$).*)",
   ],
 };

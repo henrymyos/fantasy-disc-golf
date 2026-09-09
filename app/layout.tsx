@@ -12,9 +12,31 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : "https://fantasy-disc-golf-seven.vercel.app");
+
+const DESCRIPTION =
+  "Fantasy sports for pro disc golf: leagues with commissioner controls, live snake and auction drafts, weekly matchups, trades, and scoring from real PDGA tournament results.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "Disc Fantasy",
-  description: "Fantasy Disc Golf League Platform",
+  description: DESCRIPTION,
+  openGraph: {
+    type: "website",
+    siteName: "Fantasy Disc Golf",
+    title: "Fantasy Disc Golf",
+    description: DESCRIPTION,
+    url: "/",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Fantasy Disc Golf",
+    description: DESCRIPTION,
+  },
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
