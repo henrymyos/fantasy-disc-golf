@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useClientValue } from "@/lib/use-client-value";
 import { subscribeToPush, unsubscribeFromPush } from "@/actions/notifications";
 
 const VAPID_PUBLIC = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
@@ -22,22 +23,21 @@ function arrayBufferToBase64(buf: ArrayBuffer): string {
 }
 
 export function PushSubscribeButton() {
-  const [supported, setSupported] = useState<boolean | null>(null);
-  const [permission, setPermission] = useState<NotificationPermission | null>(null);
+  const supported = useClientValue<boolean | null>(
+    () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window,
+    null,
+  );
+  // null until the user answers a prompt; before that, read the browser's current setting.
+  const [answered, setAnswered] = useState<NotificationPermission | null>(null);
+  const permission = answered ?? (supported ? Notification.permission : null);
   const [subscribed, setSubscribed] = useState<PushSubscription | null>(null);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const ok = typeof window !== "undefined"
-      && "serviceWorker" in navigator
-      && "PushManager" in window
-      && "Notification" in window;
-    setSupported(ok);
-    if (!ok) return;
-    setPermission(Notification.permission);
+    if (!supported) return;
     navigator.serviceWorker.ready.then((reg) => reg.pushManager.getSubscription()).then(setSubscribed).catch(() => {});
-  }, []);
+  }, [supported]);
 
   if (supported === false) {
     return (
@@ -61,7 +61,7 @@ export function PushSubscribeButton() {
     setError(null);
     try {
       const perm = await Notification.requestPermission();
-      setPermission(perm);
+      setAnswered(perm);
       if (perm !== "granted") {
         setError("Permission denied");
         return;

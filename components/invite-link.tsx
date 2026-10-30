@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useClientValue } from "@/lib/use-client-value";
 import { CopyButton } from "@/components/copy-button";
 
 /**
@@ -18,13 +18,8 @@ export function InviteLink({
   leagueName?: string;
   className?: string;
 }) {
-  const [origin, setOrigin] = useState("");
-  const [canShare, setCanShare] = useState(false);
-
-  useEffect(() => {
-    setOrigin(window.location.origin);
-    setCanShare(typeof navigator !== "undefined" && !!navigator.share);
-  }, []);
+  const origin = useClientValue(() => window.location.origin, "");
+  const canShare = useClientValue(() => !!navigator.share, false);
 
   const link = origin ? `${origin}/join/${code}` : `/join/${code}`;
   const display = link.replace(/^https?:\/\//, "");

@@ -179,6 +179,8 @@ export function LeagueChat({
   }, [leagueId]);
 
   useEffect(() => {
+    // Both refreshers are async: their setState calls run after an await, not synchronously.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshMessages();
     refreshFeed();
 

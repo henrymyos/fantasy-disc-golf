@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
+import { useClientValue } from "@/lib/use-client-value";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -29,15 +30,18 @@ export const useInstall = () => useContext(InstallContext);
  */
 export function InstallProvider({ children }: { children: React.ReactNode }) {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isIos, setIsIos] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(true); // assume installed until proven otherwise (no flash)
+  const isIos = useClientValue(() => /iphone|ipad|ipod/i.test(window.navigator.userAgent), false);
+  // Server render assumes installed until proven otherwise (no flash).
+  const launchedStandalone = useClientValue(
+    () =>
+      !!window.matchMedia?.("(display-mode: standalone)").matches ||
+      (window.navigator as unknown as { standalone?: boolean }).standalone === true,
+    true,
+  );
+  const [installedNow, setInstalledNow] = useState(false);
+  const isStandalone = launchedStandalone || installedNow;
 
   useEffect(() => {
-    const standalone =
-      window.matchMedia?.("(display-mode: standalone)").matches ||
-      (window.navigator as unknown as { standalone?: boolean }).standalone === true;
-    setIsStandalone(!!standalone);
-    setIsIos(/iphone|ipad|ipod/i.test(window.navigator.userAgent));
 
     const onBeforeInstall = (e: Event) => {
       e.preventDefault();
@@ -45,7 +49,7 @@ export function InstallProvider({ children }: { children: React.ReactNode }) {
     };
     const onInstalled = () => {
       setDeferred(null);
-      setIsStandalone(true);
+      setInstalledNow(true);
     };
     window.addEventListener("beforeinstallprompt", onBeforeInstall);
     window.addEventListener("appinstalled", onInstalled);

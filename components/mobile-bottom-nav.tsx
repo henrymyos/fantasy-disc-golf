@@ -17,16 +17,15 @@ export function MobileBottomNav({ leagues = [] }: { leagues?: LeagueLink[] }) {
 
   // Red badge on the Team tab while the current-week lineup has problems
   // (OUT starters / empty slots). Re-checked on league or route change.
-  const [lineupBadge, setLineupBadge] = useState(false);
+  // Stores the league the badge belongs to, so it never carries over to another league.
+  const [badgeLeagueId, setBadgeLeagueId] = useState<string | null>(null);
+  const lineupBadge = badgeLeagueId != null && badgeLeagueId === leagueId;
   useEffect(() => {
     let cancelled = false;
-    if (!leagueId) {
-      setLineupBadge(false);
-      return;
-    }
+    if (!leagueId) return;
     getMyLineupAlert(Number(leagueId))
       .then((issues) => {
-        if (!cancelled) setLineupBadge(issues != null);
+        if (!cancelled) setBadgeLeagueId(issues != null ? leagueId : null);
       })
       .catch(() => {});
     return () => {

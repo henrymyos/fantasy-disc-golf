@@ -81,6 +81,8 @@ export function AuctionPanel({
   }
 
   useEffect(() => {
+    // refresh() is async: its setState calls all run after an await, not synchronously.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
     const supabase = createClient();
     supabase
