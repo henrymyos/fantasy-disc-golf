@@ -61,10 +61,12 @@ export function DraftScheduleForm({
     return new Date(year, month - 1, safeDay, hour24, minute, 0, 0);
   }, [year, month, safeDay, hour12, minute, meridiem]);
 
-  const isFuture = selectedDate.getTime() > Date.now();
+  // Render-time "now" is fixed at mount; submit re-checks against the real clock.
+  const [mountedAt] = useState(Date.now);
+  const isFuture = selectedDate.getTime() > mountedAt;
 
   function handleSubmit() {
-    if (!isFuture) {
+    if (selectedDate.getTime() <= Date.now()) {
       setError("Pick a time in the future.");
       return;
     }

@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { LIVE_END_GRACE_MS } from "@/lib/live-window";
+import { withinLiveGrace } from "@/lib/live-window";
 import { buildWeekProjections, type MatchupPlayerRow } from "@/lib/matchup-projections";
 import { featuredWeekFor, getLeagueSchedule, weekTabsFor } from "@/lib/league-schedule";
 import { buildSeasonSchedule } from "@/lib/matchup-scheduler";
@@ -182,7 +182,7 @@ export default async function MyMatchupPage({
   // Keep polling for a grace window past the UTC end so late-posted Sunday
   // final-round results still flow in before the Monday finalize.
   const pollLive =
-    inProgress || (ended && wk.eventEndMs != null && Date.now() <= wk.eventEndMs + LIVE_END_GRACE_MS);
+    inProgress || (ended && wk.eventEndMs != null && withinLiveGrace(wk.eventEndMs));
 
   // Decorate the shared rows with this page's score-breakdown line.
   const decorate = (row: MatchupPlayerRow | null): StarterRow | null =>

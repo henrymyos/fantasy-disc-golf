@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { LIVE_END_GRACE_MS } from "@/lib/live-window";
+import { withinLiveGrace } from "@/lib/live-window";
 import { buildWeekProjections, type MatchupPlayerRow } from "@/lib/matchup-projections";
 import { resolveScoringRules, describeScoreContributions } from "@/lib/scoring-rules";
 import { LiveScoreRefresher } from "@/components/live-score-refresher";
@@ -65,7 +65,7 @@ export default async function MatchupDetailPage({
   // Keep polling for a grace window past the UTC end so late-posted Sunday
   // final-round results still flow in before the Monday finalize.
   const pollLive =
-    inProgress || (ended && wk.eventEndMs != null && Date.now() <= wk.eventEndMs + LIVE_END_GRACE_MS);
+    inProgress || (ended && wk.eventEndMs != null && withinLiveGrace(wk.eventEndMs));
 
   // Per-team player nicknames (shown under each name on this matchup).
   const { data: nickRows } = await supabase

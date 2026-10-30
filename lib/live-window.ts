@@ -33,3 +33,8 @@ export async function getPollableTournament(
   }
   return null;
 }
+
+/** True while the score poller should still run for an event that ended at `endMs`. */
+export function withinLiveGrace(endMs: number, now = Date.now()): boolean {
+  return now <= endMs + LIVE_END_GRACE_MS;
+}
