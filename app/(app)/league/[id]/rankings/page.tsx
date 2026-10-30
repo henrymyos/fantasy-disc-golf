@@ -84,8 +84,8 @@ export default async function RankingsPage({ params }: { params: Promise<{ id: s
         </Link>
         <h2 className="text-white font-bold text-xl">Your Draft Rankings</h2>
         <p className="text-gray-400 text-sm mt-1">
-          Order the players you'd take. The Auto-pick button on the draft board pulls
-          the highest-ranked available player from this list. If you don't rank a
+          Order the players you&apos;d take. The Auto-pick button on the draft board pulls
+          the highest-ranked available player from this list. If you don&apos;t rank a
           player, the bot falls back to overall ranking.
         </p>
       </div>

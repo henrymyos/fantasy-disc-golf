@@ -263,7 +263,7 @@ export default async function DraftPage({
               Save timer
             </button>
             <p className="w-full text-gray-400 text-xs">
-              If a pick isn't made within this window, the highest-ranked available player is auto-picked.
+              If a pick isn&apos;t made within this window, the highest-ranked available player is auto-picked.
             </p>
           </form>
 

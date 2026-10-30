@@ -246,7 +246,7 @@ export function AuctionPanel({
             </div>
           )}
           {me?.id === draft.auction_high_bidder_team_id && (
-            <p className="text-[#36D7B7] text-sm font-semibold">You're the high bidder.</p>
+            <p className="text-[#36D7B7] text-sm font-semibold">You&apos;re the high bidder.</p>
           )}
         </div>
       ) : isMyNomination ? (

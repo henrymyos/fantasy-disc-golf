@@ -308,7 +308,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
           <summary className="cursor-pointer flex items-center justify-between gap-3 text-sm">
             <span className="text-white font-semibold">Waiver order</span>
             <span className="text-gray-400 text-xs">
-              You're #{(myMember as any).waiver_priority ?? "—"} · waivers running
+              You&apos;re #{(myMember as any).waiver_priority ?? "—"} · waivers running
             </span>
           </summary>
           <ol className="mt-3 space-y-1 text-sm">

@@ -164,7 +164,7 @@ export function LeagueSettingsForm({ leagueId, initial }: Props) {
           className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#4B3DFF] transition"
         />
         <p className="text-gray-400 text-xs mt-1">
-          Number of players each team can carry into next season's draft (0 disables keepers).
+          Number of players each team can carry into next season&apos;s draft (0 disables keepers).
         </p>
       </div>
 

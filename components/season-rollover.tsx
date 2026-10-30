@@ -75,7 +75,7 @@ export function SeasonRollover({
           </p>
           {keeperReadyCount < memberCount && (
             <p className="text-gray-400 text-xs mt-1">
-              Teams that haven't set keepers will start {nextYear} with an empty roster and fill it in the draft.{" "}
+              Teams that haven&apos;t set keepers will start {nextYear} with an empty roster and fill it in the draft.{" "}
               <Link href={`/league/${leagueId}/settings/keepers`} className="text-[#a09aff] hover:text-white">Manage keepers →</Link>
             </p>
           )}
@@ -86,7 +86,7 @@ export function SeasonRollover({
         <div className="rounded-2xl p-4 border border-yellow-400/30 bg-yellow-400/5">
           <p className="text-sm text-white font-medium">No {nextYear} schedule yet</p>
           <p className="text-gray-400 text-xs mt-1">
-            The {nextYear} DGPT schedule isn't loaded, so there will be no events to select after rollover until it's
+            The {nextYear} DGPT schedule isn&apos;t loaded, so there will be no events to select after rollover until it&apos;s
             added. An admin can add it (or clone {currentYear}) from the schedule admin. You can still roll over now and
             pick events once the schedule exists.
           </p>
@@ -94,7 +94,7 @@ export function SeasonRollover({
       )}
 
       <div className="border border-red-500/30 rounded-2xl p-5 bg-red-500/5">
-        <h2 className="text-red-400 font-semibold mb-1">This can't be undone</h2>
+        <h2 className="text-red-400 font-semibold mb-1">This can&apos;t be undone</h2>
         <p className="text-gray-400 text-sm mb-4">
           The {currentYear} season is archived first, but live rosters, matchups, and the draft are reset. Type{" "}
           <span className="text-white font-mono font-semibold">{nextYear}</span> to confirm.
