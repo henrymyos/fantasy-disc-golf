@@ -44,13 +44,6 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
   const [enteredViaPrefill, setEnteredViaPrefill] = useState(false);
   const router = useRouter();
 
-  useEffect(() => {
-    params.then(({ id }) => {
-      setLeagueId(Number(id));
-      load(Number(id), true);
-    });
-  }, []);
-
   async function load(lid: number, applyPrefill = false) {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -250,6 +243,13 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
     setPendingTrades(tradeData ?? []);
     setLoading(false);
   }
+
+  useEffect(() => {
+    params.then(({ id }) => {
+      setLeagueId(Number(id));
+      load(Number(id), true);
+    });
+  }, []);
 
   function toggleTeam(teamId: number) {
     setSelectedTeamIds((prev) => {
