@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { reorderWaiverClaims, cancelWaiverClaim } from "@/actions/rosters";
 
@@ -50,7 +50,7 @@ function timeAgo(iso: string) {
   return "just now";
 }
 
-export function TeamActionsPanel({ leagueId, myTeamId, rosterTxs, completedTrades, pendingClaims = [] }: Props) {
+export function TeamActionsPanel({ leagueId, rosterTxs, completedTrades, pendingClaims = [] }: Props) {
   const [showTx, setShowTx] = useState(false);
   const [order, setOrder] = useState<PendingClaim[]>(pendingClaims);
   const [pending, startTransition] = useTransition();
@@ -58,10 +58,11 @@ export function TeamActionsPanel({ leagueId, myTeamId, rosterTxs, completedTrade
   // Re-sync local order when the set of claims changes (added/cancelled), but
   // not on every render (which would clobber an in-flight reorder).
   const claimKey = pendingClaims.map((c) => c.id).join(",");
-  useEffect(() => {
+  const [syncedKey, setSyncedKey] = useState(claimKey);
+  if (claimKey !== syncedKey) {
+    setSyncedKey(claimKey);
     setOrder(pendingClaims);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [claimKey]);
+  }
 
   function move(index: number, dir: -1 | 1) {
     const target = index + dir;
@@ -184,7 +185,7 @@ export function TeamActionsPanel({ leagueId, myTeamId, rosterTxs, completedTrade
             <p className="text-gray-400 text-sm text-center py-8">No recent transactions</p>
           ) : (
             <div className="divide-y divide-white/5">
-              {activity.map((entry, i) => {
+              {activity.map((entry) => {
                 if (entry.kind === "tx") {
                   const t = entry.item;
                   const isAdd = t.action === "add";

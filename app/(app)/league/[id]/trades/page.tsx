@@ -272,9 +272,6 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
   function pickKey(p: { round: number; originalTeamId: number }) {
     return `${p.round}:${p.originalTeamId}`;
   }
-  function isInPickMovements(p: { round: number; originalTeamId: number }) {
-    return pickMovements.some((m) => m.round === p.round && m.originalTeamId === p.originalTeamId);
-  }
   function togglePick(p: FuturePick, fromTeamId: number) {
     setPickMovements((prev) => {
       const key = pickKey(p);
@@ -316,10 +313,6 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
     setCurrentPickMovements((prev) =>
       prev.map((m) => (m.overallPick === overallPick ? { ...m, toTeamId } : m)),
     );
-  }
-
-  function isInMovements(playerId: number) {
-    return movements.some((m) => m.playerId === playerId);
   }
 
   function togglePlayer(playerId: number, fromTeamId: number) {

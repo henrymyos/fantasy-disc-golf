@@ -292,7 +292,6 @@ function TeamHeader({
   score,
   projected,
   isFinal,
-  inProgress,
   right,
 }: {
   name: string;

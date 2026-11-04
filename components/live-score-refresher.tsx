@@ -37,6 +37,8 @@ export function LiveScoreRefresher({
   }
 
   useEffect(() => {
+    // Intended: the mount fetch shows "Updating..." (one extra render); the rest of refresh() runs after an await.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
     const id = setInterval(refresh, intervalMs);
     return () => clearInterval(id);
