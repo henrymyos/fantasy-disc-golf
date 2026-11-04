@@ -335,15 +335,17 @@ export function MockDraft({
     [picks, playerById, availableSorted, mpoStarters, fpoStarters, rosterSize],
   );
 
+  // Solo draft: the last pick completes it (adjusted during render, not in an effect).
+  if (!isReadOnly && !isShared && phase === "drafting" && currentPickIndex >= totalPicks) {
+    setPhase("complete");
+  }
+
   // Local (solo) bot loop — disabled for shared drafts, which drive bots from
   // the host's browser instead (see below).
   useEffect(() => {
     if (isReadOnly || isShared) return;
     if (phase !== "drafting") return;
-    if (currentPickIndex >= totalPicks) {
-      setPhase("complete");
-      return;
-    }
+    if (currentPickIndex >= totalPicks) return; // phase flips to "complete" during render, above
     if (onClockTeamIndex === myTeamIndex) return; // user's turn
 
     botTimer.current = setTimeout(() => {

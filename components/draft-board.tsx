@@ -354,11 +354,6 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
     };
   }, [teamPickerOpen]);
 
-  // Sync the default viewing team to mine when myMemberId becomes available.
-  useEffect(() => {
-    if (viewingTeamId == null && myMemberId != null) setViewingTeamId(myMemberId);
-  }, [myMemberId, viewingTeamId]);
-
   // Close the settings (gear) menu on outside click / Escape.
   useEffect(() => {
     if (!settingsOpen) return;

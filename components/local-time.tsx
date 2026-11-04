@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useClientValue } from "@/lib/use-client-value";
 
 /**
  * Renders an ISO timestamp formatted in the *viewer's* own timezone.
@@ -18,11 +18,6 @@ export function LocalTime({
   iso: string;
   options?: Intl.DateTimeFormatOptions;
 }) {
-  const [text, setText] = useState("");
-  useEffect(() => {
-    setText(new Date(iso).toLocaleString("en-US", options));
-    // options is a stable literal at the call site.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [iso]);
+  const text = useClientValue(() => new Date(iso).toLocaleString("en-US", options), "");
   return <span suppressHydrationWarning>{text}</span>;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useActionState, useEffect } from "react";
+import { useState, useTransition, useActionState } from "react";
 import { useRouter } from "next/navigation";
 import type { DgptEvent } from "@/lib/dgpt-2026-schedule";
 import {
@@ -36,17 +36,16 @@ export function ScheduleAdmin({
   const [form, setForm] = useState({ ...EMPTY });
   const [editingSlug, setEditingSlug] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [state, action, saving] = useActionState<ScheduleActionState, FormData>(upsertScheduleEvent, null);
-
-  // After a successful save, reset the form and refresh the list.
-  useEffect(() => {
-    if (state?.message === "saved") {
+  const [state, action, saving] = useActionState<ScheduleActionState, FormData>(async (prev, formData) => {
+    const next = await upsertScheduleEvent(prev, formData);
+    // After a successful save, reset the form and refresh the list.
+    if (next?.message === "saved") {
       setForm({ ...EMPTY, sortOrder: String(events.length) });
       setEditingSlug(null);
       router.refresh();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state]);
+    return next;
+  }, null);
 
   function editEvent(e: DgptEvent, i: number) {
     setEditingSlug(e.slug);

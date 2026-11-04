@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { reorderWaiverClaims, cancelWaiverClaim } from "@/actions/rosters";
 
@@ -58,10 +58,11 @@ export function TeamActionsPanel({ leagueId, myTeamId, rosterTxs, completedTrade
   // Re-sync local order when the set of claims changes (added/cancelled), but
   // not on every render (which would clobber an in-flight reorder).
   const claimKey = pendingClaims.map((c) => c.id).join(",");
-  useEffect(() => {
+  const [syncedKey, setSyncedKey] = useState(claimKey);
+  if (claimKey !== syncedKey) {
+    setSyncedKey(claimKey);
     setOrder(pendingClaims);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [claimKey]);
+  }
 
   function move(index: number, dir: -1 | 1) {
     const target = index + dir;
