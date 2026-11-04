@@ -221,7 +221,6 @@ function Wheel<T>({
     if (Math.abs(el.scrollTop - target) > 1) {
       el.scrollTop = target;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index, items.length]);
 
   function handleScroll() {

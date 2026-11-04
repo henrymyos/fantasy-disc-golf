@@ -112,7 +112,6 @@ type Props = {
 
 export function MockDraft({
   leagueId,
-  leagueName,
   numTeams,
   rosterSize,
   mpoStarters,

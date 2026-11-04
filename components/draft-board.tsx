@@ -786,9 +786,6 @@ export function DraftBoard({ leagueId, draft, members, pickOwnerOverrides = [], 
     draft?.status === "complete";
 
   // Team panel state — defaults to my team, can switch via the dropdown.
-  const myPicks = myMemberId == null
-    ? []
-    : picks.filter((p) => p.teamId === myMemberId);
   const effectiveViewingTeamId = viewingTeamId ?? myMemberId;
   const viewingTeamPicks = effectiveViewingTeamId == null
     ? []

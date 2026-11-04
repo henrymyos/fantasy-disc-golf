@@ -50,7 +50,7 @@ function timeAgo(iso: string) {
   return "just now";
 }
 
-export function TeamActionsPanel({ leagueId, myTeamId, rosterTxs, completedTrades, pendingClaims = [] }: Props) {
+export function TeamActionsPanel({ leagueId, rosterTxs, completedTrades, pendingClaims = [] }: Props) {
   const [showTx, setShowTx] = useState(false);
   const [order, setOrder] = useState<PendingClaim[]>(pendingClaims);
   const [pending, startTransition] = useTransition();
@@ -185,7 +185,7 @@ export function TeamActionsPanel({ leagueId, myTeamId, rosterTxs, completedTrade
             <p className="text-gray-400 text-sm text-center py-8">No recent transactions</p>
           ) : (
             <div className="divide-y divide-white/5">
-              {activity.map((entry, i) => {
+              {activity.map((entry) => {
                 if (entry.kind === "tx") {
                   const t = entry.item;
                   const isAdd = t.action === "add";

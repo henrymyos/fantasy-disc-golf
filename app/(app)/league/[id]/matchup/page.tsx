@@ -407,7 +407,6 @@ function TeamHeader({
   score,
   projected,
   isFinal,
-  inProgress,
   isMine,
   right,
 }: {

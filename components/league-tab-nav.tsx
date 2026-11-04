@@ -32,7 +32,7 @@ const NAV_TABS = [
   { label: "Playoffs", href: "/playoffs" },
 ];
 
-export function LeagueTabNav({ base, isCommissioner, draftComplete }: { base: string; isCommissioner: boolean; draftComplete?: boolean }) {
+export function LeagueTabNav({ base, draftComplete }: { base: string; isCommissioner: boolean; draftComplete?: boolean }) {
   const pathname = usePathname();
   const activeRef = useRef<HTMLAnchorElement | null>(null);
 
