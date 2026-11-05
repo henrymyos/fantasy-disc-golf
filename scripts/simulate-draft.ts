@@ -117,7 +117,7 @@ async function manualPick(
 
 // Mirrors actions/rankings.ts:autoPickExpired — chooses best-available then
 // routes through the same RPC.
-async function autoPickExpired(client: SupabaseClient, leagueId: number, _draftId: number): Promise<"ok" | "rejected_state" | "rejected_not_expired"> {
+async function autoPickExpired(client: SupabaseClient, leagueId: number): Promise<"ok" | "rejected_state" | "rejected_not_expired"> {
   const { data: draft } = await client
     .from("drafts")
     .select("status, current_pick, seconds_per_pick, current_pick_started_at")
@@ -200,7 +200,6 @@ async function main() {
     console.log(`  pool: ${remainingMpo.length} MPO + ${remainingFpo.length} FPO available\n`);
 
     // -- Edge case A: pick out of turn --
-    const draftAtP1 = await admin.from("drafts").select("current_pick").eq("id", draftId).single();
     const wrongTeam = memberIds[2]; // slot 3 trying to pick at pick 1 (slot 1 is on clock)
     const ootResult = await manualPick(admin, leagueId, draftId, wrongTeam, remainingMpo[0].id);
     if (ootResult === "rejected_not_on_clock") ok("out-of-turn pick is rejected");
@@ -266,7 +265,7 @@ async function main() {
           .from("drafts")
           .update({ current_pick_started_at: new Date(Date.now() - 61_000).toISOString() })
           .eq("id", draftId);
-        const r = await autoPickExpired(admin, leagueId, draftId);
+        const r = await autoPickExpired(admin, leagueId);
         if (r === "ok") {
           ok(`pick #${pick}: autopick after timer expiry (round ${round}, slot ${slot})`);
           autoPickCount++;

@@ -6,7 +6,7 @@ import { currentNominator } from "@/lib/draft-timer";
 let pass = 0, fail = 0;
 function eq(label: string, got: unknown, want: unknown) {
   const ok = JSON.stringify(got) === JSON.stringify(want);
-  ok ? pass++ : fail++;
+  if (ok) pass++; else fail++;
   console.log(`${ok ? "PASS" : "FAIL"}  ${label}${ok ? "" : `  got ${JSON.stringify(got)} want ${JSON.stringify(want)}`}`);
 }
 

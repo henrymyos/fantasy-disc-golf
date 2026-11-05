@@ -71,15 +71,6 @@ interface Player {
   fantasyPoints: number;
 }
 
-// Tied players share averaged points of their shared positions.
-// ties: array of [position, groupSize] — positions that are tied.
-// If a player's finishingPosition equals the start of a tie group, they share
-// average points across that group.
-interface TieGroup {
-  startPos: number;
-  size: number;
-}
-
 function buildField(): Player[] {
   // Known real players with confirmed/realistic QCC 2026 finishes.
   // Top 20 as provided, with ties at 2nd handled explicitly.
