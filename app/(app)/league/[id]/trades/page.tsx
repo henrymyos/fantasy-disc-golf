@@ -249,6 +249,8 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
       setLeagueId(Number(id));
       load(Number(id), true);
     });
+    // Load once on mount: a new league id remounts the page, and re-running on a fresh params promise would redo the first-load hash handling.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function toggleTeam(teamId: number) {

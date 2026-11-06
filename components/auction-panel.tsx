@@ -93,6 +93,8 @@ export function AuctionPanel({
       .then(({ data }) => setPlayers((data ?? []) as any));
     const id = setInterval(refresh, 2000);
     return () => clearInterval(id);
+    // refresh is re-created every render but only reads leagueId; listing it would restart the poll each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leagueId]);
 
   useEffect(() => {
@@ -130,6 +132,8 @@ export function AuctionPanel({
         router.refresh();
       });
     }
+    // Keyed on the pick, not the polled draft object; refresh only reads leagueId and router is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isBidding, secondsLeft, draft?.current_pick, leagueId]);
 
   // Reset firedFinalizeFor when a new auction starts.
