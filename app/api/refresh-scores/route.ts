@@ -69,7 +69,7 @@ export async function POST() {
       .select("last_result")
       .eq("id", 1)
       .maybeSingle();
-    const cached = ((state as any)?.last_result ?? null) as any;
+    const cached = (state?.last_result ?? null) as any;
     localLastAttempt = now;
     localCached = cached;
     return NextResponse.json({ ok: true, cached: true, ...(cached ?? {}) });

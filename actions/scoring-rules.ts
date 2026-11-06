@@ -21,7 +21,7 @@ export async function saveScoringRules(
     .select("commissioner_id")
     .eq("id", leagueId)
     .single();
-  if (!league || (league as any).commissioner_id !== user.id) return;
+  if (!league || league.commissioner_id !== user.id) return;
 
   // Drop overrides that match defaults so we don't bloat the JSON.
   const clean: ScoringRules = {
@@ -59,7 +59,7 @@ export async function resetScoringRules(leagueId: number): Promise<void> {
     .select("commissioner_id")
     .eq("id", leagueId)
     .single();
-  if (!league || (league as any).commissioner_id !== user.id) return;
+  if (!league || league.commissioner_id !== user.id) return;
 
   await admin.from("leagues").update({ scoring_rules: null }).eq("id", leagueId);
   revalidatePath(`/league/${leagueId}/settings/scoring`);

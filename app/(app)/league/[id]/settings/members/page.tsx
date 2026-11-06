@@ -35,9 +35,9 @@ export default async function MembersPage({ params }: { params: Promise<{ id: st
     .select("status")
     .eq("league_id", id)
     .maybeSingle();
-  const draftLocked = ["in_progress", "paused", "complete"].includes((draft as any)?.status);
+  const draftLocked = ["in_progress", "paused", "complete"].includes(draft?.status);
 
-  const commissionerUserId = (league as any).commissioner_id as string;
+  const commissionerUserId = league.commissioner_id as string;
   const isCommissioner = commissionerUserId === user.id;
 
   return (
@@ -51,7 +51,7 @@ export default async function MembersPage({ params }: { params: Promise<{ id: st
         </Link>
         <h2 className="text-white font-bold text-xl">Members</h2>
         <p className="text-gray-400 text-sm mt-1">
-          {(members ?? []).length} of {(league as any).max_teams} teams
+          {(members ?? []).length} of {league.max_teams} teams
           {draftLocked
             ? " · removing teams is locked once the draft starts"
             : isCommissioner

@@ -71,11 +71,11 @@ export async function getActivityFeed(
   }
 
   for (const tr of trades ?? []) {
-    if (!(tr as any).resolved_at) continue;
+    if (!tr.resolved_at) continue;
     const proposer = (tr as any).proposer?.team_name ?? "A team";
-    if ((tr as any).status === "accepted") {
-      const tps: any[] = (tr as any).trade_players ?? [];
-      const tpicks: any[] = (tr as any).trade_picks ?? [];
+    if (tr.status === "accepted") {
+      const tps: any[] = tr.trade_players ?? [];
+      const tpicks: any[] = tr.trade_picks ?? [];
       const playerCount = tps.length;
       const pickCount = tpicks.length;
       const teamsInvolved = new Set<number>();
@@ -92,21 +92,21 @@ export async function getActivityFeed(
       if (pickCount > 0) parts.push(`${pickCount} pick${pickCount !== 1 ? "s" : ""}`);
       items.push({
         id: `trade-${tr.id}`,
-        ts: (tr as any).resolved_at,
+        ts: tr.resolved_at,
         kind: "trade",
         description: `Trade accepted between ${teamsInvolved.size} teams · ${parts.join(" + ")}`,
       });
-    } else if ((tr as any).status === "rejected") {
+    } else if (tr.status === "rejected") {
       items.push({
         id: `trade-${tr.id}`,
-        ts: (tr as any).resolved_at,
+        ts: tr.resolved_at,
         kind: "trade",
         description: `${proposer}'s trade was rejected`,
       });
-    } else if ((tr as any).status === "cancelled") {
+    } else if (tr.status === "cancelled") {
       items.push({
         id: `trade-${tr.id}`,
-        ts: (tr as any).resolved_at,
+        ts: tr.resolved_at,
         kind: "trade",
         description: `${proposer} cancelled a trade`,
       });
@@ -114,12 +114,12 @@ export async function getActivityFeed(
   }
 
   for (const w of waiverFails ?? []) {
-    if (!(w as any).processed_at) continue;
+    if (!w.processed_at) continue;
     const team = (w as any).team?.team_name ?? "A team";
     const player = (w as any).player?.name ?? "a player";
     items.push({
       id: `waiver-${w.id}`,
-      ts: (w as any).processed_at,
+      ts: w.processed_at,
       kind: "waiver_failed",
       description: `${team}'s waiver claim for ${player} failed`,
     });

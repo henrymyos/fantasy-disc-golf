@@ -131,7 +131,7 @@ export async function joinLeague(
     .select("status")
     .eq("league_id", league.id)
     .maybeSingle();
-  if ((draftRow as any)?.status != null && (draftRow as any).status !== "pending") {
+  if (draftRow?.status != null && draftRow.status !== "pending") {
     return { message: "This league's draft has already started, so it's no longer accepting new teams." };
   }
 
@@ -190,7 +190,7 @@ export async function joinLeague(
       .eq("league_id", league.id)
       .neq("id", inserted?.id ?? -1);
     for (const m of others ?? []) {
-      const uid = (m as any).user_id;
+      const uid = m.user_id;
       if (!uid) continue;
       await enqueueNotification(admin, {
         userId: uid,
@@ -335,7 +335,7 @@ export async function setSelectedEvents(
     throw new Error("Not authorized");
   }
 
-  const seasonYear = (league as any).season_year ?? DEFAULT_SEASON_YEAR;
+  const seasonYear = league.season_year ?? DEFAULT_SEASON_YEAR;
   const events = await getScheduleEvents(admin, seasonYear);
 
   const cleaned = Array.from(new Set(slugs.filter((s) => typeof s === "string" && s.length > 0)));
@@ -356,7 +356,7 @@ export async function setSelectedEvents(
     .select("selected_event_slugs")
     .eq("id", leagueId)
     .single();
-  const currentSelected = new Set<string>(((current as any)?.selected_event_slugs ?? []) as string[]);
+  const currentSelected = new Set<string>((current?.selected_event_slugs ?? []) as string[]);
 
   // Strip locked entries from the submitted list, then re-add any locked slugs
   // matching the prior persisted state.

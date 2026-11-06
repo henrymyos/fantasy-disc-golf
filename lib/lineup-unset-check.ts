@@ -24,7 +24,7 @@ export async function runLineupUnsetCheck(
     .limit(1)
     .maybeSingle();
   if (!upcoming) return { leaguesChecked: 0, notificationsSent: 0 };
-  const tournamentName = (upcoming as any).name as string;
+  const tournamentName = upcoming.name as string;
 
   const { data: leagues } = await admin
     .from("leagues")
@@ -32,7 +32,7 @@ export async function runLineupUnsetCheck(
   if (!leagues || leagues.length === 0) {
     return { leaguesChecked: 0, notificationsSent: 0 };
   }
-  const leagueIds = leagues.map((l) => (l as any).id as number);
+  const leagueIds = leagues.map((l) => l.id as number);
 
   // Batch the per-member work into a handful of grouped queries instead of two
   // round-trips per member. At ~100 leagues × ~12 members the old shape issued
@@ -65,7 +65,7 @@ export async function runLineupUnsetCheck(
   // (leagueId:teamId) -> filled starter counts per division.
   const startersByTeam = new Map<string, { mpo: number; fpo: number }>();
   for (const r of starterRows ?? []) {
-    const key = `${(r as any).league_id}:${(r as any).team_id}`;
+    const key = `${r.league_id}:${r.team_id}`;
     const counts = startersByTeam.get(key) ?? { mpo: 0, fpo: 0 };
     if (((r as any).players?.division ?? "MPO") === "FPO") counts.fpo++;
     else counts.mpo++;
@@ -77,12 +77,12 @@ export async function runLineupUnsetCheck(
   // per run, matching the original per-(user, league) dedup.
   const notified = new Set<string>();
   for (const n of recentNotifs ?? []) {
-    notified.add(`${(n as any).league_id}:${(n as any).user_id}`);
+    notified.add(`${n.league_id}:${n.user_id}`);
   }
 
   const membersByLeague = new Map<number, any[]>();
   for (const m of members ?? []) {
-    const lid = (m as any).league_id as number;
+    const lid = m.league_id as number;
     const list = membersByLeague.get(lid) ?? [];
     list.push(m);
     membersByLeague.set(lid, list);
@@ -91,15 +91,15 @@ export async function runLineupUnsetCheck(
   let notificationsSent = 0;
   let leaguesChecked = 0;
   for (const league of leagues) {
-    const leagueId = (league as any).id as number;
+    const leagueId = league.id as number;
     leaguesChecked++;
-    const mpoSlots = ((league as any).mpo_starters as number) ?? 4;
-    const fpoSlots = ((league as any).fpo_starters as number) ?? 2;
+    const mpoSlots = (league.mpo_starters as number) ?? 4;
+    const fpoSlots = (league.fpo_starters as number) ?? 2;
 
     for (const m of membersByLeague.get(leagueId) ?? []) {
-      const userId = (m as any).user_id as string | null;
+      const userId = m.user_id as string | null;
       if (!userId) continue;
-      const teamId = (m as any).id as number;
+      const teamId = m.id as number;
 
       const counts = startersByTeam.get(`${leagueId}:${teamId}`) ?? { mpo: 0, fpo: 0 };
       const open = Math.max(0, mpoSlots - counts.mpo) + Math.max(0, fpoSlots - counts.fpo);

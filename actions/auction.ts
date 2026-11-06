@@ -36,7 +36,7 @@ async function maxBidFor(
     .select("auction_budget_remaining")
     .eq("id", teamId)
     .single();
-  const budget = (member as any)?.auction_budget_remaining ?? 0;
+  const budget = member?.auction_budget_remaining ?? 0;
   return Math.max(0, budget - reserve);
 }
 
@@ -54,11 +54,11 @@ export async function nominatePlayer(
   if (!draft || draft.status !== "in_progress" || draft.type !== "auction") return;
   if (draft.auction_current_player_id != null) return; // a nomination is already live
 
-  const caller = members.find((m) => (m as any).user_id === user.id);
+  const caller = members.find((m) => m.user_id === user.id);
   if (!caller) return;
 
   const nominator = currentNominator(members, draft.current_pick);
-  if (!nominator || (nominator as any).id !== (caller as any).id) return;
+  if (!nominator || nominator.id !== caller.id) return;
 
   const { data: existing } = await admin
     .from("rosters")
@@ -69,7 +69,7 @@ export async function nominatePlayer(
   if (existing) return;
 
   const bid = Math.max(1, Math.round(openingBid));
-  const max = await maxBidFor(leagueId, (caller as any).id, draft);
+  const max = await maxBidFor(leagueId, caller.id, draft);
   if (bid > max) return;
 
   const endsAt = new Date(Date.now() + draft.seconds_per_pick * 1000).toISOString();
@@ -78,8 +78,8 @@ export async function nominatePlayer(
     .update({
       auction_current_player_id: playerId,
       auction_current_bid: bid,
-      auction_high_bidder_team_id: (caller as any).id,
-      auction_nominator_team_id: (caller as any).id,
+      auction_high_bidder_team_id: caller.id,
+      auction_nominator_team_id: caller.id,
       auction_ends_at: endsAt,
     })
     .eq("id", draft.id);
@@ -101,13 +101,13 @@ export async function placeBid(leagueId: number, amount: number): Promise<void> 
   const endsMs = Date.parse(draft.auction_ends_at);
   if (Number.isFinite(endsMs) && Date.now() >= endsMs) return;
 
-  const caller = members.find((m) => (m as any).user_id === user.id);
+  const caller = members.find((m) => m.user_id === user.id);
   if (!caller) return;
-  if ((caller as any).id === draft.auction_high_bidder_team_id) return; // can't outbid self
+  if (caller.id === draft.auction_high_bidder_team_id) return; // can't outbid self
 
   const bid = Math.round(amount);
   if (bid <= (draft.auction_current_bid ?? 0)) return;
-  const max = await maxBidFor(leagueId, (caller as any).id, draft);
+  const max = await maxBidFor(leagueId, caller.id, draft);
   if (bid > max) return;
 
   // Anti-snipe: if less than 10s remain when this bid lands, reset to 10s.
@@ -120,7 +120,7 @@ export async function placeBid(leagueId: number, amount: number): Promise<void> 
     .from("drafts")
     .update({
       auction_current_bid: bid,
-      auction_high_bidder_team_id: (caller as any).id,
+      auction_high_bidder_team_id: caller.id,
       auction_ends_at: nextEnds,
     })
     .eq("id", draft.id);

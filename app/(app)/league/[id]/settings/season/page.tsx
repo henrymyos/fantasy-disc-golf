@@ -29,14 +29,14 @@ export default async function EditSeasonPage({
   // The league's stored season_year may not have a loaded schedule (e.g. an
   // older 2025-labelled league that plays the 2026 slate). Resolve to the year
   // that actually has events so the editor never renders empty.
-  const requestedYear = (league as any).season_year ?? DEFAULT_SEASON_YEAR;
+  const requestedYear = league.season_year ?? DEFAULT_SEASON_YEAR;
   const seasonYear = await resolveScheduleYear(supabase, requestedYear);
   const events = await getScheduleEvents(supabase, seasonYear);
 
   // Drop any stale slugs that aren't on the current schedule (e.g., removed
   // events) so the displayed count doesn't exceed the schedule total.
   const scheduleSlugs = new Set(events.map((e) => e.slug));
-  const selected = effectiveSelection((league as any).selected_event_slugs, events)
+  const selected = effectiveSelection(league.selected_event_slugs, events)
     .filter((s) => scheduleSlugs.has(s));
 
   return (
@@ -45,8 +45,8 @@ export default async function EditSeasonPage({
       seasonYear={seasonYear}
       events={events}
       initialSelected={selected}
-      hasExplicitSelection={(league as any).selected_event_slugs != null}
-      playoffCount={playoffCountForTeams((league as any).max_teams)}
+      hasExplicitSelection={league.selected_event_slugs != null}
+      playoffCount={playoffCountForTeams(league.max_teams)}
     />
   );
 }

@@ -32,9 +32,9 @@ export default async function DraftPage({
 
   if (!league) notFound();
 
-  const mpoSlots: number = (league as any).mpo_starters ?? 4;
-  const fpoSlots: number = (league as any).fpo_starters ?? 2;
-  const rosterSize: number = (league as any).roster_size ?? 14;
+  const mpoSlots: number = league.mpo_starters ?? 4;
+  const fpoSlots: number = league.fpo_starters ?? 2;
+  const rosterSize: number = league.roster_size ?? 14;
 
   const isCommissioner = league.commissioner_id === user.id;
 
@@ -166,12 +166,12 @@ export default async function DraftPage({
       division: p.division,
       worldRanking: p.world_ranking,
       overallRank: p.overall_rank,
-      pdgaRating: (p as any).pdga_rating ?? null,
+      pdgaRating: p.pdga_rating ?? null,
       totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
     }));
 
   const draftPending = draft?.status === "pending";
-  const scheduledAt = (draft as any)?.scheduled_at as string | null;
+  const scheduledAt = draft?.scheduled_at as string | null;
 
   return (
     <div className="max-w-3xl space-y-4">
@@ -186,12 +186,12 @@ export default async function DraftPage({
           draft: draft ? {
             id: draft.id,
             status: draft.status,
-            type: (draft as any).type,
+            type: draft.type,
             currentPick: draft.current_pick,
             totalRounds: draft.total_rounds,
-            secondsPerPick: (draft as any).seconds_per_pick ?? 60,
-            currentPickStartedAt: (draft as any).current_pick_started_at ?? null,
-            thirdRoundReversal: !!(draft as any).third_round_reversal,
+            secondsPerPick: draft.seconds_per_pick ?? 60,
+            currentPickStartedAt: draft.current_pick_started_at ?? null,
+            thirdRoundReversal: !!draft.third_round_reversal,
           } : null,
           members,
           pickOwnerOverrides,
@@ -253,7 +253,7 @@ export default async function DraftPage({
               <label className="block text-xs text-gray-400 mb-1">Time per pick</label>
               <DurationPicker
                 name="secondsPerPick"
-                defaultSeconds={(draft as any)?.seconds_per_pick ?? 60}
+                defaultSeconds={draft?.seconds_per_pick ?? 60}
               />
             </div>
             <button
@@ -269,9 +269,9 @@ export default async function DraftPage({
 
           <DraftTypeForm
             leagueId={Number(id)}
-            initialType={((draft as any)?.type ?? "snake") as "snake" | "auction"}
-            initialBudget={(draft as any)?.auction_budget ?? 200}
-            initialThirdRoundReversal={!!(draft as any)?.third_round_reversal}
+            initialType={(draft?.type ?? "snake") as "snake" | "auction"}
+            initialBudget={draft?.auction_budget ?? 200}
+            initialThirdRoundReversal={!!draft?.third_round_reversal}
           />
 
           {/* Order */}
@@ -305,7 +305,7 @@ export default async function DraftPage({
         </div>
       )}
 
-      {(draft as any)?.type === "auction" && draft?.status === "in_progress" && (
+      {draft?.type === "auction" && draft?.status === "in_progress" && (
         <AuctionPanel leagueId={Number(id)} myUserId={user.id} />
       )}
     </div>

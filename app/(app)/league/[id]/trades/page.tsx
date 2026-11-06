@@ -73,7 +73,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
       .select("keepers_per_team")
       .eq("id", lid)
       .single();
-    const picksAvailable = ((leagueRow as any)?.keepers_per_team ?? 0) > 0;
+    const picksAvailable = (leagueRow?.keepers_per_team ?? 0) > 0;
 
     // Future-pick ownership: each team starts with picks 1..N for next year,
     // then any traded_draft_picks rows override the holder.
@@ -84,7 +84,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
           .eq("league_id", lid)
           .single()
       : { data: null };
-    const totalRounds = (draft as any)?.total_rounds ?? 0;
+    const totalRounds = draft?.total_rounds ?? 0;
     const { data: swaps } = picksAvailable
       ? await supabase
           .from("traded_draft_picks")
@@ -103,10 +103,10 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
       .select("id, status, total_rounds, third_round_reversal")
       .eq("league_id", lid)
       .maybeSingle();
-    const cdDraftId = (draftRow as any)?.id ?? null;
-    const cdStatus = (draftRow as any)?.status ?? null;
-    const cdRounds = (draftRow as any)?.total_rounds ?? 0;
-    const cdTrr = !!(draftRow as any)?.third_round_reversal;
+    const cdDraftId = draftRow?.id ?? null;
+    const cdStatus = draftRow?.status ?? null;
+    const cdRounds = draftRow?.total_rounds ?? 0;
+    const cdTrr = !!draftRow?.third_round_reversal;
 
     const { data: posMembers } = await supabase
       .from("league_members")
@@ -188,11 +188,11 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
         }
       }
       for (const s of swaps ?? []) {
-        if ((s as any).current_team_id === m.id && (s as any).original_team_id !== m.id) {
+        if (s.current_team_id === m.id && s.original_team_id !== m.id) {
           picks.push({
-            seasonYear: (s as any).season_year,
-            round: (s as any).round,
-            originalTeamId: (s as any).original_team_id,
+            seasonYear: s.season_year,
+            round: s.round,
+            originalTeamId: s.original_team_id,
             currentTeamId: m.id,
           });
         }

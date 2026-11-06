@@ -48,7 +48,7 @@ export default async function LeagueSettingsSubpage({
           <LeagueLogoForm
             leagueId={id}
             leagueName={league.name}
-            logoUrl={(league as any).logo_url ?? null}
+            logoUrl={league.logo_url ?? null}
           />
         </div>
       )}
@@ -59,27 +59,27 @@ export default async function LeagueSettingsSubpage({
             leagueId={id}
             initial={{
               name: league.name,
-              maxTeams: (league as any).max_teams,
-              rosterSize: (league as any).roster_size,
-              mpoStarters: (league as any).mpo_starters ?? 4,
-              fpoStarters: (league as any).fpo_starters ?? 2,
-              waiverOrderMode: ((league as any).waiver_order_mode ?? "reverse_standings") as
+              maxTeams: league.max_teams,
+              rosterSize: league.roster_size,
+              mpoStarters: league.mpo_starters ?? 4,
+              fpoStarters: league.fpo_starters ?? 2,
+              waiverOrderMode: (league.waiver_order_mode ?? "reverse_standings") as
                 | "reverse_standings"
                 | "reverse_last_add",
-              scoringMode: ((league as any).scoring_mode ?? "head_to_head") as
+              scoringMode: (league.scoring_mode ?? "head_to_head") as
                 | "head_to_head"
                 | "all_play"
                 | "median",
-              keepersPerTeam: (league as any).keepers_per_team ?? 0,
+              keepersPerTeam: league.keepers_per_team ?? 0,
             }}
           />
         ) : (
           <ReadOnlySettings
             name={league.name}
-            maxTeams={(league as any).max_teams}
-            rosterSize={(league as any).roster_size}
-            mpoStarters={(league as any).mpo_starters ?? 4}
-            fpoStarters={(league as any).fpo_starters ?? 2}
+            maxTeams={league.max_teams}
+            rosterSize={league.roster_size}
+            mpoStarters={league.mpo_starters ?? 4}
+            fpoStarters={league.fpo_starters ?? 2}
           />
         )}
       </div>

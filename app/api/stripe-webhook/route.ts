@@ -79,7 +79,7 @@ export async function POST(request: Request) {
         .select("dues_amount")
         .eq("id", member.leagueId)
         .single();
-      const dues = (league as any)?.dues_amount;
+      const dues = league?.dues_amount;
       const expectedCents =
         dues != null && Number.isFinite(Number(dues)) && Number(dues) > 0
           ? Math.round(Number(dues) * 100)
@@ -110,7 +110,7 @@ export async function POST(request: Request) {
       const update: { dues_paid: boolean; dues_paid_at?: string } = {
         dues_paid: true,
       };
-      if (!(existing as any)?.dues_paid_at) {
+      if (!existing?.dues_paid_at) {
         update.dues_paid_at = new Date().toISOString();
       }
 

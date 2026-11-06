@@ -50,7 +50,7 @@ export async function GET(request: Request) {
     const startingIds = new Set((startingToday as any[]).map((t) => t.id as number));
     const { data: leagues } = await admin.from("leagues").select("id");
     for (const league of leagues ?? []) {
-      const leagueId = (league as any).id as number;
+      const leagueId = league.id as number;
       const schedule = await getLeagueSchedule(admin, leagueId);
       const onSchedule = (schedule?.weeks ?? []).some((w) =>
         w.tournamentIds.some((tid) => startingIds.has(tid)),
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
         .select("status")
         .eq("league_id", leagueId)
         .maybeSingle();
-      if ((draft as any)?.status !== "complete") continue;
+      if (draft?.status !== "complete") continue;
       await admin.from("leagues").update({ waivers_locked: true }).eq("id", leagueId);
       await resetWaiverPriority(leagueId);
       locked.push(leagueId);
@@ -99,7 +99,7 @@ export async function GET(request: Request) {
     .eq("waivers_locked", true);
 
   for (const league of lockedLeagues ?? []) {
-    const leagueId = (league as any).id as number;
+    const leagueId = league.id as number;
     const schedule = await getLeagueSchedule(admin, leagueId);
     if (!schedule) continue;
     const tids = schedule.weeks.flatMap((w) => w.tournamentIds);
@@ -149,8 +149,8 @@ export async function GET(request: Request) {
     .neq("status", "complete");
   const postponed: Record<number, string[]> = {};
   for (const d of liveDrafts ?? []) {
-    const dropped = await applyDraftPostponements(admin, (d as any).league_id);
-    if (dropped.length > 0) postponed[(d as any).league_id] = dropped;
+    const dropped = await applyDraftPostponements(admin, d.league_id);
+    if (dropped.length > 0) postponed[d.league_id] = dropped;
   }
 
   // 7) Pre-draft reminders (~1 day / ~1 hour out). Daily backstop only — for

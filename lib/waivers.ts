@@ -25,7 +25,7 @@ export async function resetWaiverPriority(leagueId: number): Promise<void> {
     .select("waiver_order_mode")
     .eq("id", leagueId)
     .single();
-  const mode = (((league as any)?.waiver_order_mode ?? "reverse_standings") as WaiverOrderMode);
+  const mode = ((league?.waiver_order_mode ?? "reverse_standings") as WaiverOrderMode);
 
   const { data: members } = await admin
     .from("league_members")
@@ -164,7 +164,7 @@ export async function runWaiverProcessing(leagueId: number): Promise<void> {
         .eq("league_id", leagueId)
         .eq("team_id", teamId);
       const rosterCount = count ?? 0;
-      const needsDrop = rosterCount >= (league as any).roster_size;
+      const needsDrop = rosterCount >= league.roster_size;
 
       if (needsDrop && !claim.drop_player_id) {
         await admin
@@ -199,7 +199,7 @@ export async function runWaiverProcessing(leagueId: number): Promise<void> {
         league_id: leagueId,
         team_id: teamId,
         player_id: claim.player_id,
-        acquired_week: (league as any).current_week,
+        acquired_week: league.current_week,
       });
       if (addErr) {
         await admin
@@ -243,7 +243,7 @@ export async function runWaiverProcessing(leagueId: number): Promise<void> {
       .select("id, waiver_priority")
       .eq("league_id", leagueId);
     const ordered = [...(allMembers ?? [])].sort(
-      (a, b) => ((a as any).waiver_priority ?? 9999) - ((b as any).waiver_priority ?? 9999),
+      (a, b) => (a.waiver_priority ?? 9999) - (b.waiver_priority ?? 9999),
     );
     const grantedSet = new Set(grantedTeams);
     const losers = ordered.filter((m) => !grantedSet.has(m.id));
@@ -267,10 +267,10 @@ export async function runWaiverProcessing(leagueId: number): Promise<void> {
       .in("id", claimIds);
     const byTeam = new Map<number, { won?: string; lost?: string }>();
     for (const o of outcomes ?? []) {
-      const t = (o as any).team_id;
+      const t = o.team_id;
       const name = (o as any).players?.name ?? "a player";
       const cur = byTeam.get(t) ?? {};
-      if ((o as any).status === "processed") cur.won = name;
+      if (o.status === "processed") cur.won = name;
       else if (!cur.lost) cur.lost = name;
       byTeam.set(t, cur);
     }
@@ -279,7 +279,7 @@ export async function runWaiverProcessing(leagueId: number): Promise<void> {
       .select("id, user_id")
       .in("id", [...byTeam.keys()]);
     const userByTeam = new Map<number, string | null>();
-    for (const r of teamRows ?? []) userByTeam.set((r as any).id, (r as any).user_id);
+    for (const r of teamRows ?? []) userByTeam.set(r.id, r.user_id);
     for (const [teamId, oc] of byTeam) {
       const uid = userByTeam.get(teamId);
       if (!uid) continue;

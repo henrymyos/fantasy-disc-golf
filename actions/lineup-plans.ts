@@ -32,11 +32,11 @@ export async function saveWeekLineupPlan(
     .eq("id", leagueId)
     .single();
   if (!league) return { ok: false, error: "League not found" };
-  if (week <= (league as any).current_week) {
+  if (week <= league.current_week) {
     return { ok: false, error: "Only future weeks can be planned" };
   }
-  const mpoSlots = (league as any).mpo_starters ?? 4;
-  const fpoSlots = (league as any).fpo_starters ?? 2;
+  const mpoSlots = league.mpo_starters ?? 4;
+  const fpoSlots = league.fpo_starters ?? 2;
 
   const { data: member } = await admin
     .from("league_members")

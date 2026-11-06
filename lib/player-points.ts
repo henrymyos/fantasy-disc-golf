@@ -68,7 +68,7 @@ export async function loadPlayerPoints(
       .select("scoring_rules")
       .eq("id", opts.leagueId)
       .maybeSingle();
-    rules = resolveScoringRules((data as any)?.scoring_rules);
+    rules = resolveScoringRules(data?.scoring_rules);
   } else {
     rules = resolveScoringRules(null);
   }

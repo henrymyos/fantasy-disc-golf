@@ -30,20 +30,20 @@ export async function startNextSeason(leagueId: number): Promise<RolloverResult>
     .select("id, commissioner_id, season_year, roster_size, keepers_per_team, name, selected_event_slugs")
     .eq("id", leagueId)
     .single();
-  if (!league || (league as any).commissioner_id !== user.id) {
+  if (!league || league.commissioner_id !== user.id) {
     return { ok: false, message: "Not authorized" };
   }
 
-  const currentYear = (league as any).season_year ?? new Date().getUTCFullYear();
+  const currentYear = league.season_year ?? new Date().getUTCFullYear();
   const nextYear = currentYear + 1;
-  const keepersPerTeam = (league as any).keepers_per_team ?? 0;
-  const rosterSize = (league as any).roster_size ?? 10;
+  const keepersPerTeam = league.keepers_per_team ?? 0;
+  const rosterSize = league.roster_size ?? 10;
 
   // Precondition: only roll over once the current season is actually finished.
   const events = await getScheduleEvents(admin, currentYear);
   const seasonOver = isSeasonOver(
     events,
-    effectiveSelection((league as any).selected_event_slugs, events),
+    effectiveSelection(league.selected_event_slugs, events),
   );
   if (!seasonOver) {
     return {
@@ -95,8 +95,8 @@ export async function startNextSeason(leagueId: number): Promise<RolloverResult>
       .order("team_id")
       .order("player_id");
     for (const k of keeps ?? []) {
-      const teamId = (k as any).team_id;
-      const playerId = (k as any).player_id;
+      const teamId = k.team_id;
+      const playerId = k.player_id;
       if (teamId == null || playerId == null) continue; // skip invalid rows
       if (seenPlayers.has(playerId)) continue; // already claimed by an earlier team
       seenPlayers.add(playerId);

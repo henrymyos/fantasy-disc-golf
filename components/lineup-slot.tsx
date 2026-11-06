@@ -535,7 +535,7 @@ function BenchPickerModal({
                 </span>
                 {occupant && <PlayerPhoto player={occupant.players} />}
                 <span className="flex-1 text-sm font-medium truncate" style={{ color: occupant ? undefined : color }}>
-                  {isLoading ? "Moving..." : occupant ? (occupant as any).players?.name : "Empty slot"}
+                  {isLoading ? "Moving..." : occupant ? occupant.players?.name : "Empty slot"}
                 </span>
                 {occupant && <WeekPointsBadge wp={pointsByPlayerId?.[occupant.player_id] ?? null} />}
                 <span className="text-xs text-gray-400 shrink-0">Slot {i + 1}</span>

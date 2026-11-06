@@ -36,7 +36,7 @@ export async function enqueueNotification(
     .eq("user_id", args.userId)
     .eq("kind", args.kind)
     .maybeSingle();
-  if (pref && (pref as any).enabled === false) return;
+  if (pref && pref.enabled === false) return;
 
   // If the row can't be stored (e.g. the kind isn't in the DB CHECK constraint
   // yet), skip the push/email side-channels too — never alert without a backing

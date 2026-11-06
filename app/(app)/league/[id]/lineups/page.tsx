@@ -41,9 +41,9 @@ export default async function LineupsPage({
     .eq("id", id)
     .single();
 
-  const mpoSlots: number = (divData as any)?.mpo_starters ?? 4;
-  const fpoSlots: number = (divData as any)?.fpo_starters ?? 2;
-  const scoringMode = (((divData as any)?.scoring_mode ?? "head_to_head") as
+  const mpoSlots: number = divData?.mpo_starters ?? 4;
+  const fpoSlots: number = divData?.fpo_starters ?? 2;
+  const scoringMode = ((divData?.scoring_mode ?? "head_to_head") as
     | "head_to_head"
     | "all_play"
     | "median");
@@ -121,7 +121,7 @@ export default async function LineupsPage({
   // Scored under THIS league's rules (matching the matchup pages), paged past
   // the 1000-row select cap.
   const points = await loadPlayerPoints(supabase, {
-    rules: (league as any).scoring_rules,
+    rules: league.scoring_rules,
     playerIds,
   });
 
@@ -133,7 +133,7 @@ export default async function LineupsPage({
       .select("registered_player_ids")
       .eq("id", nextTournamentId)
       .maybeSingle();
-    const ids = (regRow as any)?.registered_player_ids as number[] | null;
+    const ids = regRow?.registered_player_ids as number[] | null;
     if (ids && ids.length > 0) registeredSet = new Set(ids);
   }
 
@@ -161,7 +161,7 @@ export default async function LineupsPage({
     const result: (any | null)[] = new Array(numSlots).fill(null);
     const unordered: any[] = [];
     for (const s of starters) {
-      const o = (s as any).lineup_order;
+      const o = s.lineup_order;
       if (o != null && o >= 1 && o <= numSlots && result[o - 1] === null) {
         result[o - 1] = s;
       } else {
@@ -254,7 +254,7 @@ export default async function LineupsPage({
       const m = new Map<number, number>();
       if (weekTid == null || ids.length === 0) return m;
       const weekPoints = await loadPlayerPoints(supabase, {
-        rules: (league as any).scoring_rules,
+        rules: league.scoring_rules,
         playerIds: ids,
         tournamentIds: [weekTid],
       });

@@ -37,9 +37,9 @@ export default async function DraftResultPage({
     .select("mpo_starters, fpo_starters, roster_size")
     .eq("id", id)
     .single();
-  const mpoSlots: number = (leagueSlotRow as any)?.mpo_starters ?? 4;
-  const fpoSlots: number = (leagueSlotRow as any)?.fpo_starters ?? 2;
-  const rosterSize: number = (leagueSlotRow as any)?.roster_size ?? 14;
+  const mpoSlots: number = leagueSlotRow?.mpo_starters ?? 4;
+  const fpoSlots: number = leagueSlotRow?.fpo_starters ?? 2;
+  const rosterSize: number = leagueSlotRow?.roster_size ?? 14;
 
   const { data: memberRows } = await supabase
     .from("league_members")
@@ -78,7 +78,7 @@ export default async function DraftResultPage({
       </Link>
       <DraftBoard
         leagueId={Number(id)}
-        draft={{ id: draft.id, status: draft.status, type: (draft as any).type, currentPick: draft.current_pick, totalRounds: draft.total_rounds, thirdRoundReversal: !!(draft as any).third_round_reversal }}
+        draft={{ id: draft.id, status: draft.status, type: draft.type, currentPick: draft.current_pick, totalRounds: draft.total_rounds, thirdRoundReversal: !!draft.third_round_reversal }}
         members={members}
         picks={picks}
         availablePlayers={[]}

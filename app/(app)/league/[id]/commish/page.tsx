@@ -22,14 +22,14 @@ export default async function CommishDashboard({ params }: { params: Promise<{ i
     .eq("id", id)
     .single();
   if (!league) notFound();
-  if ((league as any).commissioner_id !== user.id) redirect(`/league/${id}/settings`);
+  if (league.commissioner_id !== user.id) redirect(`/league/${id}/settings`);
 
   const base = `/league/${id}`;
 
-  const scheduleEvents = await getScheduleEvents(supabase, (league as any).season_year ?? DEFAULT_SEASON_YEAR);
+  const scheduleEvents = await getScheduleEvents(supabase, league.season_year ?? DEFAULT_SEASON_YEAR);
   const seasonOver = isSeasonOver(
     scheduleEvents,
-    effectiveSelection((league as any).selected_event_slugs, scheduleEvents),
+    effectiveSelection(league.selected_event_slugs, scheduleEvents),
   );
 
   const [
@@ -52,18 +52,18 @@ export default async function CommishDashboard({ params }: { params: Promise<{ i
 
   const memberList = members ?? [];
   const memberCount = memberList.length;
-  const duesAmount = (league as any).dues_amount as number | null;
+  const duesAmount = league.dues_amount as number | null;
   const paidCount = memberList.filter((m: any) => m.dues_paid).length;
   const hasDivisions = memberList.some((m: any) => !!m.division_name);
 
   const steps = computeSetupSteps(base, {
     memberCount,
-    maxTeams: (league as any).max_teams ?? null,
-    scheduleConfigured: (league as any).selected_event_slugs != null,
+    maxTeams: league.max_teams ?? null,
+    scheduleConfigured: league.selected_event_slugs != null,
     matchupsGenerated: (matchupCount ?? 0) > 0,
-    scoringConfigured: (league as any).scoring_rules != null,
-    draftStatus: (draft as any)?.status ?? null,
-    draftScheduledAt: (draft as any)?.scheduled_at ?? null,
+    scoringConfigured: league.scoring_rules != null,
+    draftStatus: draft?.status ?? null,
+    draftScheduledAt: draft?.scheduled_at ?? null,
   });
   const progress = setupProgress(steps);
 
@@ -71,7 +71,7 @@ export default async function CommishDashboard({ params }: { params: Promise<{ i
   // tournaments.week is a global per-import counter, not this league's week
   // index — filtering on it named a different event here than every matchup
   // surface showed for the same week.
-  const currentWeek = (league as any).current_week as number;
+  const currentWeek = league.current_week as number;
   const leagueSchedule = await getLeagueSchedule(supabase, Number(id));
   const currentLeagueWeek = leagueSchedule?.weeks.find((w) => w.week === currentWeek) ?? null;
   const weekTournamentIds = currentLeagueWeek?.tournamentIds ?? [];
@@ -83,7 +83,7 @@ export default async function CommishDashboard({ params }: { params: Promise<{ i
     || currentLeagueWeek?.event.name
     || "No event this week";
 
-  const draftStatus = (draft as any)?.status ?? "pending";
+  const draftStatus = draft?.status ?? "pending";
   const draftLabel =
     draftStatus === "complete" ? "Complete" : draftStatus === "in_progress" ? "In progress" : "Not started";
   const scoringModeLabel: Record<string, string> = {
@@ -96,7 +96,7 @@ export default async function CommishDashboard({ params }: { params: Promise<{ i
     <div className="max-w-2xl space-y-5">
       <div>
         <h1 className="text-xl font-bold text-white">Commissioner Dashboard</h1>
-        <p className="text-gray-400 text-sm mt-1">Run {(league as any).name} from one place.</p>
+        <p className="text-gray-400 text-sm mt-1">Run {league.name} from one place.</p>
       </div>
 
       {!progress.complete && <OnboardingChecklist steps={steps} />}
@@ -104,9 +104,9 @@ export default async function CommishDashboard({ params }: { params: Promise<{ i
       {/* League snapshot */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Stat label="Week" value={String(currentWeek)} sub={weekEventName} />
-        <Stat label="Teams" value={`${memberCount}${(league as any).max_teams ? `/${(league as any).max_teams}` : ""}`} sub={hasDivisions ? "Divisions set" : "No divisions"} />
+        <Stat label="Teams" value={`${memberCount}${league.max_teams ? `/${league.max_teams}` : ""}`} sub={hasDivisions ? "Divisions set" : "No divisions"} />
         <Stat label="Draft" value={draftLabel} />
-        <Stat label="Scoring" value={scoringModeLabel[(league as any).scoring_mode] ?? "—"} />
+        <Stat label="Scoring" value={scoringModeLabel[league.scoring_mode] ?? "—"} />
       </div>
 
       {/* Needs attention */}
@@ -183,7 +183,7 @@ export default async function CommishDashboard({ params }: { params: Promise<{ i
           <QuickLink href={`${base}/settings/scoring`} label="Scoring rules" />
           <QuickLink href={`${base}/scoring`} label="Enter / finalize results" />
           <QuickLink href={`${base}/settings/dues`} label="Dues & payouts" />
-          {(league as any).keepers_per_team > 0 && (
+          {league.keepers_per_team > 0 && (
             <QuickLink href={`${base}/settings/keepers`} label="Keepers" />
           )}
           {seasonOver && <QuickLink href={`${base}/settings/season-rollover`} label="Start next season" />}

@@ -21,8 +21,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .single();
 
   const username = profile?.username ?? "User";
-  const avatarUrl = (profile as any)?.avatar_url ?? null;
-  const avatarColor = (profile as any)?.avatar_color ?? null;
+  const avatarUrl = profile?.avatar_url ?? null;
+  const avatarColor = profile?.avatar_color ?? null;
 
   const { count: unreadCount } = await supabase
     .from("notifications")

@@ -42,7 +42,7 @@ export default async function MatchupDetailPage({
     .select("mpo_starters, fpo_starters, scoring_rules")
     .eq("id", id)
     .single();
-  const rules = resolveScoringRules((league as any)?.scoring_rules);
+  const rules = resolveScoringRules(league?.scoring_rules);
 
   const team1 = matchup.team1 as any;
   const team2 = matchup.team2 as any;
@@ -187,8 +187,8 @@ export default async function MatchupDetailPage({
           <TeamHeader
             name={team1.team_name}
             division={team1.division_name}
-            avatarUrl={(team1 as any).profiles?.avatar_url ?? null}
-            avatarColor={(team1 as any).profiles?.avatar_color ?? null}
+            avatarUrl={team1.profiles?.avatar_url ?? null}
+            avatarColor={team1.profiles?.avatar_color ?? null}
             score={team1Display}
             projected={team1Finishing}
             isFinal={isFinal || settled}
@@ -202,8 +202,8 @@ export default async function MatchupDetailPage({
           <TeamHeader
             name={team2.team_name}
             division={team2.division_name}
-            avatarUrl={(team2 as any).profiles?.avatar_url ?? null}
-            avatarColor={(team2 as any).profiles?.avatar_color ?? null}
+            avatarUrl={team2.profiles?.avatar_url ?? null}
+            avatarColor={team2.profiles?.avatar_color ?? null}
             score={team2Display}
             projected={team2Finishing}
             isFinal={isFinal || settled}

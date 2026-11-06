@@ -40,7 +40,7 @@ export default async function LeagueSettingsPage({
     .select("keepers_per_team")
     .eq("id", id)
     .single();
-  const keepersPerTeam: number = (divData as any)?.keepers_per_team ?? 0;
+  const keepersPerTeam: number = divData?.keepers_per_team ?? 0;
 
   const { count: completedDraftCount } = await supabase
     .from("drafts")
@@ -55,18 +55,18 @@ export default async function LeagueSettingsPage({
     .select("status")
     .eq("league_id", id)
     .maybeSingle();
-  const preDraft = (draftRow as any)?.status == null || (draftRow as any).status === "pending";
+  const preDraft = draftRow?.status == null || draftRow.status === "pending";
   const { count: memberCount } = await supabase
     .from("league_members")
     .select("id", { count: "exact", head: true })
     .eq("league_id", id);
-  const maxTeams = (league as any).max_teams as number | null;
+  const maxTeams = league.max_teams as number | null;
   const leagueIsFull = maxTeams != null && (memberCount ?? 0) >= maxTeams;
   const inviteCode =
-    preDraft && !leagueIsFull ? ((league as any).invite_code as string | null) : null;
-  const events = await getScheduleEvents(supabase, (league as any).season_year ?? DEFAULT_SEASON_YEAR);
+    preDraft && !leagueIsFull ? (league.invite_code as string | null) : null;
+  const events = await getScheduleEvents(supabase, league.season_year ?? DEFAULT_SEASON_YEAR);
   const eventSlugs = new Set(events.map((e) => e.slug));
-  const selectedSlugs = effectiveSelection((league as any).selected_event_slugs, events);
+  const selectedSlugs = effectiveSelection(league.selected_event_slugs, events);
   const validSelected = selectedSlugs.filter((s) => eventSlugs.has(s));
   const selectedCount = validSelected.length;
   const playoffCount = getPlayoffSlugs(validSelected, playoffCountForTeams(maxTeams), events).length;

@@ -22,7 +22,7 @@ export async function archiveSeason(leagueId: number): Promise<boolean> {
     .select("commissioner_id, season_year, scoring_mode, name")
     .eq("id", leagueId)
     .single();
-  if (!league || (league as any).commissioner_id !== user.id) return false;
+  if (!league || league.commissioner_id !== user.id) return false;
 
   const { data: members } = await admin
     .from("league_members")
@@ -31,7 +31,7 @@ export async function archiveSeason(leagueId: number): Promise<boolean> {
     .order("joined_at");
 
   // Compute final standings the same way the dashboard does.
-  const scoringMode = ((league as any).scoring_mode ?? "head_to_head") as
+  const scoringMode = (league.scoring_mode ?? "head_to_head") as
     | "head_to_head"
     | "all_play"
     | "median";
@@ -86,14 +86,14 @@ export async function archiveSeason(leagueId: number): Promise<boolean> {
     .eq("league_id", leagueId);
   const rostersByTeam = new Map<number, any[]>();
   for (const r of rosterRows ?? []) {
-    const arr = rostersByTeam.get((r as any).team_id) ?? [];
+    const arr = rostersByTeam.get(r.team_id) ?? [];
     arr.push({
       name: (r as any).players?.name ?? "Unknown",
       division: (r as any).players?.division ?? "MPO",
-      isStarter: !!(r as any).is_starter,
-      lineupOrder: (r as any).lineup_order ?? null,
+      isStarter: !!r.is_starter,
+      lineupOrder: r.lineup_order ?? null,
     });
-    rostersByTeam.set((r as any).team_id, arr);
+    rostersByTeam.set(r.team_id, arr);
   }
   const rosters = standings.map((s) => ({
     teamId: s.teamId,
@@ -115,12 +115,12 @@ export async function archiveSeason(leagueId: number): Promise<boolean> {
     const { data: picks } = await admin
       .from("draft_picks")
       .select("pick_number, round, team_id, players(name, division)")
-      .eq("draft_id", (draft as any).id)
+      .eq("draft_id", draft.id)
       .order("pick_number");
     draftSummary = {
-      type: (draft as any).type,
-      totalRounds: (draft as any).total_rounds,
-      startedAt: (draft as any).started_at,
+      type: draft.type,
+      totalRounds: draft.total_rounds,
+      startedAt: draft.started_at,
       picks: (picks ?? []).map((p: any) => ({
         pickNumber: p.pick_number,
         round: p.round,
@@ -132,7 +132,7 @@ export async function archiveSeason(leagueId: number): Promise<boolean> {
   }
 
   const payload = {
-    leagueName: (league as any).name as string,
+    leagueName: league.name as string,
     scoringMode,
     standings,
     rosters,
@@ -143,7 +143,7 @@ export async function archiveSeason(leagueId: number): Promise<boolean> {
   const { error } = await admin.from("season_archives").upsert(
     {
       league_id: leagueId,
-      season_year: (league as any).season_year ?? new Date().getFullYear(),
+      season_year: league.season_year ?? new Date().getFullYear(),
       payload,
     },
     { onConflict: "league_id,season_year" },

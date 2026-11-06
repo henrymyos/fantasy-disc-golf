@@ -46,9 +46,9 @@ export default async function RecapsPage({ params }: { params: Promise<{ id: str
     const admin = createAdminClient();
     const schedule = await getLeagueSchedule(admin, Number(id)).catch(() => null);
     for (const r of legacy) {
-      const tournamentIds = schedule?.weekToTournamentIds.get((r as any).week) ?? [];
-      const fresh = await generateWeeklyRecap(admin, Number(id), (r as any).week, tournamentIds).catch(() => null);
-      if (fresh) (r as any).body = fresh;
+      const tournamentIds = schedule?.weekToTournamentIds.get(r.week) ?? [];
+      const fresh = await generateWeeklyRecap(admin, Number(id), r.week, tournamentIds).catch(() => null);
+      if (fresh) r.body = fresh;
     }
   }
 
@@ -59,7 +59,7 @@ export default async function RecapsPage({ params }: { params: Promise<{ id: str
           href={`/league/${id}`}
           className="text-gray-400 hover:text-white text-sm transition inline-block mb-2"
         >
-          ← {(league as any).name}
+          ← {league.name}
         </Link>
         <h2 className="text-white font-bold text-xl">Weekly Recaps</h2>
         <p className="text-gray-400 text-sm mt-1">

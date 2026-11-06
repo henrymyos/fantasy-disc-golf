@@ -15,12 +15,12 @@ export default async function KeepersPage({ params }: { params: Promise<{ id: st
     .eq("id", id)
     .single();
   if (!league) notFound();
-  const limit = (league as any).keepers_per_team ?? 0;
+  const limit = league.keepers_per_team ?? 0;
   // Keepers apply to NEXT season's draft, so they're stored under season_year+1.
   // The rollover (actions/season.ts) reads keeper_picks for that upcoming year;
   // writing them under the current year is why kept players never carried over.
   const keeperSeasonYear =
-    ((league as any).season_year ?? new Date().getUTCFullYear()) + 1;
+    (league.season_year ?? new Date().getUTCFullYear()) + 1;
 
   const { data: member } = await supabase
     .from("league_members")

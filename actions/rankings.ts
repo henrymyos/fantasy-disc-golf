@@ -93,7 +93,7 @@ export async function autoPickFromRankings(leagueId: number): Promise<void> {
     p_player_id: pickedPlayerId,
   });
 
-  if ((result as any)?.complete) {
+  if (result?.complete) {
     await finalizeDraftCompletion(admin, leagueId);
   }
 

@@ -43,13 +43,13 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   if (!league) notFound();
 
-  const isCommissioner = (league as any).commissioner_id === user.id;
+  const isCommissioner = league.commissioner_id === user.id;
 
   const activeTournament = await getActiveTournament(supabase, Number(id));
-  const waiversActive = (league as any).waivers_locked === true || activeTournament !== null;
+  const waiversActive = league.waivers_locked === true || activeTournament !== null;
 
-  const scheduleEvents = await getScheduleEvents(supabase, (league as any).season_year ?? DEFAULT_SEASON_YEAR);
-  const selectedSlugs = new Set(effectiveSelection((league as any).selected_event_slugs, scheduleEvents));
+  const scheduleEvents = await getScheduleEvents(supabase, league.season_year ?? DEFAULT_SEASON_YEAR);
+  const selectedSlugs = new Set(effectiveSelection(league.selected_event_slugs, scheduleEvents));
   const today = new Date().toISOString().slice(0, 10);
   // The "Upcoming Tournaments" widget is an informational view of the DGPT
   // tour, not the league's scoring schedule — so it shows every event that is
@@ -68,7 +68,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   const showMockDraft = draft?.status !== "complete";
   // Once a draft has a scheduled time (but hasn't finished), let everyone peek at
   // the draft board alongside the mock-draft option.
-  const draftScheduled = draft?.status === "pending" && !!(draft as any)?.scheduled_at;
+  const draftScheduled = draft?.status === "pending" && !!draft?.scheduled_at;
 
   // Setup checklist: any-matchup existence is needed; member count comes from
   // the members query below, so steps are assembled after that.
@@ -85,8 +85,8 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   // Before the draft starts and while there's still an open slot, surface the
   // invite code so the league can be filled.
   const preDraft = draft?.status == null || draft.status === "pending";
-  const inviteCode = (league as any).invite_code as string | null;
-  const maxTeams = (league as any).max_teams as number | null;
+  const inviteCode = league.invite_code as string | null;
+  const maxTeams = league.max_teams as number | null;
   const leagueIsFull = maxTeams != null && (members ?? []).length >= maxTeams;
   const showInviteCode = preDraft && !!inviteCode && !leagueIsFull;
   // Open-slot placeholders only make sense while joining is still possible.
@@ -117,7 +117,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
     .eq("league_id", id)
     .eq("is_final", true);
 
-  const scoringMode = (((league as any).scoring_mode ?? "head_to_head") as
+  const scoringMode = ((league.scoring_mode ?? "head_to_head") as
     | "head_to_head"
     | "all_play"
     | "median");
@@ -145,18 +145,18 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
       if (m.team1_score > m.team2_score) {
         winsMap[m.team1_id].wins++;
         winsMap[m.team2_id].losses++;
-        pushResult(m.team1_id, (m as any).week, "W");
-        pushResult(m.team2_id, (m as any).week, "L");
+        pushResult(m.team1_id, m.week, "W");
+        pushResult(m.team2_id, m.week, "L");
       } else if (m.team2_score > m.team1_score) {
         winsMap[m.team2_id].wins++;
         winsMap[m.team1_id].losses++;
-        pushResult(m.team2_id, (m as any).week, "W");
-        pushResult(m.team1_id, (m as any).week, "L");
+        pushResult(m.team2_id, m.week, "W");
+        pushResult(m.team1_id, m.week, "L");
       } else {
         winsMap[m.team1_id].ties++;
         winsMap[m.team2_id].ties++;
-        pushResult(m.team1_id, (m as any).week, "T");
-        pushResult(m.team2_id, (m as any).week, "T");
+        pushResult(m.team1_id, m.week, "T");
+        pushResult(m.team2_id, m.week, "T");
       }
     }
   });
@@ -207,7 +207,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   // playoffCountForTeams gives the number of playoff EVENTS (rounds);
   // playoffBracketSize turns that into the seeded team count.
   const playoffTeamCount = playoffBracketSize(
-    playoffCountForTeams((league as any).max_teams),
+    playoffCountForTeams(league.max_teams),
     (members ?? []).length,
   );
 
@@ -241,18 +241,18 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   const setupSteps = isCommissioner
     ? computeSetupSteps(`/league/${id}`, {
         memberCount: (members ?? []).length,
-        maxTeams: (league as any).max_teams ?? null,
-        scheduleConfigured: (league as any).selected_event_slugs != null,
+        maxTeams: league.max_teams ?? null,
+        scheduleConfigured: league.selected_event_slugs != null,
         matchupsGenerated: (anyMatchupCount ?? 0) > 0,
-        scoringConfigured: (league as any).scoring_rules != null,
+        scoringConfigured: league.scoring_rules != null,
         draftStatus: draft?.status ?? null,
-        draftScheduledAt: (draft as any)?.scheduled_at ?? null,
+        draftScheduledAt: draft?.scheduled_at ?? null,
       })
     : null;
   const setupComplete = setupSteps ? setupProgress(setupSteps).complete : true;
 
-  const duesAmount = Number((league as any).dues_amount ?? 0);
-  const myDuesUnpaid = !!myMembership && duesAmount > 0 && !(myMembership as any).dues_paid;
+  const duesAmount = Number(league.dues_amount ?? 0);
+  const myDuesUnpaid = !!myMembership && duesAmount > 0 && !myMembership.dues_paid;
   const canPayOnline = stripeEnabled();
 
   const activity = await getActivityFeed(supabase, Number(id), 15);
@@ -443,7 +443,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
             const rec = winsMap[myMembership.id];
             const rank = standings.findIndex((t) => t.id === myMembership.id) + 1;
             const pa = pointsAgainst.get(myMembership.id) ?? 0;
-            const waiver = (myMembership as any).waiver_priority as number | null;
+            const waiver = myMembership.waiver_priority as number | null;
             const chip = (label: string, value: string) => (
               <div className="min-w-0">
                 <p className="text-gray-400 text-[10px] uppercase tracking-wider font-semibold">{label}</p>
@@ -541,12 +541,12 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
                             <p className="text-white text-sm font-medium truncate">{t.team_name}</p>
-                            {draft?.status === "complete" && waiversActive && (t as any).waiver_priority != null && (
+                            {draft?.status === "complete" && waiversActive && t.waiver_priority != null && (
                               <span
                                 className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded text-yellow-300 bg-yellow-400/15"
-                                title={`Next waiver pick: #${(t as any).waiver_priority}`}
+                                title={`Next waiver pick: #${t.waiver_priority}`}
                               >
-                                W#{(t as any).waiver_priority}
+                                W#{t.waiver_priority}
                               </span>
                             )}
                           </div>
@@ -574,8 +574,8 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                         <p
                           className="text-gray-400 text-xs tabular-nums"
                           title={`${t.points.toFixed(1)} points for · ${pa.toFixed(1)} points against${
-                            (t as any).strengthOfSchedule >= 0
-                              ? ` · SoS ${Math.round((t as any).strengthOfSchedule * 100)}%`
+                            t.strengthOfSchedule >= 0
+                              ? ` · SoS ${Math.round(t.strengthOfSchedule * 100)}%`
                               : ""
                           }`}
                         >
@@ -607,7 +607,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
       <div className="lg:col-span-2 min-w-0 space-y-4">
         {seasonReview && seasonReview.champion && (
           <SeasonReview
-            seasonYear={(league as any).season_year ?? DEFAULT_SEASON_YEAR}
+            seasonYear={league.season_year ?? DEFAULT_SEASON_YEAR}
             champion={seasonReview.champion}
             consolationChamp={seasonReview.consolationChamp}
             lastPlace={seasonReview.lastPlace}
@@ -724,7 +724,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                   📰
                 </div>
                 <div className="min-w-0">
-                  <p className="text-white font-bold text-sm">Week {(latestRecap as any).week} Recap</p>
+                  <p className="text-white font-bold text-sm">Week {latestRecap.week} Recap</p>
                   <p className="text-gray-400 text-xs mt-0.5">
                     Matchup results &amp; weekly awards
                   </p>

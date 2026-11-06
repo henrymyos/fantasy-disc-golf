@@ -27,25 +27,25 @@ export async function getLineupIssues(
     .eq("id", leagueId)
     .single();
   if (!league) return null;
-  const mpoSlots = (league as any).mpo_starters ?? 4;
-  const fpoSlots = (league as any).fpo_starters ?? 2;
+  const mpoSlots = league.mpo_starters ?? 4;
+  const fpoSlots = league.fpo_starters ?? 2;
 
   const schedule = await getLeagueSchedule(supabase, leagueId);
   const currentWeekTid: number | null =
-    schedule?.weekToTournamentIds.get((league as any).current_week)?.[0]
+    schedule?.weekToTournamentIds.get(league.current_week)?.[0]
     ?? (await getLeagueNextTournamentId(supabase, leagueId));
   let regSet: Set<number> | null = null;
   let eventName: string | null =
-    schedule?.weeks.find((w) => w.week === (league as any).current_week)?.event.name ?? null;
+    schedule?.weeks.find((w) => w.week === league.current_week)?.event.name ?? null;
   if (currentWeekTid != null) {
     const { data: tRow } = await supabase
       .from("tournaments")
       .select("name, registered_player_ids")
       .eq("id", currentWeekTid)
       .maybeSingle();
-    const ids = (tRow as any)?.registered_player_ids as number[] | null;
+    const ids = tRow?.registered_player_ids as number[] | null;
     if (ids && ids.length > 0) regSet = new Set(ids);
-    eventName = (tRow as any)?.name ?? eventName;
+    eventName = tRow?.name ?? eventName;
   }
 
   const { data: rosterRows } = await supabase

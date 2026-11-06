@@ -49,9 +49,9 @@ export async function finalizeWeekScoresCore(
     .select("scoring_rules, mpo_starters, fpo_starters")
     .eq("id", leagueId)
     .single();
-  const rules = resolveScoringRules((league as any)?.scoring_rules);
-  const mpoSlots = (league as any)?.mpo_starters ?? 4;
-  const fpoSlots = (league as any)?.fpo_starters ?? 2;
+  const rules = resolveScoringRules(league?.scoring_rules);
+  const mpoSlots = league?.mpo_starters ?? 4;
+  const fpoSlots = league?.fpo_starters ?? 2;
 
   // Map this LEAGUE week to the event it represents (the league's Nth selected
   // event), then to that event's tournament(s). Keying on the league's
@@ -159,11 +159,11 @@ export async function finalizeWeekScoresCore(
 
   for (const m of matchups ?? []) {
     await admin.from("matchups").update({
-      team1_score: teamScores[(m as any).team1_id] ?? 0,
-      team2_score: teamScores[(m as any).team2_id] ?? 0,
+      team1_score: teamScores[m.team1_id] ?? 0,
+      team2_score: teamScores[m.team2_id] ?? 0,
       is_final: true,
       finalized_at: new Date().toISOString(),
-    }).eq("id", (m as any).id);
+    }).eq("id", m.id);
   }
 
   if (recap) await generateWeeklyRecap(admin, leagueId, week, tournamentIds);
@@ -182,13 +182,13 @@ export async function finalizeWeekScoresCore(
   );
 
   for (const m of matchups ?? []) {
-    const s1 = teamScores[(m as any).team1_id] ?? 0;
-    const s2 = teamScores[(m as any).team2_id] ?? 0;
-    const u1 = teamUserMap.get((m as any).team1_id);
-    const u2 = teamUserMap.get((m as any).team2_id);
-    const t1Name = nameById.get((m as any).team1_id) ?? "Team 1";
-    const t2Name = nameById.get((m as any).team2_id) ?? "Team 2";
-    const link = `/league/${leagueId}/matchups/${(m as any).id}`;
+    const s1 = teamScores[m.team1_id] ?? 0;
+    const s2 = teamScores[m.team2_id] ?? 0;
+    const u1 = teamUserMap.get(m.team1_id);
+    const u2 = teamUserMap.get(m.team2_id);
+    const t1Name = nameById.get(m.team1_id) ?? "Team 1";
+    const t2Name = nameById.get(m.team2_id) ?? "Team 2";
+    const link = `/league/${leagueId}/matchups/${m.id}`;
     if (u1) {
       const verdict = s1 === s2 ? "tied with" : s1 > s2 ? "won against" : "lost to";
       await enqueueNotification(admin, {
@@ -220,7 +220,7 @@ export async function advanceWeekCore(admin: SupabaseClient, leagueId: number): 
     .eq("id", leagueId)
     .single();
   if (!league) return;
-  const nextWeek = (league as any).current_week + 1;
+  const nextWeek = league.current_week + 1;
 
   const { data: members } = await admin
     .from("league_members")
@@ -233,9 +233,9 @@ export async function advanceWeekCore(admin: SupabaseClient, leagueId: number): 
   // weeks), results drive the bracket, not standings — generating and then
   // finalizing round-robin matchups there double-counts those events into the
   // records and corrupts seeding.
-  const events = await getScheduleEvents(admin, (league as any).season_year ?? DEFAULT_SEASON_YEAR);
-  const selectedSlugs = effectiveSelection((league as any).selected_event_slugs, events);
-  const regularWeeks = regularSeasonWeekCount(selectedSlugs, events, (league as any).max_teams);
+  const events = await getScheduleEvents(admin, league.season_year ?? DEFAULT_SEASON_YEAR);
+  const selectedSlugs = effectiveSelection(league.selected_event_slugs, events);
+  const regularWeeks = regularSeasonWeekCount(selectedSlugs, events, league.max_teams);
 
   if (nextWeek <= regularWeeks) {
     const { count: existing } = await admin
@@ -274,7 +274,7 @@ export async function advanceWeekCore(admin: SupabaseClient, leagueId: number): 
     admin,
     leagueId,
     nextWeek,
-    (league as any).mpo_starters ?? 4,
-    (league as any).fpo_starters ?? 2,
+    league.mpo_starters ?? 4,
+    league.fpo_starters ?? 2,
   );
 }

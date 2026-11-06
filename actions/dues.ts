@@ -14,7 +14,7 @@ async function requireCommissioner(leagueId: number, userId: string) {
     .select("commissioner_id")
     .eq("id", leagueId)
     .single();
-  return !!(league && (league as any).commissioner_id === userId);
+  return !!(league && league.commissioner_id === userId);
 }
 
 export async function saveDuesConfig(
@@ -71,7 +71,7 @@ export async function createDuesCheckout(leagueId: number): Promise<void> {
     .select("id, name, dues_amount")
     .eq("id", leagueId)
     .single();
-  const amount = Number((league as any)?.dues_amount ?? 0);
+  const amount = Number(league?.dues_amount ?? 0);
   if (!league || !(amount > 0)) return;
 
   const { data: member } = await admin
@@ -80,12 +80,12 @@ export async function createDuesCheckout(leagueId: number): Promise<void> {
     .eq("league_id", leagueId)
     .eq("user_id", user.id)
     .single();
-  if (!member || (member as any).dues_paid) return;
+  if (!member || member.dues_paid) return;
 
   const url = await createDuesCheckoutSession({
     leagueId,
-    memberId: (member as any).id,
-    leagueName: (league as any).name,
+    memberId: member.id,
+    leagueName: league.name,
     amountDollars: amount,
   });
 

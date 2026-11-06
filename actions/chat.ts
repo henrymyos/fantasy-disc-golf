@@ -63,7 +63,7 @@ export async function sendChatMessage(
         .select("user_id")
         .eq("id", recipientMemberId)
         .single();
-      if ((r as any)?.user_id) recipientUserIds = [(r as any).user_id];
+      if (r?.user_id) recipientUserIds = [r.user_id];
     } else {
       const { data: mems } = await admin
         .from("league_members")
@@ -74,8 +74,8 @@ export async function sendChatMessage(
         .map((m: any) => m.user_id)
         .filter((uid: string | null): uid is string => !!uid);
     }
-    const senderName = (sender as any).team_name ?? "New message";
-    const tag = `chat-${leagueId}-${(inserted as any)?.id ?? "x"}`;
+    const senderName = sender.team_name ?? "New message";
+    const tag = `chat-${leagueId}-${inserted?.id ?? "x"}`;
     await Promise.all(
       Array.from(new Set(recipientUserIds)).map((uid) =>
         sendPushToUser(admin, uid, {
@@ -169,9 +169,9 @@ export async function toggleChatReaction(
     .maybeSingle();
   if (!msg) return { ok: false };
   const visible =
-    (msg as any).recipient_member_id == null ||
-    (msg as any).sender_member_id === member.id ||
-    (msg as any).recipient_member_id === member.id;
+    msg.recipient_member_id == null ||
+    msg.sender_member_id === member.id ||
+    msg.recipient_member_id === member.id;
   if (!visible) return { ok: false };
 
   try {
@@ -184,7 +184,7 @@ export async function toggleChatReaction(
       .maybeSingle();
     if (selErr) return { ok: false };
     if (existing) {
-      await admin.from("chat_reactions").delete().eq("id", (existing as any).id);
+      await admin.from("chat_reactions").delete().eq("id", existing.id);
     } else {
       const { error } = await admin.from("chat_reactions").insert({
         league_id: leagueId,

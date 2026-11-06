@@ -97,7 +97,7 @@ export default async function ScoringPage({ params }: { params: Promise<{ id: st
           </form>
 
           {/* Waivers */}
-          {(league as any).waivers_locked ? (
+          {league.waivers_locked ? (
             <>
               <form action={processWaivers.bind(null, Number(id))}>
                 <button

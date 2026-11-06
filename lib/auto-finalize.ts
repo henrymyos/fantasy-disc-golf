@@ -35,9 +35,9 @@ export async function autoFinalizeDueWeeks(admin: SupabaseClient): Promise<strin
 
   let imported = false;
   for (const league of leagues ?? []) {
-    if ((league as any).draft_status !== "complete") continue;
-    const leagueId = (league as any).id as number;
-    const week = (league as any).current_week as number;
+    if (league.draft_status !== "complete") continue;
+    const leagueId = league.id as number;
+    const week = league.current_week as number;
 
     // Resolve this league week to its event through the league's own
     // selected-event order — the global tournaments.week is not a reliable

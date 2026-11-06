@@ -38,9 +38,9 @@ export default async function MockDraftPage({
     .select("type, auction_budget, third_round_reversal")
     .eq("league_id", id)
     .single();
-  const draftType = ((draft as any)?.type ?? "snake") as "snake" | "auction";
-  const auctionBudget = ((draft as any)?.auction_budget ?? 200) as number;
-  const thirdRoundReversal = !!(draft as any)?.third_round_reversal;
+  const draftType = (draft?.type ?? "snake") as "snake" | "auction";
+  const auctionBudget = (draft?.auction_budget ?? 200) as number;
+  const thirdRoundReversal = !!draft?.third_round_reversal;
 
   const players = await selectAllRows<any>(() =>
     supabase
@@ -63,7 +63,7 @@ export default async function MockDraftPage({
     name: p.name,
     division: p.division as "MPO" | "FPO",
     worldRanking: p.world_ranking as number | null,
-    overallRank: (p as any).overall_rank as number | null,
+    overallRank: p.overall_rank as number | null,
     totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
   }));
 
@@ -74,8 +74,8 @@ export default async function MockDraftPage({
         leagueName={league.name}
         numTeams={league.max_teams}
         rosterSize={league.roster_size}
-        mpoStarters={(league as any).mpo_starters ?? 4}
-        fpoStarters={(league as any).fpo_starters ?? 2}
+        mpoStarters={league.mpo_starters ?? 4}
+        fpoStarters={league.fpo_starters ?? 2}
         budget={auctionBudget}
         players={mappedPlayers}
       />
@@ -88,8 +88,8 @@ export default async function MockDraftPage({
       leagueName={league.name}
       numTeams={league.max_teams}
       rosterSize={league.roster_size}
-      mpoStarters={(league as any).mpo_starters ?? 4}
-      fpoStarters={(league as any).fpo_starters ?? 2}
+      mpoStarters={league.mpo_starters ?? 4}
+      fpoStarters={league.fpo_starters ?? 2}
       thirdRoundReversal={thirdRoundReversal}
       currentUserId={user.id}
       players={mappedPlayers}

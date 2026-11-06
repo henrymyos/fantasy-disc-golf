@@ -27,9 +27,9 @@ export async function getTeamWeeklyTotals(
     .select("scoring_rules, mpo_starters, fpo_starters")
     .eq("id", leagueId)
     .single();
-  const rules = resolveScoringRules((league as any)?.scoring_rules);
-  const mpoSlots = (league as any)?.mpo_starters ?? 4;
-  const fpoSlots = (league as any)?.fpo_starters ?? 2;
+  const rules = resolveScoringRules(league?.scoring_rules);
+  const mpoSlots = league?.mpo_starters ?? 4;
+  const fpoSlots = league?.fpo_starters ?? 2;
 
   // Canonical league-week -> tournament mapping (see lib/league-schedule). League
   // weeks are this league's selected events in order, so weekly totals line up

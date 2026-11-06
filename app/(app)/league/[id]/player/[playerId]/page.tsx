@@ -46,7 +46,7 @@ export default async function PlayerPage({
     .eq("league_id", id)
     .eq("player_id", playerId)
     .maybeSingle();
-  const ownerTeamId = (rosterEntry as any)?.team_id ?? null;
+  const ownerTeamId = rosterEntry?.team_id ?? null;
   const ownerTeamName = (rosterEntry as any)?.league_members?.team_name ?? null;
   const isFreeAgent = ownerTeamId == null;
   const isMine = ownerTeamId === member.id;
@@ -69,7 +69,7 @@ export default async function PlayerPage({
   // Live or recently-ended: keeps the score poller running through the
   // post-event grace window (see lib/live-window.ts).
   const pollableTournament = await getPollableTournament(supabase, Number(id));
-  const waiversActive = ((league as any)?.waivers_locked === true) || activeTournament !== null;
+  const waiversActive = (league?.waivers_locked === true) || activeTournament !== null;
 
   const { data: myRosterRows } = await supabase
     .from("rosters")
@@ -89,11 +89,11 @@ export default async function PlayerPage({
       .select("registered_player_ids")
       .eq("id", nextTournamentId)
       .maybeSingle();
-    const ids = (regRow as any)?.registered_player_ids as number[] | null;
+    const ids = regRow?.registered_player_ids as number[] | null;
     if (ids && ids.length > 0) nextRegisteredSet = new Set(ids);
   }
   const rosterPoints = await loadPlayerPoints(supabase, {
-    rules: (league as any)?.scoring_rules,
+    rules: league?.scoring_rules,
     playerIds: rosterPlayerIds,
   });
   const rosterProjectionFor = (pid: number): number | null => {
@@ -106,7 +106,7 @@ export default async function PlayerPage({
     projection: rosterProjectionFor(r.player_id),
   }));
   const rosterCount = myRoster.length;
-  const openSpots = Math.max(0, ((league as any)?.roster_size ?? 14) - rosterCount);
+  const openSpots = Math.max(0, (league?.roster_size ?? 14) - rosterCount);
 
   const { data: myClaim } = await supabase
     .from("waiver_claims")
@@ -137,7 +137,7 @@ export default async function PlayerPage({
   // League-rule points (not the default-rule fantasy_points column) and paged,
   // so peer tiers and this player's totals match every other surface.
   const divPoints = await loadPlayerPoints(supabase, {
-    rules: (league as any)?.scoring_rules,
+    rules: league?.scoring_rules,
     playerIds: divPlayerIds,
   });
 
@@ -285,10 +285,10 @@ export default async function PlayerPage({
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
           <div className="flex items-center gap-4 min-w-0">
-            {(player as any).avatar_url ? (
+            {player.avatar_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={(player as any).avatar_url}
+                src={player.avatar_url}
                 alt={player.name}
                 className="w-14 h-14 rounded-xl object-cover shrink-0 bg-white/10"
                 style={{ border: `1.5px solid ${accentColor}40` }}
@@ -319,13 +319,13 @@ export default async function PlayerPage({
                 >
                   {player.division}
                 </span>
-                {(player as any).pdga_rating != null && (
+                {player.pdga_rating != null && (
                   <span
                     className="text-xs font-bold px-2 py-0.5 rounded tabular-nums"
                     style={{ color: accentColor, background: `${accentColor}20` }}
                     title="Current PDGA Rating"
                   >
-                    {(player as any).pdga_rating} rated
+                    {player.pdga_rating} rated
                   </span>
                 )}
                 {player.world_ranking && (
@@ -391,7 +391,7 @@ export default async function PlayerPage({
               // Registration status: a result row means they competed; otherwise
               // check the registered list. An empty/missing list means the field
               // hasn't been synced yet — unknown, not "not registered".
-              const regIds = (event as any).registered_player_ids as number[] | null;
+              const regIds = event.registered_player_ids as number[] | null;
               const registered: boolean | null = r
                 ? true
                 : regIds && regIds.length > 0
@@ -420,9 +420,9 @@ export default async function PlayerPage({
                       {registered === true ? "✓" : registered === false ? "✕" : ""}
                     </span>
                     <div className="min-w-0">
-                    {(event as any).pdga_event_id ? (
+                    {event.pdga_event_id ? (
                       <a
-                        href={`https://www.pdga.com/tour/event/${(event as any).pdga_event_id}`}
+                        href={`https://www.pdga.com/tour/event/${event.pdga_event_id}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-white text-sm font-medium truncate hover:underline block"

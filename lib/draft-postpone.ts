@@ -53,13 +53,13 @@ export async function applyDraftPostponements(
     .eq("id", leagueId)
     .single();
   if (!league) return [];
-  const seasonYear = (league as any).season_year ?? DEFAULT_SEASON_YEAR;
+  const seasonYear = league.season_year ?? DEFAULT_SEASON_YEAR;
 
   const events = await getScheduleEvents(admin, seasonYear);
-  const selectedSlugs = effectiveSelection((league as any).selected_event_slugs, events);
+  const selectedSlugs = effectiveSelection(league.selected_event_slugs, events);
   const selectedSet = new Set(selectedSlugs);
   const playoffSet = new Set(
-    getPlayoffSlugs(selectedSlugs, playoffCountForTeams((league as any).max_teams), events),
+    getPlayoffSlugs(selectedSlugs, playoffCountForTeams(league.max_teams), events),
   );
 
   // Selected regular-season events in schedule order.
@@ -73,10 +73,10 @@ export async function applyDraftPostponements(
     .eq("season_year", seasonYear);
   const teeByPdga = new Map<number, { lock_at: string | null; start_date: string | null }>();
   for (const t of tournaments ?? []) {
-    if ((t as any).pdga_event_id != null) {
-      teeByPdga.set((t as any).pdga_event_id, {
-        lock_at: (t as any).lock_at ?? null,
-        start_date: (t as any).start_date ?? null,
+    if (t.pdga_event_id != null) {
+      teeByPdga.set(t.pdga_event_id, {
+        lock_at: t.lock_at ?? null,
+        start_date: t.start_date ?? null,
       });
     }
   }

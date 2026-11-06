@@ -18,17 +18,17 @@ export default async function SeasonRolloverPage({ params }: { params: Promise<{
     .eq("id", id)
     .single();
   if (!league) notFound();
-  if ((league as any).commissioner_id !== user.id) redirect(`/league/${id}/settings`);
+  if (league.commissioner_id !== user.id) redirect(`/league/${id}/settings`);
 
-  const currentYear = (league as any).season_year ?? DEFAULT_SEASON_YEAR;
+  const currentYear = league.season_year ?? DEFAULT_SEASON_YEAR;
   const nextYear = currentYear + 1;
-  const keepersPerTeam = (league as any).keepers_per_team ?? 0;
+  const keepersPerTeam = league.keepers_per_team ?? 0;
 
   // Don't allow rolling over until the season is actually finished.
   const scheduleEvents = await getScheduleEvents(supabase, currentYear);
   const seasonOver = isSeasonOver(
     scheduleEvents,
-    effectiveSelection((league as any).selected_event_slugs, scheduleEvents),
+    effectiveSelection(league.selected_event_slugs, scheduleEvents),
   );
   if (!seasonOver) {
     return (

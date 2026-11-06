@@ -34,7 +34,7 @@ export default async function InvitePage({
     .eq("invite_code", code)
     .maybeSingle();
 
-  const leagueName = (league as any)?.name as string | undefined;
+  const leagueName = league?.name as string | undefined;
 
   return (
     <div className="min-h-screen bg-[#0f1117] flex items-center justify-center p-4">

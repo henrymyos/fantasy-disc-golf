@@ -130,7 +130,7 @@ async function main() {
     console.error("Could not find Kristin Lätt in the players table.");
     process.exit(1);
   }
-  console.log("Updating row id", (kristin as any).id, "in place…");
+  console.log("Updating row id", kristin.id, "in place…");
   const { error } = await s
     .from("players")
     .update({
@@ -138,13 +138,13 @@ async function main() {
       world_ranking: replacement.rank,
       pdga_number: pdgaNum ? String(pdgaNum) : null,
     })
-    .eq("id", (kristin as any).id);
+    .eq("id", kristin.id);
   if (error) {
     console.error("Update failed:", error.message);
     process.exit(1);
   }
   console.log("Done.");
-  console.log(`  Was: ${(kristin as any).name} (WR ${(kristin as any).world_ranking})`);
+  console.log(`  Was: ${kristin.name} (WR ${kristin.world_ranking})`);
   console.log(`  Now: ${replacement.name} (WR ${replacement.rank})`);
 }
 

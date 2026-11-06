@@ -65,20 +65,20 @@ export default async function MockDraftViewerPage({
     name: p.name,
     division: p.division as "MPO" | "FPO",
     worldRanking: p.world_ranking as number | null,
-    overallRank: (p as any).overall_rank as number | null,
+    overallRank: p.overall_rank as number | null,
     totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
   }));
 
-  if ((mock as any).draft_type === "auction") {
+  if (mock.draft_type === "auction") {
     return (
       <MockAuction
         leagueId={id}
         leagueName={league.name}
         numTeams={mock.num_teams}
         rosterSize={mock.roster_size}
-        mpoStarters={(league as any).mpo_starters ?? 4}
-        fpoStarters={(league as any).fpo_starters ?? 2}
-        budget={(mock as any).auction_budget ?? 200}
+        mpoStarters={league.mpo_starters ?? 4}
+        fpoStarters={league.fpo_starters ?? 2}
+        budget={mock.auction_budget ?? 200}
         players={mappedPlayers}
         initialMockDraft={{
           id: mock.id,
@@ -92,7 +92,7 @@ export default async function MockDraftViewerPage({
               price: p.price ?? 0,
             })),
           createdAt: mock.created_at,
-          status: ((mock as any).status ?? "complete") as "in_progress" | "complete",
+          status: (mock.status ?? "complete") as "in_progress" | "complete",
         }}
       />
     );
@@ -104,9 +104,9 @@ export default async function MockDraftViewerPage({
       leagueName={league.name}
       numTeams={mock.num_teams}
       rosterSize={mock.roster_size}
-      mpoStarters={(league as any).mpo_starters ?? 4}
-      fpoStarters={(league as any).fpo_starters ?? 2}
-      thirdRoundReversal={!!(mock as any).third_round_reversal}
+      mpoStarters={league.mpo_starters ?? 4}
+      fpoStarters={league.fpo_starters ?? 2}
+      thirdRoundReversal={!!mock.third_round_reversal}
       currentUserId={user.id}
       players={mappedPlayers}
       initialMockDraft={{
@@ -114,10 +114,10 @@ export default async function MockDraftViewerPage({
         myDraftPosition: mock.my_draft_position,
         picks: (mock.picks ?? []) as SavedPick[],
         createdAt: mock.created_at,
-        status: ((mock as any).status ?? "complete") as "lobby" | "in_progress" | "complete",
-        isShared: !!(mock as any).is_shared,
+        status: (mock.status ?? "complete") as "lobby" | "in_progress" | "complete",
+        isShared: !!mock.is_shared,
         hostId: mock.user_id,
-        seats: ((mock as any).seats ?? {}) as MockSeats,
+        seats: (mock.seats ?? {}) as MockSeats,
       }}
     />
   );

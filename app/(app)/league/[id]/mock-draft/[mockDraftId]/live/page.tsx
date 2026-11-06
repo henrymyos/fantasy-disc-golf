@@ -32,7 +32,7 @@ export default async function LiveMockDraftPage({
     .single();
 
   // Only shared drafts are joinable here, and the URL's league must match.
-  if (!mock || !(mock as any).is_shared || String(mock.league_id) !== id) notFound();
+  if (!mock || !mock.is_shared || String(mock.league_id) !== id) notFound();
 
   const { data: league } = await admin
     .from("leagues")
@@ -62,7 +62,7 @@ export default async function LiveMockDraftPage({
     name: p.name,
     division: p.division as "MPO" | "FPO",
     worldRanking: p.world_ranking as number | null,
-    overallRank: (p as any).overall_rank as number | null,
+    overallRank: p.overall_rank as number | null,
     totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
   }));
 
@@ -72,9 +72,9 @@ export default async function LiveMockDraftPage({
       leagueName={league.name}
       numTeams={mock.num_teams}
       rosterSize={mock.roster_size}
-      mpoStarters={(league as any).mpo_starters ?? 4}
-      fpoStarters={(league as any).fpo_starters ?? 2}
-      thirdRoundReversal={!!(mock as any).third_round_reversal}
+      mpoStarters={league.mpo_starters ?? 4}
+      fpoStarters={league.fpo_starters ?? 2}
+      thirdRoundReversal={!!mock.third_round_reversal}
       currentUserId={user.id}
       players={mappedPlayers}
       initialMockDraft={{
@@ -82,10 +82,10 @@ export default async function LiveMockDraftPage({
         myDraftPosition: mock.my_draft_position,
         picks: (mock.picks ?? []) as SavedPick[],
         createdAt: mock.created_at,
-        status: ((mock as any).status ?? "lobby") as "lobby" | "in_progress" | "complete",
+        status: (mock.status ?? "lobby") as "lobby" | "in_progress" | "complete",
         isShared: true,
         hostId: mock.user_id,
-        seats: ((mock as any).seats ?? {}) as MockSeats,
+        seats: (mock.seats ?? {}) as MockSeats,
       }}
     />
   );

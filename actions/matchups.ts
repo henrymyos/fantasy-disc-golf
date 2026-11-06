@@ -29,9 +29,9 @@ export async function regenerateLeagueMatchups(leagueId: number): Promise<void> 
     .order("joined_at");
   if (!members || members.length < 2) return;
 
-  const events = await getScheduleEvents(admin, (league as any).season_year ?? DEFAULT_SEASON_YEAR);
-  const selectedSlugs = effectiveSelection((league as any).selected_event_slugs, events);
-  const totalWeeks = regularSeasonWeekCount(selectedSlugs, events, (league as any).max_teams);
+  const events = await getScheduleEvents(admin, league.season_year ?? DEFAULT_SEASON_YEAR);
+  const selectedSlugs = effectiveSelection(league.selected_event_slugs, events);
+  const totalWeeks = regularSeasonWeekCount(selectedSlugs, events, league.max_teams);
   const schedule = buildSeasonSchedule(
     members.map((m: any) => ({ id: m.id, divisionName: m.division_name })),
     totalWeeks,
@@ -109,7 +109,7 @@ export async function updateMatchupTeams(
     .select("id, league_id, is_final")
     .eq("id", matchupId)
     .single();
-  if (!matchup || matchup.league_id !== leagueId || (matchup as any).is_final) return;
+  if (!matchup || matchup.league_id !== leagueId || matchup.is_final) return;
 
   await admin
     .from("matchups")

@@ -22,7 +22,7 @@ async function draftLocked(admin: AdminClient, leagueId: number): Promise<boolea
     .select("status")
     .eq("league_id", leagueId)
     .maybeSingle();
-  const status = (draft as any)?.status;
+  const status = draft?.status;
   return status === "in_progress" || status === "paused" || status === "complete";
 }
 
@@ -37,7 +37,7 @@ async function resequenceDraftPositions(admin: AdminClient, leagueId: number) {
     .order("draft_position", { ascending: true });
   let pos = 1;
   for (const m of members ?? []) {
-    await admin.from("league_members").update({ draft_position: pos }).eq("id", (m as any).id);
+    await admin.from("league_members").update({ draft_position: pos }).eq("id", m.id);
     pos++;
   }
 }
@@ -52,7 +52,7 @@ export async function transferCommissioner(leagueId: number, newMemberId: number
     .select("commissioner_id")
     .eq("id", leagueId)
     .single();
-  if (!league || (league as any).commissioner_id !== user.id) return { error: "Only the commissioner can do that." };
+  if (!league || league.commissioner_id !== user.id) return { error: "Only the commissioner can do that." };
 
   const { data: target } = await admin
     .from("league_members")
@@ -60,9 +60,9 @@ export async function transferCommissioner(leagueId: number, newMemberId: number
     .eq("id", newMemberId)
     .eq("league_id", leagueId)
     .single();
-  if (!target || !(target as any).user_id) return { error: "That team has no owner to hand off to." };
+  if (!target || !target.user_id) return { error: "That team has no owner to hand off to." };
 
-  await admin.from("leagues").update({ commissioner_id: (target as any).user_id }).eq("id", leagueId);
+  await admin.from("leagues").update({ commissioner_id: target.user_id }).eq("id", leagueId);
   // Keep the per-member flag in sync.
   await admin.from("league_members").update({ is_commissioner: false }).eq("league_id", leagueId);
   await admin.from("league_members").update({ is_commissioner: true }).eq("id", newMemberId);
@@ -82,7 +82,7 @@ export async function removeMember(leagueId: number, memberId: number): Promise<
     .select("commissioner_id")
     .eq("id", leagueId)
     .single();
-  if (!league || (league as any).commissioner_id !== user.id) return { error: "Only the commissioner can remove members." };
+  if (!league || league.commissioner_id !== user.id) return { error: "Only the commissioner can remove members." };
 
   const { data: target } = await admin
     .from("league_members")
@@ -91,7 +91,7 @@ export async function removeMember(leagueId: number, memberId: number): Promise<
     .eq("league_id", leagueId)
     .single();
   if (!target) return { error: "Member not found." };
-  if ((target as any).user_id === user.id) return { error: "You can't remove yourself. Transfer the commissioner role first." };
+  if (target.user_id === user.id) return { error: "You can't remove yourself. Transfer the commissioner role first." };
 
   if (await draftLocked(admin, leagueId)) {
     return { error: "Members can't be removed once the draft has started. Removal is only available before the draft." };
@@ -117,7 +117,7 @@ export async function leaveLeague(leagueId: number): Promise<{ error?: string }>
     .eq("id", leagueId)
     .single();
   if (!league) return { error: "League not found." };
-  if ((league as any).commissioner_id === user.id) {
+  if (league.commissioner_id === user.id) {
     return { error: "As commissioner, transfer the role to someone else first, then you can leave." };
   }
 
@@ -133,7 +133,7 @@ export async function leaveLeague(leagueId: number): Promise<{ error?: string }>
     return { error: "You can't leave once the draft has started." };
   }
 
-  const { error } = await admin.from("league_members").delete().eq("id", (me as any).id);
+  const { error } = await admin.from("league_members").delete().eq("id", me.id);
   if (error) return { error: "Couldn't leave while you still have league history." };
 
   await resequenceDraftPositions(admin, leagueId);

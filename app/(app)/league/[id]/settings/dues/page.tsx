@@ -23,7 +23,7 @@ export default async function DuesPage({
     .eq("id", id)
     .single();
   if (!league) notFound();
-  if ((league as any).commissioner_id !== user.id) redirect(`/league/${id}/settings`);
+  if (league.commissioner_id !== user.id) redirect(`/league/${id}/settings`);
 
   const { data: members } = await supabase
     .from("league_members")
@@ -32,7 +32,7 @@ export default async function DuesPage({
     .order("joined_at");
 
   // Compute current standings to power the projected-payout preview.
-  const scoringMode = (((league as any).scoring_mode ?? "head_to_head") as
+  const scoringMode = ((league.scoring_mode ?? "head_to_head") as
     | "head_to_head"
     | "all_play"
     | "median");
@@ -104,8 +104,8 @@ export default async function DuesPage({
       <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
         <DuesEditor
           leagueId={Number(id)}
-          initialDuesAmount={Number((league as any).dues_amount ?? 0)}
-          initialPayoutSplits={(league as any).payout_splits ?? []}
+          initialDuesAmount={Number(league.dues_amount ?? 0)}
+          initialPayoutSplits={league.payout_splits ?? []}
           members={(members ?? []).map((m: any) => ({
             id: m.id,
             team_name: m.team_name,

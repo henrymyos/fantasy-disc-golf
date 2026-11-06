@@ -63,10 +63,10 @@ export default async function LeagueLayout({
           href={base}
           className="flex items-center gap-2.5 min-w-0 group"
         >
-          {(league as any).logo_url ? (
+          {league.logo_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={(league as any).logo_url}
+              src={league.logo_url}
               alt=""
               className="w-8 h-8 rounded-lg object-cover shrink-0 bg-white/10"
             />

@@ -24,7 +24,7 @@ export default async function ArchivePage({
     .eq("id", id)
     .single();
   if (!league) notFound();
-  const isCommissioner = (league as any).commissioner_id === user.id;
+  const isCommissioner = league.commissioner_id === user.id;
 
   const { data: member } = await supabase
     .from("league_members")

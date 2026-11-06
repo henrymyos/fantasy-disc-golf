@@ -30,10 +30,10 @@ export default async function ScoringPage({
     .single();
   if (!member) redirect(`/league/${id}`);
 
-  const isCommissioner = (league as any).commissioner_id === user.id;
-  const rules = resolveScoringRules((league as any).scoring_rules);
-  const mpoStarters = (league as any).mpo_starters ?? 4;
-  const fpoStarters = (league as any).fpo_starters ?? 2;
+  const isCommissioner = league.commissioner_id === user.id;
+  const rules = resolveScoringRules(league.scoring_rules);
+  const mpoStarters = league.mpo_starters ?? 4;
+  const fpoStarters = league.fpo_starters ?? 2;
 
   return (
     <div className="max-w-2xl space-y-5">

@@ -65,10 +65,10 @@ export async function proposeTrade(
       .select("id, status")
       .eq("league_id", leagueId)
       .single();
-    if (!draftRow || (draftRow as any).status !== "pending") {
+    if (!draftRow || draftRow.status !== "pending") {
       filteredCurrentPicks = [];
     } else {
-      currentDraftId = (draftRow as any).id;
+      currentDraftId = draftRow.id;
     }
   }
   if (filtered.length === 0 && filteredPicks.length === 0 && filteredCurrentPicks.length === 0) return;
@@ -161,15 +161,15 @@ export async function proposeTrade(
     .select("team_name")
     .eq("id", proposer.id)
     .single();
-  const proposerName = (proposerInfo as any)?.team_name ?? "Another team";
+  const proposerName = proposerInfo?.team_name ?? "Another team";
   const { data: receivers } = await admin
     .from("league_members")
     .select("id, user_id")
     .in("id", receiverTeamIds);
   for (const r of receivers ?? []) {
-    if ((r as any).user_id) {
+    if (r.user_id) {
       await enqueueNotification(admin, {
-        userId: (r as any).user_id,
+        userId: r.user_id,
         leagueId,
         kind: "trade_proposed",
         body: `${proposerName} proposed a trade.`,
@@ -241,7 +241,7 @@ export async function respondToTrade(
       const involved = new Set<number>();
       if (tradeProposerId != null) involved.add(tradeProposerId);
       for (const p of parts ?? []) {
-        if ((p as any).team_id != null) involved.add((p as any).team_id);
+        if (p.team_id != null) involved.add(p.team_id);
       }
       // The team acting now already knows the outcome.
       involved.delete(myMemberId);
@@ -255,7 +255,7 @@ export async function respondToTrade(
           ? "A trade you were part of was accepted."
           : "A trade you were part of was rejected.";
       for (const person of people ?? []) {
-        const uid = (person as any).user_id;
+        const uid = person.user_id;
         if (!uid) continue;
         await enqueueNotification(admin, {
           userId: uid,
@@ -360,7 +360,7 @@ export async function respondToTrade(
       .select("roster_size")
       .eq("id", trade.league_id)
       .single();
-    const rosterSize = (leagueRow as any)?.roster_size ?? 10;
+    const rosterSize = leagueRow?.roster_size ?? 10;
 
     const involvedTeams = new Set<number>();
     for (const tp of playerLegs) {
@@ -405,10 +405,10 @@ export async function respondToTrade(
     await admin.from("traded_draft_picks").upsert(
       {
         league_id: trade.league_id,
-        season_year: (tp as any).season_year,
-        round: (tp as any).round,
-        original_team_id: (tp as any).original_team_id,
-        current_team_id: (tp as any).to_team_id,
+        season_year: tp.season_year,
+        round: tp.round,
+        original_team_id: tp.original_team_id,
+        current_team_id: tp.to_team_id,
       },
       { onConflict: "league_id,season_year,round,original_team_id" },
     );
@@ -426,7 +426,7 @@ export async function respondToTrade(
       .select("id, status, third_round_reversal")
       .eq("league_id", trade.league_id)
       .single();
-    if (draftRow && (draftRow as any).status === "pending") {
+    if (draftRow && draftRow.status === "pending") {
       const { data: membs } = await admin
         .from("league_members")
         .select("id, draft_position")
@@ -434,16 +434,16 @@ export async function respondToTrade(
         .not("draft_position", "is", null)
         .order("draft_position");
       const memberSlots = (membs ?? []).map((m: any) => ({ id: m.id, draftPosition: m.draft_position }));
-      const trr = !!(draftRow as any).third_round_reversal;
+      const trr = !!draftRow.third_round_reversal;
       for (const cp of currentPicks!) {
         // original_team_id = the true snake-default owner (for display/chains).
-        const originalOwner = resolvePickOwnerId((cp as any).overall_pick, memberSlots, trr, null);
+        const originalOwner = resolvePickOwnerId(cp.overall_pick, memberSlots, trr, null);
         await admin.from("current_draft_pick_owners").upsert(
           {
-            draft_id: (cp as any).draft_id,
-            overall_pick: (cp as any).overall_pick,
-            owner_team_id: (cp as any).to_team_id,
-            original_team_id: originalOwner ?? (cp as any).to_team_id,
+            draft_id: cp.draft_id,
+            overall_pick: cp.overall_pick,
+            owner_team_id: cp.to_team_id,
+            original_team_id: originalOwner ?? cp.to_team_id,
           },
           { onConflict: "draft_id,overall_pick" },
         );
@@ -502,7 +502,7 @@ export async function cancelTrade(tradeId: number): Promise<void> {
         .select("user_id")
         .in("id", teamIds);
       for (const person of people ?? []) {
-        const uid = (person as any).user_id;
+        const uid = person.user_id;
         if (!uid) continue;
         await enqueueNotification(admin, {
           userId: uid,

@@ -33,7 +33,7 @@ export async function getLineupPlan(
       .eq("week", week)
       .maybeSingle();
     if (error) return null;
-    const starters = (data as any)?.starters;
+    const starters = data?.starters;
     return Array.isArray(starters) ? (starters as PlannedStarter[]) : null;
   } catch {
     return null;
@@ -66,7 +66,7 @@ export async function getLineupSnapshot(
       .eq("week", week)
       .maybeSingle();
     if (error) return null;
-    const lineup = (data as any)?.lineup;
+    const lineup = data?.lineup;
     if (!lineup || !Array.isArray(lineup.starters)) return null;
     return {
       starters: lineup.starters as PlannedStarter[],
@@ -103,8 +103,8 @@ export async function applyLineupPlansForWeek(
     if (error) return;
 
     for (const plan of plans ?? []) {
-      const teamId = (plan as any).team_id as number;
-      const planned = ((plan as any).starters ?? []) as PlannedStarter[];
+      const teamId = plan.team_id as number;
+      const planned = (plan.starters ?? []) as PlannedStarter[];
       if (!Array.isArray(planned) || planned.length === 0) continue;
 
       const { data: roster } = await admin

@@ -32,14 +32,14 @@ export async function setKeepers(
     .select("status")
     .eq("league_id", leagueId)
     .single();
-  if (!draft || (draft as any).status !== "pending") return;
+  if (!draft || draft.status !== "pending") return;
 
   const { data: league } = await admin
     .from("leagues")
     .select("keepers_per_team")
     .eq("id", leagueId)
     .single();
-  const limit = (league as any)?.keepers_per_team ?? 0;
+  const limit = league?.keepers_per_team ?? 0;
   const cleaned = Array.from(new Set(playerIds)).slice(0, limit);
 
   // Each player must currently be on this team.

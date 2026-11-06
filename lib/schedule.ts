@@ -52,7 +52,7 @@ export async function resolveScheduleYear(
     .order("season_year", { ascending: false })
     .limit(1)
     .maybeSingle();
-  const latestYear = (latest as any)?.season_year as number | undefined;
+  const latestYear = latest?.season_year as number | undefined;
   if (latestYear != null) return latestYear;
 
   return DEFAULT_SEASON_YEAR;

@@ -31,7 +31,7 @@ export async function toggleWatchlist(
       .maybeSingle();
     if (selErr) return { ok: false, starred: false };
     if (existing) {
-      await admin.from("player_watchlist").delete().eq("id", (existing as any).id);
+      await admin.from("player_watchlist").delete().eq("id", existing.id);
       return { ok: true, starred: false };
     }
     const { error } = await admin

@@ -131,10 +131,10 @@ export async function buildLeagueSystemFeed(
   const events: SystemEvent[] = [];
 
   for (const t of txs ?? []) {
-    const teamId = (t as any).team_id;
+    const teamId = t.team_id;
     const actor = (t as any).team?.team_name ?? "A team";
     const player = playerAsset((t as any).player, nickOf(teamId, (t as any).player_id), (t as any).player_id ?? null);
-    const dropped = (t as any).dropped
+    const dropped = t.dropped
       ? playerAsset((t as any).dropped, nickOf(teamId, (t as any).dropped_player_id), (t as any).dropped_player_id ?? null)
       : null;
     if (t.action === "add") {
@@ -146,7 +146,7 @@ export async function buildLeagueSystemFeed(
         actorMemberId: teamId ?? null,
         gains: [player],
         losses: dropped ? [dropped] : [],
-        via: waiverKeys.has(`${teamId}:${(t as any).player_id}`) ? "waiver" : undefined,
+        via: waiverKeys.has(`${teamId}:${t.player_id}`) ? "waiver" : undefined,
       });
     } else if (t.action === "drop") {
       events.push({
@@ -162,10 +162,10 @@ export async function buildLeagueSystemFeed(
   }
 
   for (const tr of trades ?? []) {
-    const ts = (tr as any).resolved_at;
+    const ts = tr.resolved_at;
     if (!ts) continue;
-    const tps: any[] = (tr as any).trade_players ?? [];
-    const tpicks: any[] = (tr as any).trade_picks ?? [];
+    const tps: any[] = tr.trade_players ?? [];
+    const tpicks: any[] = tr.trade_picks ?? [];
 
     // Gather every team involved, then bucket each asset as a gain/loss per team.
     const order: number[] = [];
@@ -180,7 +180,7 @@ export async function buildLeagueSystemFeed(
       return b;
     };
     // Proposer's roster shows first, matching the trade proposal's perspective.
-    if ((tr as any).proposer_id != null) ensure((tr as any).proposer_id);
+    if (tr.proposer_id != null) ensure(tr.proposer_id);
 
     for (const tp of tps) {
       if (tp.to_team_id != null)
@@ -211,13 +211,13 @@ export async function buildLeagueSystemFeed(
 
   // New members joining the league.
   for (const m of memberRows ?? []) {
-    if (!(m as any).joined_at) continue;
+    if (!m.joined_at) continue;
     events.push({
-      id: `join-${(m as any).id}`,
+      id: `join-${m.id}`,
       kind: "notice",
-      ts: (m as any).joined_at,
+      ts: m.joined_at,
       variant: "join",
-      title: `${(m as any).team_name ?? "A team"} joined the league`,
+      title: `${m.team_name ?? "A team"} joined the league`,
     });
   }
 
@@ -232,8 +232,8 @@ export async function buildLeagueSystemFeed(
     .not("finalized_at", "is", null);
   const weekFinalizedAt = new Map<number, string>();
   for (const m of finals ?? []) {
-    const wk = (m as any).week as number;
-    const ts = (m as any).finalized_at as string;
+    const wk = m.week as number;
+    const ts = m.finalized_at as string;
     const cur = weekFinalizedAt.get(wk);
     if (!cur || ts > cur) weekFinalizedAt.set(wk, ts);
   }
@@ -254,31 +254,31 @@ export async function buildLeagueSystemFeed(
     .select("id, status, scheduled_at, scheduled_set_at")
     .eq("league_id", leagueId)
     .maybeSingle();
-  if ((draftRow as any)?.scheduled_set_at && (draftRow as any)?.scheduled_at) {
+  if (draftRow?.scheduled_set_at && draftRow?.scheduled_at) {
     events.push({
-      id: `draft-sched-${(draftRow as any).id}`,
+      id: `draft-sched-${draftRow.id}`,
       kind: "notice",
-      ts: (draftRow as any).scheduled_set_at,
+      ts: draftRow.scheduled_set_at,
       variant: "draft",
       title: "Draft scheduled",
-      scheduledAt: (draftRow as any).scheduled_at,
+      scheduledAt: draftRow.scheduled_at,
     });
   }
 
   // Draft complete, anchored at the final pick's timestamp.
-  if ((draftRow as any)?.status === "complete") {
+  if (draftRow?.status === "complete") {
     const { data: lastPick } = await supabase
       .from("draft_picks")
       .select("created_at")
-      .eq("draft_id", (draftRow as any).id)
+      .eq("draft_id", draftRow.id)
       .order("pick_number", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if ((lastPick as any)?.created_at) {
+    if (lastPick?.created_at) {
       events.push({
-        id: `draft-done-${(draftRow as any).id}`,
+        id: `draft-done-${draftRow.id}`,
         kind: "notice",
-        ts: (lastPick as any).created_at,
+        ts: lastPick.created_at,
         variant: "draft_done",
         title: "The draft is complete",
       });

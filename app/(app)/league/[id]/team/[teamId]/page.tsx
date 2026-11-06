@@ -31,8 +31,8 @@ export default async function TeamPage({
     .single();
   if (!league) notFound();
 
-  const mpoSlots: number = (league as any).mpo_starters ?? 4;
-  const fpoSlots: number = (league as any).fpo_starters ?? 2;
+  const mpoSlots: number = league.mpo_starters ?? 4;
+  const fpoSlots: number = league.fpo_starters ?? 2;
 
   const { data: team } = await supabase
     .from("league_members")
@@ -68,7 +68,7 @@ export default async function TeamPage({
     const result: (any | null)[] = new Array(numSlots).fill(null);
     const unordered: any[] = [];
     for (const s of starters) {
-      const o = (s as any).lineup_order;
+      const o = s.lineup_order;
       if (o != null && o >= 1 && o <= numSlots && result[o - 1] === null) {
         result[o - 1] = s;
       } else {

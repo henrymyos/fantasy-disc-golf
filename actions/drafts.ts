@@ -24,7 +24,7 @@ async function notifyLeague(
       .select("user_id")
       .eq("league_id", leagueId);
     for (const m of members ?? []) {
-      const uid = (m as any).user_id;
+      const uid = m.user_id;
       if (!uid || uid === excludeUserId) continue;
       await enqueueNotification(admin, { userId: uid, leagueId, kind: "draft_status", body, link });
     }
@@ -80,15 +80,15 @@ export async function startDraft(leagueId: number): Promise<void> {
   }
 
   // Seed auction budgets if this is an auction draft.
-  if ((draftRow as any)?.type === "auction") {
-    const budget = (draftRow as any)?.auction_budget ?? 200;
+  if (draftRow?.type === "auction") {
+    const budget = draftRow?.auction_budget ?? 200;
     await admin
       .from("league_members")
       .update({ auction_budget_remaining: budget })
       .eq("league_id", leagueId);
   }
 
-  const nominatorTeam = (draftRow as any)?.type === "auction"
+  const nominatorTeam = draftRow?.type === "auction"
     ? (await admin
         .from("league_members")
         .select("id")
@@ -104,7 +104,7 @@ export async function startDraft(leagueId: number): Promise<void> {
       started_at: new Date().toISOString(),
       current_pick: 1,
       current_pick_started_at: new Date().toISOString(),
-      auction_nominator_team_id: (nominatorTeam as any)?.id ?? null,
+      auction_nominator_team_id: nominatorTeam?.id ?? null,
       auction_current_player_id: null,
       auction_current_bid: null,
       auction_high_bidder_team_id: null,
@@ -125,7 +125,7 @@ export async function startDraft(leagueId: number): Promise<void> {
 
   // ...and, for snake drafts, alert the team on the opening pick. (Auctions run
   // through the nomination flow, not a snake clock.)
-  if ((draftRow as any)?.type !== "auction") {
+  if (draftRow?.type !== "auction") {
     try {
       await notifyOnClock(admin, leagueId);
     } catch (e) {
@@ -175,8 +175,8 @@ export async function randomizeDraftOrder(leagueId: number): Promise<void> {
 
   // Changing the order changes which slots belong to whom, so any current-draft
   // pick trades made under the old order are voided (back to snake default).
-  await admin.from("current_draft_pick_owners").delete().eq("draft_id", (draft as any).id);
-  await admin.from("trade_current_picks").delete().eq("draft_id", (draft as any).id);
+  await admin.from("current_draft_pick_owners").delete().eq("draft_id", draft.id);
+  await admin.from("trade_current_picks").delete().eq("draft_id", draft.id);
 
   revalidatePath(`/league/${leagueId}/draft`);
   revalidatePath(`/league/${leagueId}`);
@@ -295,7 +295,7 @@ export async function makeDraftPick(leagueId: number, playerId: number): Promise
     p_player_id: playerId,
   });
 
-  if ((result as any)?.complete) {
+  if (result?.complete) {
     await finalizeDraftCompletion(admin, leagueId);
   }
 
@@ -339,7 +339,7 @@ export async function undoPick(leagueId: number, pickNumber: number): Promise<vo
   // Undo only handles snake drafts. For an auction it would delete the roster /
   // draft_pick rows without refunding auction_budget_remaining or clearing the
   // live nomination state, permanently corrupting budgets — so refuse here.
-  if ((draft as any).type === "auction") return;
+  if (draft.type === "auction") return;
   if (draft.status !== "in_progress" && draft.status !== "paused" && draft.status !== "complete") {
     return;
   }
@@ -404,13 +404,13 @@ export async function undoLastPick(leagueId: number): Promise<void> {
   const { data: lastPick } = await admin
     .from("draft_picks")
     .select("pick_number")
-    .eq("draft_id", (draft as any).id)
+    .eq("draft_id", draft.id)
     .order("pick_number", { ascending: false })
     .limit(1)
     .maybeSingle();
   if (!lastPick) return;
 
-  await undoPick(leagueId, (lastPick as any).pick_number);
+  await undoPick(leagueId, lastPick.pick_number);
 }
 
 /**
@@ -452,18 +452,18 @@ export async function replacePick(
   if (!draft) return;
   // Auction rosters carry budget state a plain swap wouldn't reconcile, so
   // (like undoPick) this only handles snake drafts.
-  if ((draft as any).type === "auction") return;
+  if (draft.type === "auction") return;
 
   const { data: pick } = await admin
     .from("draft_picks")
     .select("id, team_id, player_id")
-    .eq("draft_id", (draft as any).id)
+    .eq("draft_id", draft.id)
     .eq("pick_number", pickNumber)
     .maybeSingle();
   if (!pick) return;
 
-  const oldPlayerId = (pick as any).player_id as number | null;
-  const teamId = (pick as any).team_id as number;
+  const oldPlayerId = pick.player_id as number | null;
+  const teamId = pick.team_id as number;
   if (oldPlayerId === newPlayerId) return; // no-op
 
   const { data: newPlayer } = await admin
@@ -488,10 +488,10 @@ export async function replacePick(
     await admin.from("rosters").delete().eq("league_id", leagueId).eq("player_id", oldPlayerId);
   }
 
-  const division = (newPlayer as any).division as string;
+  const division = newPlayer.division as string;
   const slotLimit = division === "MPO"
-    ? ((league as any).mpo_starters ?? 4)
-    : ((league as any).fpo_starters ?? 2);
+    ? (league.mpo_starters ?? 4)
+    : (league.fpo_starters ?? 2);
 
   const { data: starterRows } = await admin
     .from("rosters")
@@ -525,7 +525,7 @@ export async function replacePick(
   await admin
     .from("draft_picks")
     .update({ player_id: newPlayerId })
-    .eq("id", (pick as any).id);
+    .eq("id", pick.id);
 
   revalidatePath(`/league/${leagueId}/draft`);
   revalidatePath(`/league/${leagueId}/lineups`);
@@ -562,12 +562,12 @@ export async function commissionerMakePick(leagueId: number, playerId: number): 
   const { data: ownerRows } = await admin
     .from("current_draft_pick_owners")
     .select("overall_pick, owner_team_id")
-    .eq("draft_id", (draft as any).id);
+    .eq("draft_id", draft.id);
 
   const onClockId = resolvePickOwnerId(
     draft.current_pick,
     (members as any[]).map((m) => ({ id: m.id, draftPosition: m.draft_position })),
-    (draft as any).third_round_reversal ?? false,
+    draft.third_round_reversal ?? false,
     buildPickOwnerOverrides(ownerRows as any),
   );
   if (onClockId == null) return;
@@ -578,7 +578,7 @@ export async function commissionerMakePick(leagueId: number, playerId: number): 
     p_player_id: playerId,
   });
 
-  if ((result as any)?.complete) {
+  if (result?.complete) {
     await finalizeDraftCompletion(admin, leagueId);
   }
 

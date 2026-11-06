@@ -194,7 +194,7 @@ export async function addFreeAgent(leagueId: number, playerId: number, dropPlaye
   // Free agency is disabled while waivers are locked AND while any tournament
   // is currently in progress — adds during those windows must go through
   // waiver claims so everyone has a shot at hot pickups.
-  if (await isFreeAgencyLocked(supabase, leagueId, (league as any).waivers_locked)) return;
+  if (await isFreeAgencyLocked(supabase, leagueId, league.waivers_locked)) return;
 
   const { data: draft } = await admin
     .from("drafts")
@@ -296,7 +296,7 @@ export async function dropPlayer(leagueId: number, playerId: number): Promise<vo
     .eq("team_id", member.id)
     .eq("player_id", playerId)
     .maybeSingle();
-  if ((spot as any)?.is_starter && (await isLineupLocked(supabase, leagueId))) return;
+  if (spot?.is_starter && (await isLineupLocked(supabase, leagueId))) return;
 
   await admin
     .from("rosters")
@@ -338,7 +338,7 @@ export async function commissionerSetPlayerTeam(
     .select("commissioner_id, mpo_starters, fpo_starters, current_week")
     .eq("id", leagueId)
     .single();
-  if (!league || (league as any).commissioner_id !== user.id) return;
+  if (!league || league.commissioner_id !== user.id) return;
 
   const { data: existing } = await admin
     .from("rosters")
@@ -353,7 +353,7 @@ export async function commissionerSetPlayerTeam(
       await admin.from("rosters").delete().eq("id", existing.id);
       await admin.from("roster_transactions").insert({
         league_id: leagueId,
-        team_id: (existing as any).team_id,
+        team_id: existing.team_id,
         player_id: playerId,
         action: "drop",
       });
@@ -364,7 +364,7 @@ export async function commissionerSetPlayerTeam(
     return;
   }
 
-  if (existing && (existing as any).team_id === newTeamId) return;
+  if (existing && existing.team_id === newTeamId) return;
 
   // Verify target team is in this league (defense in depth).
   const { data: targetTeam } = await admin
@@ -380,11 +380,11 @@ export async function commissionerSetPlayerTeam(
     .select("division")
     .eq("id", playerId)
     .single();
-  const division = ((player as any)?.division ?? "MPO") as "MPO" | "FPO";
+  const division = (player?.division ?? "MPO") as "MPO" | "FPO";
   const slotLimit =
     division === "MPO"
-      ? (league as any).mpo_starters ?? 4
-      : (league as any).fpo_starters ?? 2;
+      ? league.mpo_starters ?? 4
+      : league.fpo_starters ?? 2;
 
   const { data: divStarters } = await admin
     .from("rosters")
@@ -408,12 +408,12 @@ export async function commissionerSetPlayerTeam(
         team_id: newTeamId,
         is_starter: assignedOrder !== null,
         lineup_order: assignedOrder,
-        acquired_week: (league as any).current_week ?? 1,
+        acquired_week: league.current_week ?? 1,
       })
-      .eq("id", (existing as any).id);
+      .eq("id", existing.id);
     await admin.from("roster_transactions").insert({
       league_id: leagueId,
-      team_id: (existing as any).team_id,
+      team_id: existing.team_id,
       player_id: playerId,
       action: "drop",
     });
@@ -422,7 +422,7 @@ export async function commissionerSetPlayerTeam(
       league_id: leagueId,
       team_id: newTeamId,
       player_id: playerId,
-      acquired_week: (league as any).current_week ?? 1,
+      acquired_week: league.current_week ?? 1,
       is_starter: assignedOrder !== null,
       lineup_order: assignedOrder,
     });
@@ -509,14 +509,14 @@ export async function placeWaiverClaim(
     .eq("team_id", member.id)
     .eq("status", "pending");
   const nextOrder =
-    (existing ?? []).reduce((max, c) => Math.max(max, (c as any).claim_order ?? 0), 0) + 1;
+    (existing ?? []).reduce((max, c) => Math.max(max, c.claim_order ?? 0), 0) + 1;
 
   await admin.from("waiver_claims").insert({
     league_id: leagueId,
     team_id: member.id,
     player_id: playerId,
     drop_player_id: dropPlayerId ?? null,
-    priority: (member as any).waiver_priority ?? null,
+    priority: member.waiver_priority ?? null,
     claim_order: nextOrder,
     status: "pending",
   });
@@ -548,7 +548,7 @@ export async function reorderWaiverClaims(leagueId: number, orderedClaimIds: num
     .eq("league_id", leagueId)
     .eq("team_id", member.id)
     .eq("status", "pending");
-  const mineIds = new Set((mine ?? []).map((c) => (c as any).id as number));
+  const mineIds = new Set((mine ?? []).map((c) => c.id as number));
 
   let order = 1;
   for (const id of orderedClaimIds) {
@@ -627,7 +627,7 @@ export async function processWaivers(leagueId: number): Promise<void> {
     .select("commissioner_id")
     .eq("id", leagueId)
     .single();
-  if (!league || (league as any).commissioner_id !== user.id) return;
+  if (!league || league.commissioner_id !== user.id) return;
 
   await runWaiverProcessing(leagueId);
 
@@ -673,8 +673,8 @@ export async function optimizeLineup(leagueId: number): Promise<void> {
     .eq("id", leagueId)
     .single();
   if (!league) return;
-  const mpoSlots = (league as any).mpo_starters ?? 4;
-  const fpoSlots = (league as any).fpo_starters ?? 2;
+  const mpoSlots = league.mpo_starters ?? 4;
+  const fpoSlots = league.fpo_starters ?? 2;
 
   const { data: member } = await admin
     .from("league_members")
@@ -698,7 +698,7 @@ export async function optimizeLineup(leagueId: number): Promise<void> {
   // ranks higher.
   const playerIds = roster.map((r: any) => r.player_id as number);
   const points = await loadPlayerPoints(admin, {
-    rules: (league as any).scoring_rules,
+    rules: league.scoring_rules,
     playerIds,
   });
 
@@ -711,7 +711,7 @@ export async function optimizeLineup(leagueId: number): Promise<void> {
       .select("registered_player_ids")
       .eq("id", targetTid)
       .maybeSingle();
-    const ids = (regRow as any)?.registered_player_ids as number[] | null;
+    const ids = regRow?.registered_player_ids as number[] | null;
     if (ids && ids.length > 0) regSet = new Set(ids);
   }
 

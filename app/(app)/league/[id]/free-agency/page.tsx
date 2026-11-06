@@ -23,7 +23,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
 
   if (!league) notFound();
 
-  const isCommissioner = (league as any).commissioner_id === user.id;
+  const isCommissioner = league.commissioner_id === user.id;
 
   const { data: myMember } = await supabase
     .from("league_members")
@@ -76,7 +76,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
   // Points under THIS league's scoring rules (never the default-rule
   // fantasy_points column) and paged past the 1000-row select cap, so the
   // numbers here match the matchup pages.
-  const points = await loadPlayerPoints(supabase, { rules: (league as any).scoring_rules });
+  const points = await loadPlayerPoints(supabase, { rules: league.scoring_rules });
 
   // Per-player event history in chronological order → last-event line
   // ("#5 · Ledgestone Open · 30.7 pts") and a recent-form delta (avg of the
@@ -118,7 +118,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
 
   // Total events in the league's selected season (fall back to whatever
   // tournaments exist in DB if no selection is stored).
-  const selectedCount = ((league as any).selected_event_slugs?.length as number | undefined);
+  const selectedCount = (league.selected_event_slugs?.length as number | undefined);
   const totalEventsInSeason = selectedCount ?? points.tournamentIds.size;
 
   function projectionFor(playerId: number): number | null {
@@ -141,7 +141,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
       .select("registered_player_ids")
       .eq("id", nextTournamentId)
       .maybeSingle();
-    const ids = (regRow as any)?.registered_player_ids as number[] | null;
+    const ids = regRow?.registered_player_ids as number[] | null;
     if (ids && ids.length > 0) nextRegisteredSet = new Set(ids);
   }
 
@@ -160,9 +160,9 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
       name: p.name,
       division: p.division,
       worldRanking: p.world_ranking as number | null,
-      overallRank: (p as any).overall_rank as number | null,
-      pdgaRating: (p as any).pdga_rating as number | null,
-      avatarUrl: (p as any).avatar_url as string | null,
+      overallRank: p.overall_rank as number | null,
+      pdgaRating: p.pdga_rating as number | null,
+      avatarUrl: p.avatar_url as string | null,
       totalPoints: Math.round(points.totalFor(p.id) * 10) / 10,
       nextWeekPoints: nextProjectionFor(p.id),
       lastEvent: lastEventFor(p.id),
@@ -178,9 +178,9 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
         name: p.name,
         division: p.division,
         worldRanking: p.world_ranking as number | null,
-        overallRank: (p as any).overall_rank as number | null,
-        pdgaRating: (p as any).pdga_rating as number | null,
-        avatarUrl: (p as any).avatar_url as string | null,
+        overallRank: p.overall_rank as number | null,
+        pdgaRating: p.pdga_rating as number | null,
+        avatarUrl: p.avatar_url as string | null,
         totalPoints: Math.round(points.totalFor(p.id) * 10) / 10,
         projectedPoints: projectionFor(p.id),
         nextWeekPoints: nextProjectionFor(p.id),
@@ -224,7 +224,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
 
   // League-scoped: a live tournament only pauses free agency when it's on
   // this league's schedule (activeT above, from getActiveTournament).
-  const waiversLocked = (league as any).waivers_locked === true || activeT !== null;
+  const waiversLocked = league.waivers_locked === true || activeT !== null;
 
   const { data: myClaims } = await supabase
     .from("waiver_claims")
@@ -308,7 +308,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
           <summary className="cursor-pointer flex items-center justify-between gap-3 text-sm">
             <span className="text-white font-semibold">Waiver order</span>
             <span className="text-gray-400 text-xs">
-              You&apos;re #{(myMember as any).waiver_priority ?? "—"} · waivers running
+              You&apos;re #{myMember.waiver_priority ?? "—"} · waivers running
             </span>
           </summary>
           <ol className="mt-3 space-y-1 text-sm">

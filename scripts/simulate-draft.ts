@@ -108,7 +108,7 @@ async function manualPick(
     p_player_id: playerId,
   });
   if (error) return "rejected_state";
-  const status = (data as any)?.status;
+  const status = data?.status;
   if (status === "ok") return "ok";
   if (status === "rejected_not_on_clock") return "rejected_not_on_clock";
   if (status === "rejected_duplicate") return "rejected_duplicate";
@@ -156,7 +156,7 @@ async function autoPickExpired(client: SupabaseClient, leagueId: number): Promis
     p_team_id: onClock.id,
     p_player_id: picked,
   });
-  return (data as any)?.status === "ok" ? "ok" : "rejected_state";
+  return data?.status === "ok" ? "ok" : "rejected_state";
 }
 
 async function main() {
@@ -276,7 +276,7 @@ async function main() {
             .eq("draft_id", draftId)
             .eq("pick_number", pick)
             .single();
-          const apId = (latest as any)?.player_id;
+          const apId = latest?.player_id;
           if (apId != null) {
             const idx1 = remainingMpo.findIndex((p) => p.id === apId);
             if (idx1 >= 0) remainingMpo.splice(idx1, 1);

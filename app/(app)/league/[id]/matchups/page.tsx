@@ -169,10 +169,10 @@ export default async function MatchupsPage({
               const card = (
                 <>
                   <div className="flex items-center gap-3">
-                    {(t1 as any)?.profiles?.avatar_url ? (
+                    {t1?.profiles?.avatar_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={(t1 as any).profiles.avatar_url}
+                        src={t1.profiles.avatar_url}
                         alt=""
                         className={`w-9 h-9 rounded-full object-cover shrink-0 bg-white/10 ${
                           m.is_final && m.team1_score > m.team2_score ? "ring-2 ring-[#36D7B7]" : ""
@@ -186,7 +186,7 @@ export default async function MatchupsPage({
                         style={
                           m.is_final && m.team1_score > m.team2_score
                             ? undefined
-                            : { backgroundColor: (t1 as any)?.profiles?.avatar_color ?? "rgba(255,255,255,0.1)" }
+                            : { backgroundColor: t1?.profiles?.avatar_color ?? "rgba(255,255,255,0.1)" }
                         }
                       >
                         {t1?.team_name?.[0]?.toUpperCase()}
@@ -209,10 +209,10 @@ export default async function MatchupsPage({
                   </span>
 
                   <div className="flex items-center gap-3 flex-row-reverse">
-                    {(t2 as any)?.profiles?.avatar_url ? (
+                    {t2?.profiles?.avatar_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={(t2 as any).profiles.avatar_url}
+                        src={t2.profiles.avatar_url}
                         alt=""
                         className={`w-9 h-9 rounded-full object-cover shrink-0 bg-white/10 ${
                           m.is_final && m.team2_score > m.team1_score ? "ring-2 ring-[#36D7B7]" : ""
@@ -226,7 +226,7 @@ export default async function MatchupsPage({
                         style={
                           m.is_final && m.team2_score > m.team1_score
                             ? undefined
-                            : { backgroundColor: (t2 as any)?.profiles?.avatar_color ?? "rgba(255,255,255,0.1)" }
+                            : { backgroundColor: t2?.profiles?.avatar_color ?? "rgba(255,255,255,0.1)" }
                         }
                       >
                         {t2?.team_name?.[0]?.toUpperCase()}

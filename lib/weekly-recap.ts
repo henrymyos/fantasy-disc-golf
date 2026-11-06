@@ -80,15 +80,15 @@ export async function generateWeeklyRecap(
   };
   const performances: Performance[] = [];
   for (const s of rosterRows ?? []) {
-    const r = (results ?? []).find((rr: any) => rr.player_id === (s as any).player_id);
+    const r = (results ?? []).find((rr: any) => rr.player_id === s.player_id);
     if (!r) continue;
     performances.push({
       name: (s as any).players?.name ?? "Unknown",
-      teamId: (s as any).team_id,
-      position: Number((r as any).finishing_position ?? 0),
-      tournamentName: tournamentNameById.get((r as any).tournament_id) ?? "the event",
-      points: Number((r as any).fantasy_points ?? 0),
-      isStarter: !!(s as any).is_starter,
+      teamId: s.team_id,
+      position: Number(r.finishing_position ?? 0),
+      tournamentName: tournamentNameById.get(r.tournament_id) ?? "the event",
+      points: Number(r.fantasy_points ?? 0),
+      isStarter: !!s.is_starter,
     });
   }
 

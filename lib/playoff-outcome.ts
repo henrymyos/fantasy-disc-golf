@@ -45,7 +45,7 @@ export async function getPlayoffOutcome(
     .select("scoring_mode")
     .eq("id", leagueId)
     .single();
-  const scoringMode = (((league as any)?.scoring_mode ?? "head_to_head") as
+  const scoringMode = ((league?.scoring_mode ?? "head_to_head") as
     | "head_to_head"
     | "all_play"
     | "median");
@@ -104,8 +104,8 @@ export async function getPlayoffOutcome(
       if (!m) return null;
       return {
         teamId: e.teamId,
-        teamName: (m as any).team_name as string,
-        username: ((m as any).profiles as any)?.username ?? null,
+        teamName: m.team_name as string,
+        username: (m.profiles as any)?.username ?? null,
         wins: e.wins,
         losses: e.losses,
         ties: e.ties,
@@ -126,7 +126,7 @@ export async function getPlayoffOutcome(
       .from("tournament_results")
       .select("tournament_id")
       .in("tournament_id", playoffTids);
-    for (const r of resultRows ?? []) tidsWithResults.add((r as any).tournament_id);
+    for (const r of resultRows ?? []) tidsWithResults.add(r.tournament_id);
   }
   const playoffEvents: ResolvedPlayoffEvent[] = playoffWeeks.map((w) => ({
     name: w.event.name,

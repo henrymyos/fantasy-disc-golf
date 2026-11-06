@@ -83,9 +83,9 @@ export async function pickBestAvailableForTeam(
     .select("mpo_starters, fpo_starters, roster_size")
     .eq("id", leagueId)
     .single();
-  const mpoStarters = Number((league as any)?.mpo_starters ?? 4);
-  const fpoStarters = Number((league as any)?.fpo_starters ?? 2);
-  const rosterSize = Number((league as any)?.roster_size ?? 10);
+  const mpoStarters = Number(league?.mpo_starters ?? 4);
+  const fpoStarters = Number(league?.fpo_starters ?? 2);
+  const rosterSize = Number(league?.roster_size ?? 10);
 
   // All drafted players in this league, with each player's division so we can
   // both skip taken players and tally the on-clock team's current MPO/FPO mix.
@@ -97,7 +97,7 @@ export async function pickBestAvailableForTeam(
   let mpoCount = 0;
   let fpoCount = 0;
   for (const r of drafted ?? []) {
-    if ((r as any).team_id !== teamId) continue;
+    if (r.team_id !== teamId) continue;
     const div = (r as any).players?.division;
     if (div === "MPO") mpoCount++;
     else if (div === "FPO") fpoCount++;
@@ -124,7 +124,7 @@ export async function pickBestAvailableForTeam(
     .limit(500);
   const divisionById = new Map<number, string>();
   for (const p of allPlayers ?? []) {
-    divisionById.set((p as any).id, (p as any).division ?? "MPO");
+    divisionById.set(p.id, p.division ?? "MPO");
   }
 
   // Candidate order: the user's draft queue first (highest priority), then
@@ -140,7 +140,7 @@ export async function pickBestAvailableForTeam(
       .eq("league_id", leagueId)
       .order("position", { ascending: true });
     for (const r of queued ?? []) {
-      const pid = (r as any).player_id;
+      const pid = r.player_id;
       if (!seen.has(pid)) {
         candidateIds.push(pid);
         seen.add(pid);
@@ -153,7 +153,7 @@ export async function pickBestAvailableForTeam(
       .eq("league_id", leagueId)
       .order("rank", { ascending: true });
     for (const r of rankings ?? []) {
-      const pid = (r as any).player_id;
+      const pid = r.player_id;
       if (!seen.has(pid)) {
         candidateIds.push(pid);
         seen.add(pid);
@@ -161,7 +161,7 @@ export async function pickBestAvailableForTeam(
     }
   }
   for (const p of allPlayers ?? []) {
-    const pid = (p as any).id;
+    const pid = p.id;
     if (!seen.has(pid)) {
       candidateIds.push(pid);
       seen.add(pid);
@@ -214,12 +214,12 @@ export async function runExpiredSnakePick(admin: AdminClient, leagueId: number):
   const { data: ownerRows } = await admin
     .from("current_draft_pick_owners")
     .select("overall_pick, owner_team_id")
-    .eq("draft_id", (draft as any).id);
+    .eq("draft_id", draft.id);
 
   const onClockId = resolvePickOwnerId(
     draft.current_pick,
     (members as any[]).map((m) => ({ id: m.id, draftPosition: m.draft_position })),
-    (draft as any).third_round_reversal ?? false,
+    draft.third_round_reversal ?? false,
     buildPickOwnerOverrides(ownerRows as any),
   );
   const onClock = (members as any[]).find((m) => m.id === onClockId);
@@ -235,7 +235,7 @@ export async function runExpiredSnakePick(admin: AdminClient, leagueId: number):
   const { data: claimedPick } = await admin
     .from("drafts")
     .update({ current_pick_started_at: new Date().toISOString() })
-    .eq("id", (draft as any).id)
+    .eq("id", draft.id)
     .eq("current_pick", draft.current_pick)
     .eq("current_pick_started_at", draft.current_pick_started_at)
     .select("id");
@@ -255,7 +255,7 @@ export async function runExpiredSnakePick(admin: AdminClient, leagueId: number):
     p_player_id: pickedPlayerId,
   });
 
-  if ((result as any)?.complete) {
+  if (result?.complete) {
     await finalizeDraftCompletion(admin, leagueId);
   }
 
@@ -315,15 +315,15 @@ export async function runExpiredAuctionFinalize(admin: AdminClient, leagueId: nu
   // snake claim_draft_pick path) so auction winners aren't stuck on the bench
   // scoring nothing until the manager manually builds a lineup.
   const { data: player } = await admin.from("players").select("division").eq("id", playerId).single();
-  const division = ((player as any)?.division ?? "MPO") as "MPO" | "FPO";
+  const division = (player?.division ?? "MPO") as "MPO" | "FPO";
   const { data: leagueSlots } = await admin
     .from("leagues")
     .select("mpo_starters, fpo_starters")
     .eq("id", leagueId)
     .single();
   const slotLimit = division === "MPO"
-    ? ((leagueSlots as any)?.mpo_starters ?? 4)
-    : ((leagueSlots as any)?.fpo_starters ?? 2);
+    ? (leagueSlots?.mpo_starters ?? 4)
+    : (leagueSlots?.fpo_starters ?? 2);
   const { data: divStarters } = await admin
     .from("rosters")
     .select("lineup_order, players!inner(division)")
@@ -366,7 +366,7 @@ export async function runExpiredAuctionFinalize(admin: AdminClient, leagueId: nu
     .select("auction_budget_remaining")
     .eq("id", winnerTeamId)
     .single();
-  const remaining = ((winner as any)?.auction_budget_remaining ?? 0) - winningBid;
+  const remaining = (winner?.auction_budget_remaining ?? 0) - winningBid;
   await admin
     .from("league_members")
     .update({ auction_budget_remaining: Math.max(0, remaining) })
@@ -383,7 +383,7 @@ export async function runExpiredAuctionFinalize(admin: AdminClient, leagueId: nu
     .eq("league_id", leagueId);
   const ownedByTeam = new Map<number, number>();
   for (const r of rosterRows ?? []) {
-    ownedByTeam.set((r as any).team_id, (ownedByTeam.get((r as any).team_id) ?? 0) + 1);
+    ownedByTeam.set(r.team_id, (ownedByTeam.get(r.team_id) ?? 0) + 1);
   }
   const positioned = members.filter((m: any) => m.draft_position != null);
   const allFull =
@@ -412,7 +412,7 @@ export async function runExpiredAuctionFinalize(admin: AdminClient, leagueId: nu
     let guard = 0;
     while (
       nextNominator &&
-      (ownedByTeam.get((nextNominator as any).id) ?? 0) >= draft.total_rounds &&
+      (ownedByTeam.get(nextNominator.id) ?? 0) >= draft.total_rounds &&
       guard++ < 100000
     ) {
       np++;
@@ -426,7 +426,7 @@ export async function runExpiredAuctionFinalize(admin: AdminClient, leagueId: nu
         auction_current_player_id: null,
         auction_current_bid: null,
         auction_high_bidder_team_id: null,
-        auction_nominator_team_id: nextNominator ? (nextNominator as any).id : null,
+        auction_nominator_team_id: nextNominator ? nextNominator.id : null,
         auction_ends_at: null,
       })
       .eq("id", draft.id);
@@ -469,18 +469,18 @@ export async function runExpiredAuctionNomination(
     .from("rosters")
     .select("id", { count: "exact", head: true })
     .eq("league_id", leagueId)
-    .eq("team_id", (nominator as any).id);
+    .eq("team_id", nominator.id);
   const remainingSpots = draft.total_rounds - (count ?? 0);
   if (remainingSpots <= 0) return false;
   // Same reserve rule the bid actions use: $1 held back per future spot.
-  const budget = Number((nominator as any).auction_budget_remaining ?? 0);
+  const budget = Number(nominator.auction_budget_remaining ?? 0);
   if (budget - (remainingSpots - 1) < 1) return false;
 
   const playerId = await pickBestAvailableForTeam(
     admin,
     leagueId,
-    (nominator as any).id,
-    (nominator as any).user_id ?? null,
+    nominator.id,
+    nominator.user_id ?? null,
   );
   if (playerId == null) return false;
 
@@ -492,8 +492,8 @@ export async function runExpiredAuctionNomination(
     .update({
       auction_current_player_id: playerId,
       auction_current_bid: 1,
-      auction_high_bidder_team_id: (nominator as any).id,
-      auction_nominator_team_id: (nominator as any).id,
+      auction_high_bidder_team_id: nominator.id,
+      auction_nominator_team_id: nominator.id,
       auction_ends_at: endsAt,
     })
     .eq("id", draft.id)

@@ -47,7 +47,7 @@ export default async function MockDraftHubPage({
     .select("type")
     .eq("league_id", id)
     .single();
-  const liveType = ((liveDraft as any)?.type ?? "snake") as "snake" | "auction";
+  const liveType = (liveDraft?.type ?? "snake") as "snake" | "auction";
 
   // Resolve player names for the user's own picks so we can preview their top pick
   const allPlayerIds = new Set<number>();
@@ -98,7 +98,7 @@ export default async function MockDraftHubPage({
         ) : (
           <div className="bg-[#1a1d23] rounded-2xl border border-white/5 overflow-hidden">
             {(drafts ?? []).map((d, i) => {
-              const isAuction = (d as any).draft_type === "auction";
+              const isAuction = d.draft_type === "auction";
               const myTeamIndex = d.my_draft_position - 1;
               const myPicks = ((d.picks ?? []) as SavedPick[])
                 .filter((p) => p.teamIndex === myTeamIndex && p.playerId != null)
@@ -136,7 +136,7 @@ export default async function MockDraftHubPage({
                       >
                         {isAuction ? "Auction" : "Snake"}
                       </span>
-                      {(d as any).status === "in_progress" ? (
+                      {d.status === "in_progress" ? (
                         <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded text-yellow-300 bg-yellow-400/15 border border-yellow-400/30">
                           In progress
                         </span>

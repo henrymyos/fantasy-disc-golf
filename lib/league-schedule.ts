@@ -126,13 +126,13 @@ export async function getLeagueSchedule(
     .eq("id", leagueId)
     .single();
   if (!league) return null;
-  const seasonYear = (league as any).season_year ?? DEFAULT_SEASON_YEAR;
+  const seasonYear = league.season_year ?? DEFAULT_SEASON_YEAR;
 
   const events = await getScheduleEvents(supabase, seasonYear);
-  const selectedSlugs = effectiveSelection((league as any).selected_event_slugs, events);
+  const selectedSlugs = effectiveSelection(league.selected_event_slugs, events);
   const selectedSet = new Set(selectedSlugs);
   const playoffSet = new Set(
-    getPlayoffSlugs(selectedSlugs, playoffCountForTeams((league as any).max_teams), events),
+    getPlayoffSlugs(selectedSlugs, playoffCountForTeams(league.max_teams), events),
   );
 
   // Selected events in schedule order, regular-season events before playoff ones
@@ -151,8 +151,8 @@ export async function getLeagueSchedule(
   const byPdga = new Map<number, number>();
   const byName = new Map<string, number>();
   for (const t of tournaments ?? []) {
-    if ((t as any).pdga_event_id != null) byPdga.set((t as any).pdga_event_id, (t as any).id);
-    if ((t as any).name) byName.set(normalizeName((t as any).name), (t as any).id);
+    if (t.pdga_event_id != null) byPdga.set(t.pdga_event_id, t.id);
+    if (t.name) byName.set(normalizeName(t.name), t.id);
   }
 
   const weeks: LeagueWeek[] = [];

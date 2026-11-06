@@ -20,7 +20,7 @@ export default async function CommissionerRostersPage({
     .eq("id", id)
     .single();
   if (!league) notFound();
-  if ((league as any).commissioner_id !== user.id) redirect(`/league/${id}/settings`);
+  if (league.commissioner_id !== user.id) redirect(`/league/${id}/settings`);
 
   const { data: members } = await supabase
     .from("league_members")

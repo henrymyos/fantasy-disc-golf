@@ -32,8 +32,8 @@ export default async function ProfilePage() {
 
       <EditProfileForm
         initialUsername={profile?.username ?? "User"}
-        initialColor={(profile as any)?.avatar_color ?? null}
-        avatarUrl={(profile as any)?.avatar_url ?? null}
+        initialColor={profile?.avatar_color ?? null}
+        avatarUrl={profile?.avatar_url ?? null}
         email={user.email ?? null}
       />
     </div>

@@ -20,25 +20,25 @@ export async function runDraftReminders(admin: SupabaseClient): Promise<{ sent: 
 
   let sent = 0;
   for (const d of drafts ?? []) {
-    const startMs = Date.parse((d as any).scheduled_at);
+    const startMs = Date.parse(d.scheduled_at);
     if (!Number.isFinite(startMs)) continue;
     const until = startMs - now;
     if (until <= 0) continue; // its (informational) time has passed; commissioner still starts manually
 
     // Final hour — send the 1-hour reminder (and don't also fire the day one).
     if (until <= HOUR_MS) {
-      if (!(d as any).reminder_1h_sent) {
-        await notifyLeague(admin, (d as any).league_id, "The draft starts within the hour — get ready!");
-        await admin.from("drafts").update({ reminder_1h_sent: true }).eq("id", (d as any).id);
+      if (!d.reminder_1h_sent) {
+        await notifyLeague(admin, d.league_id, "The draft starts within the hour — get ready!");
+        await admin.from("drafts").update({ reminder_1h_sent: true }).eq("id", d.id);
         sent++;
       }
       continue;
     }
 
     // Within a day (but more than an hour out) — send the 1-day reminder.
-    if (until <= DAY_MS && !(d as any).reminder_1d_sent) {
-      await notifyLeague(admin, (d as any).league_id, "The draft starts within a day — get your rankings set.");
-      await admin.from("drafts").update({ reminder_1d_sent: true }).eq("id", (d as any).id);
+    if (until <= DAY_MS && !d.reminder_1d_sent) {
+      await notifyLeague(admin, d.league_id, "The draft starts within a day — get your rankings set.");
+      await admin.from("drafts").update({ reminder_1d_sent: true }).eq("id", d.id);
       sent++;
     }
   }
@@ -51,7 +51,7 @@ async function notifyLeague(admin: SupabaseClient, leagueId: number, body: strin
     .select("user_id")
     .eq("league_id", leagueId);
   for (const m of members ?? []) {
-    const uid = (m as any).user_id;
+    const uid = m.user_id;
     if (!uid) continue;
     await enqueueNotification(admin, {
       userId: uid,

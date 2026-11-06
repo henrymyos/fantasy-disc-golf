@@ -99,7 +99,7 @@ export async function finalizeWeekScores(leagueId: number, week: number): Promis
     .select("commissioner_id")
     .eq("id", leagueId)
     .single();
-  if (!league || (league as any).commissioner_id !== user.id) return;
+  if (!league || league.commissioner_id !== user.id) return;
 
   await finalizeWeekScoresCore(admin, leagueId, week);
 

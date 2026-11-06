@@ -32,7 +32,7 @@ export async function GET(request: Request) {
 
   const refinalized: string[] = [];
   for (const league of leagues ?? []) {
-    const leagueId = (league as any).id as number;
+    const leagueId = league.id as number;
     // Only weeks that actually have finalized matchups for this league.
     const { data: weeks } = await admin
       .from("matchups")

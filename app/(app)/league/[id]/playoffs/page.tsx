@@ -20,7 +20,7 @@ export default async function PlayoffsPage({ params }: { params: Promise<{ id: s
 
   const { data: league } = await supabase.from("leagues").select("id, name, max_teams").eq("id", id).single();
   if (!league) notFound();
-  const playoffSlots = playoffCountForTeams((league as any).max_teams);
+  const playoffSlots = playoffCountForTeams(league.max_teams);
 
   const outcome = await getPlayoffOutcome(supabase, Number(id));
   const { standings, bracketSize, playoffEvents, result, championTeamId } = outcome;
