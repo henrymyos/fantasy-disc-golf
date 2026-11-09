@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { DuesEditor } from "@/components/dues-editor";
 import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
 import { stripeEnabled } from "@/lib/stripe";
+import type { PayoutSplit } from "@/lib/dues-types";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export default async function DuesPage({
   const { data: league } = await supabase
     .from("leagues")
     .select("id, commissioner_id, dues_amount, payout_splits, scoring_mode")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   if (!league) notFound();
   if (league.commissioner_id !== user.id) redirect(`/league/${id}/settings`);
@@ -28,7 +29,7 @@ export default async function DuesPage({
   const { data: members } = await supabase
     .from("league_members")
     .select("id, team_name, dues_paid, dues_paid_at")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .order("joined_at");
 
   // Compute current standings to power the projected-payout preview.
@@ -43,7 +44,7 @@ export default async function DuesPage({
   const { data: finals } = await supabase
     .from("matchups")
     .select("team1_id, team2_id, team1_score, team2_score")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("is_final", true);
   (finals ?? []).forEach((m: any) => {
     if (!wins[m.team1_id]) wins[m.team1_id] = { wins: 0, losses: 0, points: 0 };
@@ -105,7 +106,7 @@ export default async function DuesPage({
         <DuesEditor
           leagueId={Number(id)}
           initialDuesAmount={Number(league.dues_amount ?? 0)}
-          initialPayoutSplits={league.payout_splits ?? []}
+          initialPayoutSplits={(league.payout_splits as PayoutSplit[] | null) ?? []}
           members={(members ?? []).map((m: any) => ({
             id: m.id,
             team_name: m.team_name,

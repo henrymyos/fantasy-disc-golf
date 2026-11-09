@@ -16,7 +16,7 @@ export default async function TeamPage({
   const { data: myMember } = await supabase
     .from("league_members")
     .select("id, user_id")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("user_id", user.id)
     .single();
   if (!myMember) redirect(`/league/${id}`);
@@ -27,7 +27,7 @@ export default async function TeamPage({
   const { data: league } = await supabase
     .from("leagues")
     .select("id, roster_size, mpo_starters, fpo_starters")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   if (!league) notFound();
 
@@ -37,16 +37,16 @@ export default async function TeamPage({
   const { data: team } = await supabase
     .from("league_members")
     .select("id, team_name, profiles(username)")
-    .eq("league_id", id)
-    .eq("id", teamId)
+    .eq("league_id", Number(id))
+    .eq("id", Number(teamId))
     .single();
   if (!team) notFound();
 
   const { data: rosterRows } = await supabase
     .from("rosters")
     .select("id, is_starter, player_id, lineup_order, players(id, name, division)")
-    .eq("league_id", id)
-    .eq("team_id", teamId)
+    .eq("league_id", Number(id))
+    .eq("team_id", Number(teamId))
     .order("lineup_order", { ascending: true, nullsFirst: false })
     .order("id", { ascending: true });
 
@@ -56,9 +56,9 @@ export default async function TeamPage({
   const { data: nickRows } = await supabase
     .from("player_nicknames")
     .select("player_id, nickname")
-    .eq("team_id", teamId);
+    .eq("team_id", Number(teamId));
   const nickByPlayer = new Map<number, string>(
-    (nickRows ?? []).map((n: any) => [n.player_id as number, n.nickname as string]),
+    (nickRows ?? []).map((n) => [n.player_id as number, n.nickname as string]),
   );
   for (const r of roster) {
     (r as any).nickname = nickByPlayer.get((r as any).player_id) ?? null;
@@ -83,16 +83,16 @@ export default async function TeamPage({
   }
 
   const allMpoStarters = roster.filter(
-    (r) => r.is_starter && (r.players as any)?.division === "MPO",
+    (r) => r.is_starter && r.players?.division === "MPO",
   );
   const allFpoStarters = roster.filter(
-    (r) => r.is_starter && (r.players as any)?.division === "FPO",
+    (r) => r.is_starter && r.players?.division === "FPO",
   );
   const mpoSlotArray = buildSlotArray(allMpoStarters, mpoSlots);
   const fpoSlotArray = buildSlotArray(allFpoStarters, fpoSlots);
 
   const starterIds = new Set(
-    [...mpoSlotArray, ...fpoSlotArray].filter(Boolean).map((r: any) => r.id),
+    [...mpoSlotArray, ...fpoSlotArray].filter(Boolean).map((r) => r.id),
   );
   const bench = roster.filter((r) => !starterIds.has(r.id));
 
@@ -113,9 +113,9 @@ export default async function TeamPage({
         <div className="flex items-center justify-between mb-5">
           <div>
             <h2 className="font-bold text-white text-lg">{team.team_name}</h2>
-            {(team as any).profiles?.username && (
+            {team.profiles?.username && (
               <p className="text-gray-400 text-xs mt-0.5">
-                {(team as any).profiles.username}
+                {team.profiles.username}
               </p>
             )}
           </div>
@@ -151,7 +151,7 @@ export default async function TeamPage({
               Bench
             </h3>
             <div className="space-y-2">
-              {bench.map((spot: any) => (
+              {bench.map((spot) => (
                 <BenchRow key={spot.id} leagueId={Number(id)} spot={spot} />
               ))}
             </div>
@@ -223,7 +223,7 @@ function LineupRow({
 
 function BenchRow({ leagueId, spot }: { leagueId: number; spot: any }) {
   const player = spot.players;
-  const div: "MPO" | "FPO" = (player?.division as any) ?? "MPO";
+  const div: "MPO" | "FPO" = (player?.division) ?? "MPO";
   const color = div === "MPO" ? "#4B3DFF" : "#36D7B7";
   return (
     <div className="flex items-center gap-3 p-3 rounded-xl bg-[#0f1117] border border-white/5">

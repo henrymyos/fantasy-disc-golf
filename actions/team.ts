@@ -49,7 +49,7 @@ export async function updateTeamSettings(
     .select("player_id")
     .eq("league_id", leagueId)
     .eq("team_id", member.id);
-  const ownPlayerIds = new Set((roster ?? []).map((r: any) => r.player_id as number));
+  const ownPlayerIds = new Set((roster ?? []).map((r) => r.player_id as number));
 
   const toUpsert: { league_id: number; team_id: number; player_id: number; nickname: string }[] = [];
   const toClear: number[] = [];

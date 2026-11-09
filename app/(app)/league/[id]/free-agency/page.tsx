@@ -18,7 +18,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
   const { data: league } = await supabase
     .from("leagues")
     .select("id, roster_size, waivers_locked, commissioner_id, selected_event_slugs, scoring_rules")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
 
   if (!league) notFound();
@@ -28,7 +28,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
   const { data: myMember } = await supabase
     .from("league_members")
     .select("id, team_name, waiver_priority")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("user_id", user.id)
     .single();
 
@@ -37,7 +37,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
   const { data: allMembers } = await supabase
     .from("league_members")
     .select("id, team_name, waiver_priority")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .order("waiver_priority", { ascending: true, nullsFirst: false });
   const waiverOrder = (allMembers ?? []) as Array<{
     id: number;
@@ -48,7 +48,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
   const { data: draft } = await supabase
     .from("drafts")
     .select("status")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .single();
 
   const draftComplete = draft?.status === "complete";
@@ -56,7 +56,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
   const { data: rosteredSpots } = await supabase
     .from("rosters")
     .select("player_id, team_id, league_members!inner(team_name)")
-    .eq("league_id", id);
+    .eq("league_id", Number(id));
 
   const rosteredOwner = new Map<number, { teamId: number; teamName: string }>();
   (rosteredSpots ?? []).forEach((r: any) => {
@@ -208,7 +208,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
   const { data: myRosterRows } = await supabase
     .from("rosters")
     .select("player_id, players(id, name, division)")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("team_id", myMember.id)
     .order("player_id");
   // Upcoming-event projection per roster player, shown in the add-with-drop
@@ -219,8 +219,8 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
   }));
 
   const rosterCount = (myRoster ?? []).length;
-  const overLimit = rosterCount > league.roster_size;
-  const openSpots = Math.max(0, league.roster_size - rosterCount);
+  const overLimit = rosterCount > league.roster_size!;
+  const openSpots = Math.max(0, league.roster_size! - rosterCount);
 
   // League-scoped: a live tournament only pauses free agency when it's on
   // this league's schedule (activeT above, from getActiveTournament).
@@ -229,7 +229,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
   const { data: myClaims } = await supabase
     .from("waiver_claims")
     .select("id, player_id, drop_player_id, submitted_at, players!waiver_claims_player_id_fkey(name, division)")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("team_id", myMember.id)
     .eq("status", "pending")
     .order("submitted_at", { ascending: true });
@@ -269,7 +269,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
             <p className="text-red-400 font-semibold text-sm">Roster over limit</p>
             <p className="text-red-300/80 text-xs mt-0.5">
               You have {rosterCount} players but the max is {league.roster_size}.
-              Drop {rosterCount - league.roster_size} player{rosterCount - league.roster_size !== 1 ? "s" : ""} before adding anyone new.
+              Drop {rosterCount - league.roster_size!} player{rosterCount - league.roster_size! !== 1 ? "s" : ""} before adding anyone new.
             </p>
           </div>
         </div>

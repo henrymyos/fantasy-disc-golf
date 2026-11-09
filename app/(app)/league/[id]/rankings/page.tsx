@@ -14,14 +14,14 @@ export default async function RankingsPage({ params }: { params: Promise<{ id: s
   const { data: league } = await supabase
     .from("leagues")
     .select("id, name")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   if (!league) notFound();
 
   const { data: member } = await supabase
     .from("league_members")
     .select("id")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("user_id", user.id)
     .single();
   if (!member) redirect(`/league/${id}`);
@@ -29,14 +29,14 @@ export default async function RankingsPage({ params }: { params: Promise<{ id: s
   const players = await selectAllRows<any>(() =>
     supabase
       .from("players")
-      .select("id, name, division, world_ranking, overall_rank") as any,
+      .select("id, name, division, world_ranking, overall_rank"),
   );
 
   const { data: rankings } = await supabase
     .from("user_player_rankings")
     .select("player_id, rank")
     .eq("user_id", user.id)
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .order("rank", { ascending: true });
 
   // Total fantasy points this season — used as the primary sort for
@@ -50,7 +50,7 @@ export default async function RankingsPage({ params }: { params: Promise<{ id: s
   };
 
   const playerById = new Map<number, { id: number; name: string; division: string; overallRank: number | null; worldRanking: number | null }>();
-  (players ?? []).forEach((p: any) => {
+  (players ?? []).forEach((p) => {
     playerById.set(p.id, {
       id: p.id,
       name: p.name,

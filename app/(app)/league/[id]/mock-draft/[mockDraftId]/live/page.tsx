@@ -37,7 +37,7 @@ export default async function LiveMockDraftPage({
   const { data: league } = await admin
     .from("leagues")
     .select("id, name, mpo_starters, fpo_starters")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   if (!league) notFound();
 
@@ -45,7 +45,7 @@ export default async function LiveMockDraftPage({
     admin
       .from("players")
       .select("id, name, division, world_ranking, overall_rank")
-      .order("overall_rank", { ascending: true, nullsFirst: false }) as any,
+      .order("overall_rank", { ascending: true, nullsFirst: false }),
   );
 
   // Total fantasy points this season → primary sort, matching the board's

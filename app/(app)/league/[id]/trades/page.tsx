@@ -192,7 +192,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
           picks.push({
             seasonYear: s.season_year,
             round: s.round,
-            originalTeamId: s.original_team_id,
+            originalTeamId: s.original_team_id!,
             currentTeamId: m.id,
           });
         }

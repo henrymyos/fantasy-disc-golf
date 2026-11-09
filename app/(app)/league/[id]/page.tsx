@@ -38,7 +38,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   const { data: league } = await supabase
     .from("leagues")
     .select("id, name, current_week, starters_count, mpo_starters, fpo_starters, selected_event_slugs, waivers_locked, scoring_mode, scoring_rules, invite_code, max_teams, commissioner_id, season_year, dues_amount")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
 
   if (!league) notFound();
@@ -63,7 +63,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   const { data: draft } = await supabase
     .from("drafts")
     .select("status, scheduled_at")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .single();
   const showMockDraft = draft?.status !== "complete";
   // Once a draft has a scheduled time (but hasn't finished), let everyone peek at
@@ -73,13 +73,13 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   // Setup checklist: any-matchup existence is needed; member count comes from
   // the members query below, so steps are assembled after that.
   const { count: anyMatchupCount } = isCommissioner
-    ? await supabase.from("matchups").select("id", { count: "exact", head: true }).eq("league_id", id)
+    ? await supabase.from("matchups").select("id", { count: "exact", head: true }).eq("league_id", Number(id))
     : { count: 0 };
 
   const { data: members } = await supabase
     .from("league_members")
     .select("id, team_name, user_id, is_commissioner, waiver_priority, dues_paid, profiles(username, avatar_url, avatar_color)")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .order("joined_at");
 
   // Before the draft starts and while there's still an open slot, surface the
@@ -97,7 +97,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   // Wednesday midday, then the dashboard flips to the new current week.
   const leagueSchedule = await getLeagueSchedule(supabase, Number(id));
   const featuredWeek = leagueSchedule
-    ? featuredWeekFor(leagueSchedule, league.current_week)
+    ? featuredWeekFor(leagueSchedule, league.current_week!)
     : league.current_week;
 
   const { data: matchups } = await supabase
@@ -107,14 +107,14 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
       team1:league_members!matchups_team1_id_fkey(id, team_name),
       team2:league_members!matchups_team2_id_fkey(id, team_name)
     `)
-    .eq("league_id", id)
-    .eq("week", featuredWeek);
+    .eq("league_id", Number(id))
+    .eq("week", featuredWeek!);
 
   // Compute standings from all matchups
   const { data: allMatchups } = await supabase
     .from("matchups")
     .select("week, team1_id, team2_id, team1_score, team2_score, is_final")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("is_final", true);
 
   const scoringMode = ((league.scoring_mode ?? "head_to_head") as
@@ -135,28 +135,28 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   // Total points always come from finalized matchups (or the alt total below).
   (allMatchups ?? []).forEach((m) => {
-    if (!winsMap[m.team1_id]) winsMap[m.team1_id] = { wins: 0, losses: 0, ties: 0, points: 0 };
-    if (!winsMap[m.team2_id]) winsMap[m.team2_id] = { wins: 0, losses: 0, ties: 0, points: 0 };
-    winsMap[m.team1_id].points += m.team1_score;
-    winsMap[m.team2_id].points += m.team2_score;
-    pointsAgainst.set(m.team1_id, (pointsAgainst.get(m.team1_id) ?? 0) + m.team2_score);
-    pointsAgainst.set(m.team2_id, (pointsAgainst.get(m.team2_id) ?? 0) + m.team1_score);
+    if (!winsMap[m.team1_id!]) winsMap[m.team1_id!] = { wins: 0, losses: 0, ties: 0, points: 0 };
+    if (!winsMap[m.team2_id!]) winsMap[m.team2_id!] = { wins: 0, losses: 0, ties: 0, points: 0 };
+    winsMap[m.team1_id!].points += m.team1_score!;
+    winsMap[m.team2_id!].points += m.team2_score!;
+    pointsAgainst.set(m.team1_id!, (pointsAgainst.get(m.team1_id!) ?? 0) + m.team2_score!);
+    pointsAgainst.set(m.team2_id!, (pointsAgainst.get(m.team2_id!) ?? 0) + m.team1_score!);
     if (scoringMode === "head_to_head") {
-      if (m.team1_score > m.team2_score) {
-        winsMap[m.team1_id].wins++;
-        winsMap[m.team2_id].losses++;
-        pushResult(m.team1_id, m.week, "W");
-        pushResult(m.team2_id, m.week, "L");
-      } else if (m.team2_score > m.team1_score) {
-        winsMap[m.team2_id].wins++;
-        winsMap[m.team1_id].losses++;
-        pushResult(m.team2_id, m.week, "W");
-        pushResult(m.team1_id, m.week, "L");
+      if (m.team1_score! > m.team2_score!) {
+        winsMap[m.team1_id!].wins++;
+        winsMap[m.team2_id!].losses++;
+        pushResult(m.team1_id!, m.week, "W");
+        pushResult(m.team2_id!, m.week, "L");
+      } else if (m.team2_score! > m.team1_score!) {
+        winsMap[m.team2_id!].wins++;
+        winsMap[m.team1_id!].losses++;
+        pushResult(m.team2_id!, m.week, "W");
+        pushResult(m.team1_id!, m.week, "L");
       } else {
-        winsMap[m.team1_id].ties++;
-        winsMap[m.team2_id].ties++;
-        pushResult(m.team1_id, m.week, "T");
-        pushResult(m.team2_id, m.week, "T");
+        winsMap[m.team1_id!].ties++;
+        winsMap[m.team2_id!].ties++;
+        pushResult(m.team1_id!, m.week, "T");
+        pushResult(m.team2_id!, m.week, "T");
       }
     }
   });
@@ -263,7 +263,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   const { data: latestRecap } = await supabase
     .from("weekly_recaps")
     .select("week")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .order("week", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -274,9 +274,9 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   const wk = (matchups ?? []).length > 0
     ? await buildWeekProjections(supabase, {
         leagueId: Number(id),
-        week: featuredWeek,
+        week: featuredWeek!,
         schedule: leagueSchedule,
-        league: league as any,
+        league: league,
       })
     : null;
   const inProgress = wk?.inProgress ?? false;
@@ -373,8 +373,8 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                     <div className={winner ? "rounded-full ring-2 ring-[#36D7B7]" : ""}>
                       <TeamAvatar
                         name={member?.team_name ?? "TBD"}
-                        avatarUrl={(member?.profiles as any)?.avatar_url}
-                        avatarColor={(member?.profiles as any)?.avatar_color}
+                        avatarUrl={(member?.profiles)?.avatar_url}
+                        avatarColor={(member?.profiles)?.avatar_color}
                         seed={teamId}
                       />
                     </div>
@@ -485,13 +485,13 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                     <span className="text-gray-400 text-sm w-4">{i + 1}</span>
                     <TeamAvatar
                       name={t.team_name}
-                      avatarUrl={(t.profiles as any)?.avatar_url}
-                      avatarColor={(t.profiles as any)?.avatar_color}
+                      avatarUrl={t.profiles?.avatar_url}
+                      avatarColor={t.profiles?.avatar_color}
                       seed={t.id}
                     />
                     <div className="min-w-0">
                       <p className="text-white text-sm font-medium truncate">{t.team_name}</p>
-                      <p className="text-gray-400 text-xs truncate">{(t.profiles as any)?.username}</p>
+                      <p className="text-gray-400 text-xs truncate">{t.profiles?.username}</p>
                     </div>
                   </Link>
                 );
@@ -534,8 +534,8 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                         <span className="text-gray-400 text-sm w-4">{i + 1}</span>
                         <TeamAvatar
                           name={t.team_name}
-                          avatarUrl={(t.profiles as any)?.avatar_url}
-                          avatarColor={(t.profiles as any)?.avatar_color}
+                          avatarUrl={t.profiles?.avatar_url}
+                          avatarColor={t.profiles?.avatar_color}
                           seed={t.id}
                         />
                         <div className="min-w-0">
@@ -550,7 +550,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
                               </span>
                             )}
                           </div>
-                          <p className="text-gray-400 text-xs">{(t.profiles as any)?.username}</p>
+                          <p className="text-gray-400 text-xs">{t.profiles?.username}</p>
                         </div>
                       </div>
                       <div className="text-right shrink-0">
@@ -929,7 +929,7 @@ function MatchupRow({
     >
       <div className="flex items-center justify-between">
         <TeamScore
-          name={(matchup.team1 as any)?.team_name ?? "TBD"}
+          name={matchup.team1?.team_name ?? "TBD"}
           score={team1Score}
           projected={team1Projected}
           isFinal={matchup.is_final || settled}
@@ -941,7 +941,7 @@ function MatchupRow({
           </span>
         </div>
         <TeamScore
-          name={(matchup.team2 as any)?.team_name ?? "TBD"}
+          name={matchup.team2?.team_name ?? "TBD"}
           score={team2Score}
           projected={team2Projected}
           isFinal={matchup.is_final || settled}

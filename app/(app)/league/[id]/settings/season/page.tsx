@@ -18,7 +18,7 @@ export default async function EditSeasonPage({
   const { data: league } = await supabase
     .from("leagues")
     .select("id, name, commissioner_id, selected_event_slugs, season_year, max_teams")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   if (!league) notFound();
 

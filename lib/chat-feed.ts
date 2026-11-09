@@ -84,7 +84,7 @@ export async function buildLeagueSystemFeed(
     .select("id, team_name, joined_at")
     .eq("league_id", leagueId);
   const teamName = new Map<number, string>(
-    (memberRows ?? []).map((m: any) => [m.id as number, (m.team_name as string) ?? "A team"]),
+    (memberRows ?? []).map((m) => [m.id as number, (m.team_name as string) ?? "A team"]),
   );
 
   // Keys of players won on waivers, so a waiver pickup reads differently from a
@@ -95,7 +95,7 @@ export async function buildLeagueSystemFeed(
     .eq("league_id", leagueId)
     .eq("status", "processed");
   const waiverKeys = new Set<string>(
-    (wonClaims ?? []).map((c: any) => `${c.team_id}:${c.player_id}`),
+    (wonClaims ?? []).map((c) => `${c.team_id}:${c.player_id}`),
   );
 
   // Per-team player nicknames, shown under each player's name in the feed.
@@ -104,7 +104,7 @@ export async function buildLeagueSystemFeed(
     .select("team_id, player_id, nickname")
     .eq("league_id", leagueId);
   const nickMap = new Map<string, string>(
-    (nickRows ?? []).map((n: any) => [`${n.team_id}:${n.player_id}`, n.nickname as string]),
+    (nickRows ?? []).map((n) => [`${n.team_id}:${n.player_id}`, n.nickname as string]),
   );
   const nickOf = (teamId: number | null | undefined, playerId: number | null | undefined): string | null =>
     teamId != null && playerId != null ? nickMap.get(`${teamId}:${playerId}`) ?? null : null;

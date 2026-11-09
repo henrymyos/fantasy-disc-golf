@@ -47,7 +47,7 @@ export async function GET(request: Request) {
 
   const locked: number[] = [];
   if (startingToday && startingToday.length > 0) {
-    const startingIds = new Set((startingToday as any[]).map((t) => t.id as number));
+    const startingIds = new Set(startingToday.map((t) => t.id as number));
     const { data: leagues } = await admin.from("leagues").select("id");
     for (const league of leagues ?? []) {
       const leagueId = league.id as number;
@@ -113,7 +113,7 @@ export async function GET(request: Request) {
     );
     if (eventInProgress) continue;
     const concludedEnds = (trows ?? [])
-      .map((t: any) => t.end_date as string)
+      .map((t) => t.end_date as string)
       .filter((e) => e != null && e <= today)
       .sort();
     const latestEnd = concludedEnds[concludedEnds.length - 1];
@@ -149,8 +149,8 @@ export async function GET(request: Request) {
     .neq("status", "complete");
   const postponed: Record<number, string[]> = {};
   for (const d of liveDrafts ?? []) {
-    const dropped = await applyDraftPostponements(admin, d.league_id);
-    if (dropped.length > 0) postponed[d.league_id] = dropped;
+    const dropped = await applyDraftPostponements(admin, d.league_id!);
+    if (dropped.length > 0) postponed[d.league_id!] = dropped;
   }
 
   // 7) Pre-draft reminders (~1 day / ~1 hour out). Daily backstop only — for
@@ -163,7 +163,7 @@ export async function GET(request: Request) {
     ok: true,
     today,
     isWednesday,
-    startingToday: (startingToday ?? []).map((t: any) => t.name),
+    startingToday: (startingToday ?? []).map((t) => t.name),
     lockedLeagueIds: locked,
     processedLeagueIds: processed,
     autoFinalized,

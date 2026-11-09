@@ -15,7 +15,7 @@ export default async function ScoringPage({ params }: { params: Promise<{ id: st
   const { data: league } = await supabase
     .from("leagues")
     .select("id, commissioner_id, current_week, name, waivers_locked")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
 
   if (!league) notFound();
@@ -30,7 +30,7 @@ export default async function ScoringPage({ params }: { params: Promise<{ id: st
     supabase
       .from("players")
       .select("id, name, division, pdga_number, avatar_url")
-      .order("name") as any,
+      .order("name"),
   );
 
   // The league's current week maps to its Nth SELECTED event — not to the
@@ -58,7 +58,7 @@ export default async function ScoringPage({ params }: { params: Promise<{ id: st
             action={async (formData: FormData) => {
               "use server";
               const name = formData.get("tournamentName") as string;
-              await createTournament(Number(id), name, league.current_week);
+              await createTournament(Number(id), name, league.current_week!);
             }}
             className="flex gap-2"
           >
@@ -77,7 +77,7 @@ export default async function ScoringPage({ params }: { params: Promise<{ id: st
           </form>
 
           {/* Finalize week */}
-          <form action={finalizeWeekScores.bind(null, Number(id), league.current_week)}>
+          <form action={finalizeWeekScores.bind(null, Number(id), league.current_week!)}>
             <button
               type="submit"
               className="bg-[#36D7B7] hover:bg-[#2bc4a6] text-black font-bold text-sm px-4 py-2 rounded-lg transition"
@@ -92,7 +92,7 @@ export default async function ScoringPage({ params }: { params: Promise<{ id: st
               type="submit"
               className="border border-white/10 hover:border-white/20 text-gray-300 text-sm font-medium px-4 py-2 rounded-lg transition"
             >
-              Advance to Week {league.current_week + 1}
+              Advance to Week {league.current_week! + 1}
             </button>
           </form>
 
@@ -148,12 +148,12 @@ export default async function ScoringPage({ params }: { params: Promise<{ id: st
       )}
 
       {/* Past tournaments */}
-      {(tournaments ?? []).filter((t) => t.week < league.current_week).length > 0 && (
+      {(tournaments ?? []).filter((t) => t.week < league.current_week!).length > 0 && (
         <div className="bg-[#1a1d23] rounded-2xl p-5 border border-white/5">
           <h3 className="font-semibold text-white mb-4">Past Tournaments</h3>
           <div className="space-y-2">
             {(tournaments ?? [])
-              .filter((t) => t.week < league.current_week)
+              .filter((t) => t.week < league.current_week!)
               .map((t) => (
                 <div key={t.id} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
                   <p className="text-gray-300 text-sm">{t.name}</p>

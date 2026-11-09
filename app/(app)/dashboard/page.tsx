@@ -47,8 +47,8 @@ export default async function DashboardPage({
     ? await supabase.from("league_members").select("league_id").in("league_id", leagueIds)
     : { data: [] as { league_id: number }[] };
   const countByLeague = new Map<number, number>();
-  (memberCountRows ?? []).forEach((r: { league_id: number }) => {
-    countByLeague.set(r.league_id, (countByLeague.get(r.league_id) ?? 0) + 1);
+  (memberCountRows ?? []).forEach((r) => {
+    countByLeague.set(r.league_id!, (countByLeague.get(r.league_id!) ?? 0) + 1);
   });
 
   const hour = new Date().getHours();

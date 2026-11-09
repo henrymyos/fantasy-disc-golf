@@ -21,14 +21,14 @@ export default async function LeagueSettingsPage({
   const { data: league } = await supabase
     .from("leagues")
     .select("id, name, commissioner_id, invite_code, selected_event_slugs, season_year, max_teams")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   if (!league) notFound();
 
   const { data: member } = await supabase
     .from("league_members")
     .select("id")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("user_id", user.id)
     .single();
   if (!member) redirect(`/league/${id}`);
@@ -38,14 +38,14 @@ export default async function LeagueSettingsPage({
   const { data: divData } = await supabase
     .from("leagues")
     .select("keepers_per_team")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   const keepersPerTeam: number = divData?.keepers_per_team ?? 0;
 
   const { count: completedDraftCount } = await supabase
     .from("drafts")
     .select("id", { count: "exact", head: true })
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("status", "complete");
 
   // The invite card only matters while the league can still be joined:
@@ -53,13 +53,13 @@ export default async function LeagueSettingsPage({
   const { data: draftRow } = await supabase
     .from("drafts")
     .select("status")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .maybeSingle();
   const preDraft = draftRow?.status == null || draftRow.status === "pending";
   const { count: memberCount } = await supabase
     .from("league_members")
     .select("id", { count: "exact", head: true })
-    .eq("league_id", id);
+    .eq("league_id", Number(id));
   const maxTeams = league.max_teams as number | null;
   const leagueIsFull = maxTeams != null && (memberCount ?? 0) >= maxTeams;
   const inviteCode =

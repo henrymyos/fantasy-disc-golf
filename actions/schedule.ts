@@ -105,7 +105,7 @@ export async function cloneSeason(
     .from("schedule_events")
     .select("slug")
     .eq("season_year", toYear);
-  const have = new Set((existing ?? []).map((r: any) => r.slug));
+  const have = new Set((existing ?? []).map((r) => r.slug));
 
   const shift = (iso: string) => {
     const d = new Date(`${iso}T00:00:00Z`);

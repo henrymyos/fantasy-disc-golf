@@ -27,7 +27,7 @@ export default async function PlayerPage({
   const { data: member } = await supabase
     .from("league_members")
     .select("id")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("user_id", user.id)
     .single();
   if (!member) redirect(`/league/${id}`);
@@ -35,7 +35,7 @@ export default async function PlayerPage({
   const { data: player } = await supabase
     .from("players")
     .select("id, name, division, world_ranking, overall_rank, pdga_rating, avatar_url")
-    .eq("id", playerId)
+    .eq("id", Number(playerId))
     .single();
   if (!player) notFound();
 
@@ -43,8 +43,8 @@ export default async function PlayerPage({
   const { data: rosterEntry } = await supabase
     .from("rosters")
     .select("team_id, league_members!inner(id, team_name)")
-    .eq("league_id", id)
-    .eq("player_id", playerId)
+    .eq("league_id", Number(id))
+    .eq("player_id", Number(playerId))
     .maybeSingle();
   const ownerTeamId = rosterEntry?.team_id ?? null;
   const ownerTeamName = (rosterEntry as any)?.league_members?.team_name ?? null;
@@ -56,12 +56,12 @@ export default async function PlayerPage({
   const { data: league } = await supabase
     .from("leagues")
     .select("roster_size, waivers_locked, selected_event_slugs, scoring_rules")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   const { data: draft } = await supabase
     .from("drafts")
     .select("status")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .single();
   const draftComplete = draft?.status === "complete";
 
@@ -74,7 +74,7 @@ export default async function PlayerPage({
   const { data: myRosterRows } = await supabase
     .from("rosters")
     .select("player_id, players(id, name, division)")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("team_id", member.id);
 
   // Upcoming-event projection per roster player (per-event scoring pace, 0 if
@@ -111,9 +111,9 @@ export default async function PlayerPage({
   const { data: myClaim } = await supabase
     .from("waiver_claims")
     .select("id")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("team_id", member.id)
-    .eq("player_id", playerId)
+    .eq("player_id", Number(playerId))
     .eq("status", "pending")
     .maybeSingle();
   const hasPendingClaim = myClaim !== null;
@@ -124,14 +124,14 @@ export default async function PlayerPage({
       id, name, week, start_date, pdga_event_id, registered_player_ids,
       tournament_results(fantasy_points, finishing_position, hot_round_count, bogey_free_count, ace_count)
     `)
-    .eq("tournament_results.player_id", playerId)
+    .eq("tournament_results.player_id", Number(playerId))
     .order("start_date", { ascending: true });
 
   // All result rows for players in this player's division — used both to
   // compute event-level field sizes and to tier this player's season totals
   // and average finish against same-division peers.
   const divPlayerRows = await selectAllRows<any>(() =>
-    supabase.from("players").select("id").eq("division", player.division) as any,
+    supabase.from("players").select("id").eq("division", player.division!) as any,
   );
   const divPlayerIds = divPlayerRows.map((p: any) => p.id as number);
   // League-rule points (not the default-rule fantasy_points column) and paged,
@@ -266,7 +266,7 @@ export default async function PlayerPage({
               ) : (
                 <AddWithDropModal
                   leagueId={Number(id)}
-                  addPlayer={{ id: player.id, name: player.name, division: player.division }}
+                  addPlayer={{ id: player.id, name: player.name, division: player.division! }}
                   myRoster={myRoster as any}
                   openSpots={openSpots}
                 />

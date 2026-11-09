@@ -18,7 +18,7 @@ export default async function PlayoffsPage({ params }: { params: Promise<{ id: s
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: league } = await supabase.from("leagues").select("id, name, max_teams").eq("id", id).single();
+  const { data: league } = await supabase.from("leagues").select("id, name, max_teams").eq("id", Number(id)).single();
   if (!league) notFound();
   const playoffSlots = playoffCountForTeams(league.max_teams);
 

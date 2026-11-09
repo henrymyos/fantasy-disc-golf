@@ -19,14 +19,14 @@ export default async function MockDraftHubPage({
   const { data: league } = await supabase
     .from("leagues")
     .select("id, name")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   if (!league) notFound();
 
   const { data: member } = await supabase
     .from("league_members")
     .select("id")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("user_id", user.id)
     .single();
   if (!member) redirect(`/league/${id}`);
@@ -37,7 +37,7 @@ export default async function MockDraftHubPage({
     .from("mock_drafts")
     .select("id, my_draft_position, num_teams, roster_size, picks, created_at, status, draft_type, auction_budget")
     .eq("user_id", user.id)
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .order("created_at", { ascending: false });
 
   // The league's current draft type, used to label the "start" button so it's
@@ -45,7 +45,7 @@ export default async function MockDraftHubPage({
   const { data: liveDraft } = await supabase
     .from("drafts")
     .select("type")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .single();
   const liveType = (liveDraft?.type ?? "snake") as "snake" | "auction";
 
@@ -63,7 +63,7 @@ export default async function MockDraftHubPage({
       .from("players")
       .select("id, name, division")
       .in("id", Array.from(allPlayerIds));
-    playersById = Object.fromEntries((players ?? []).map((p) => [p.id, { name: p.name, division: p.division }]));
+    playersById = Object.fromEntries((players ?? []).map((p) => [p.id, { name: p.name, division: p.division! }]));
   }
 
   return (

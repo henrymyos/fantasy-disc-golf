@@ -71,7 +71,7 @@ export async function sendChatMessage(
         .eq("league_id", leagueId)
         .neq("id", sender.id);
       recipientUserIds = (mems ?? [])
-        .map((m: any) => m.user_id)
+        .map((m) => m.user_id)
         .filter((uid: string | null): uid is string => !!uid);
     }
     const senderName = sender.team_name ?? "New message";

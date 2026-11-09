@@ -112,11 +112,11 @@ export async function startNextSeason(leagueId: number): Promise<RolloverResult>
     .from("league_members")
     .select("id")
     .eq("league_id", leagueId);
-  const teamIds = (teamRows ?? []).map((m: any) => m.id);
+  const teamIds = (teamRows ?? []).map((m) => m.id);
 
   // 3. The league's draft row(s).
   const { data: drafts } = await admin.from("drafts").select("id").eq("league_id", leagueId).order("id");
-  const draftIds = (drafts ?? []).map((d: any) => d.id);
+  const draftIds = (drafts ?? []).map((d) => d.id);
   const keepDraftId = draftIds[0] ?? null;
 
   // 4. Wipe season state.

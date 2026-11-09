@@ -12,7 +12,7 @@ export default async function EditMatchupsPage({ params }: { params: Promise<{ i
   const { data: league } = await supabase
     .from("leagues")
     .select("id, name, commissioner_id, current_week")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   if (!league) notFound();
   if (league.commissioner_id !== user.id) redirect(`/league/${id}/settings`);
@@ -20,13 +20,13 @@ export default async function EditMatchupsPage({ params }: { params: Promise<{ i
   const { data: members } = await supabase
     .from("league_members")
     .select("id, team_name, division_name, joined_at")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .order("joined_at");
 
   const { data: matchups } = await supabase
     .from("matchups")
     .select("id, week, team1_id, team2_id, is_final")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .order("week", { ascending: true })
     .order("id", { ascending: true });
 
@@ -47,8 +47,8 @@ export default async function EditMatchupsPage({ params }: { params: Promise<{ i
 
       <MatchupsEditor
         leagueId={Number(id)}
-        currentWeek={league.current_week}
-        members={(members ?? []).map((m: any) => ({
+        currentWeek={league.current_week!}
+        members={(members ?? []).map((m) => ({
           id: m.id,
           team_name: m.team_name,
           division_name: m.division_name,

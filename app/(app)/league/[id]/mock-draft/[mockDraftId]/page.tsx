@@ -23,14 +23,14 @@ export default async function MockDraftViewerPage({
   const { data: league } = await supabase
     .from("leagues")
     .select("id, name, max_teams, roster_size, mpo_starters, fpo_starters")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   if (!league) notFound();
 
   const { data: member } = await supabase
     .from("league_members")
     .select("id")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("user_id", user.id)
     .single();
   if (!member) redirect(`/league/${id}`);
@@ -48,7 +48,7 @@ export default async function MockDraftViewerPage({
     supabase
       .from("players")
       .select("id, name, division, world_ranking, overall_rank")
-      .order("overall_rank", { ascending: true, nullsFirst: false }) as any,
+      .order("overall_rank", { ascending: true, nullsFirst: false }),
   );
 
   // Total fantasy points this season, used as the primary sort to match the

@@ -17,7 +17,7 @@ export default async function DraftResultPage({
   const { data: member } = await supabase
     .from("league_members")
     .select("id")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("user_id", user.id)
     .single();
 
@@ -26,8 +26,8 @@ export default async function DraftResultPage({
   const { data: draft } = await supabase
     .from("drafts")
     .select("id, status, type, current_pick, total_rounds, third_round_reversal")
-    .eq("id", draftId)
-    .eq("league_id", id)
+    .eq("id", Number(draftId))
+    .eq("league_id", Number(id))
     .single();
 
   if (!draft || draft.status !== "complete") notFound();
@@ -35,7 +35,7 @@ export default async function DraftResultPage({
   const { data: leagueSlotRow } = await supabase
     .from("leagues")
     .select("mpo_starters, fpo_starters, roster_size")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   const mpoSlots: number = leagueSlotRow?.mpo_starters ?? 4;
   const fpoSlots: number = leagueSlotRow?.fpo_starters ?? 2;
@@ -44,7 +44,7 @@ export default async function DraftResultPage({
   const { data: memberRows } = await supabase
     .from("league_members")
     .select("id, team_name, draft_position")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .not("draft_position", "is", null)
     .order("draft_position");
 
@@ -78,7 +78,7 @@ export default async function DraftResultPage({
       </Link>
       <DraftBoard
         leagueId={Number(id)}
-        draft={{ id: draft.id, status: draft.status, type: draft.type, currentPick: draft.current_pick, totalRounds: draft.total_rounds, thirdRoundReversal: !!draft.third_round_reversal }}
+        draft={{ id: draft.id, status: draft.status!, type: draft.type!, currentPick: draft.current_pick!, totalRounds: draft.total_rounds!, thirdRoundReversal: !!draft.third_round_reversal }}
         members={members}
         picks={picks}
         availablePlayers={[]}

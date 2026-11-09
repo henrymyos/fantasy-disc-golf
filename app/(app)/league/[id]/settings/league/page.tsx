@@ -17,14 +17,14 @@ export default async function LeagueSettingsSubpage({
   const { data: league } = await supabase
     .from("leagues")
     .select("id, name, commissioner_id, logo_url, max_teams, roster_size, mpo_starters, fpo_starters, waiver_order_mode, scoring_mode, keepers_per_team")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   if (!league) notFound();
 
   const { data: member } = await supabase
     .from("league_members")
     .select("id")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("user_id", user.id)
     .single();
   if (!member) redirect(`/league/${id}`);
@@ -59,8 +59,8 @@ export default async function LeagueSettingsSubpage({
             leagueId={id}
             initial={{
               name: league.name,
-              maxTeams: league.max_teams,
-              rosterSize: league.roster_size,
+              maxTeams: league.max_teams!,
+              rosterSize: league.roster_size!,
               mpoStarters: league.mpo_starters ?? 4,
               fpoStarters: league.fpo_starters ?? 2,
               waiverOrderMode: (league.waiver_order_mode ?? "reverse_standings") as
@@ -76,8 +76,8 @@ export default async function LeagueSettingsSubpage({
         ) : (
           <ReadOnlySettings
             name={league.name}
-            maxTeams={league.max_teams}
-            rosterSize={league.roster_size}
+            maxTeams={league.max_teams!}
+            rosterSize={league.roster_size!}
             mpoStarters={league.mpo_starters ?? 4}
             fpoStarters={league.fpo_starters ?? 2}
           />
