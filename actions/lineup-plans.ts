@@ -32,7 +32,7 @@ export async function saveWeekLineupPlan(
     .eq("id", leagueId)
     .single();
   if (!league) return { ok: false, error: "League not found" };
-  if (week <= league.current_week!) {
+  if (week <= league.current_week) {
     return { ok: false, error: "Only future weeks can be planned" };
   }
   const mpoSlots = league.mpo_starters ?? 4;
@@ -52,7 +52,7 @@ export async function saveWeekLineupPlan(
     .eq("league_id", leagueId)
     .eq("team_id", member.id);
   const divByPlayer = new Map<number, string>(
-    (roster ?? []).map((r) => [r.player_id as number, (r.players?.division as string) ?? "MPO"]),
+    (roster ?? []).map((r) => [r.player_id, (r.players?.division as string) ?? "MPO"]),
   );
 
   // Sanitize: on-roster players only, division must match the slot, orders in

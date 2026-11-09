@@ -45,7 +45,7 @@ export async function loadAuctionContext(admin: AdminClient, leagueId: number) {
     .select("id, user_id, draft_position, auction_budget_remaining")
     .eq("league_id", leagueId)
     .order("draft_position");
-  return { admin, draft: draft as DraftRow | null, members: members ?? [] };
+  return { admin, draft: draft, members: members ?? [] };
 }
 
 /** Team whose turn it is to nominate, given the snake-ordered nomination
@@ -141,9 +141,9 @@ export async function pickBestAvailableForTeam(
       .order("position", { ascending: true });
     for (const r of queued ?? []) {
       const pid = r.player_id;
-      if (!seen.has(pid!)) {
-        candidateIds.push(pid!);
-        seen.add(pid!);
+      if (!seen.has(pid)) {
+        candidateIds.push(pid);
+        seen.add(pid);
       }
     }
     const { data: rankings } = await admin
@@ -217,7 +217,7 @@ export async function runExpiredSnakePick(admin: AdminClient, leagueId: number):
     .eq("draft_id", draft.id);
 
   const onClockId = resolvePickOwnerId(
-    draft.current_pick!,
+    draft.current_pick,
     (members as any[]).map((m) => ({ id: m.id, draftPosition: m.draft_position })),
     draft.third_round_reversal ?? false,
     buildPickOwnerOverrides(ownerRows as any),
@@ -236,7 +236,7 @@ export async function runExpiredSnakePick(admin: AdminClient, leagueId: number):
     .from("drafts")
     .update({ current_pick_started_at: new Date().toISOString() })
     .eq("id", draft.id)
-    .eq("current_pick", draft.current_pick!)
+    .eq("current_pick", draft.current_pick)
     .eq("current_pick_started_at", draft.current_pick_started_at)
     .select("id");
   if (!claimedPick || claimedPick.length === 0) return false;
@@ -383,7 +383,7 @@ export async function runExpiredAuctionFinalize(admin: AdminClient, leagueId: nu
     .eq("league_id", leagueId);
   const ownedByTeam = new Map<number, number>();
   for (const r of rosterRows ?? []) {
-    ownedByTeam.set(r.team_id!, (ownedByTeam.get(r.team_id!) ?? 0) + 1);
+    ownedByTeam.set(r.team_id, (ownedByTeam.get(r.team_id) ?? 0) + 1);
   }
   const positioned = members.filter((m: any) => m.draft_position != null);
   const allFull =

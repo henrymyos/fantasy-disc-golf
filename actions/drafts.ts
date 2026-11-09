@@ -463,7 +463,7 @@ export async function replacePick(
   if (!pick) return;
 
   const oldPlayerId = pick.player_id as number | null;
-  const teamId = pick.team_id as number;
+  const teamId = pick.team_id;
   if (oldPlayerId === newPlayerId) return; // no-op
 
   const { data: newPlayer } = await admin
@@ -565,7 +565,7 @@ export async function commissionerMakePick(leagueId: number, playerId: number): 
     .eq("draft_id", draft.id);
 
   const onClockId = resolvePickOwnerId(
-    draft.current_pick!,
+    draft.current_pick,
     members.map((m) => ({ id: m.id, draftPosition: m.draft_position })),
     draft.third_round_reversal ?? false,
     buildPickOwnerOverrides(ownerRows as any),

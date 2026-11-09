@@ -51,19 +51,19 @@ export default async function MyMatchupPage({
   // Wednesday midday, then the surfaces flip to the new current week.
   const schedule = await getLeagueSchedule(supabase, Number(id));
   const featuredWeek = schedule
-    ? featuredWeekFor(schedule, league.current_week!)
+    ? featuredWeekFor(schedule, league.current_week)
     : league.current_week;
 
   // Week navigation: ?week=N shows my matchup for any week of the season;
   // no param keeps the featured-week default.
   const totalWeeks = schedule?.weeks.length ?? league.current_week;
-  const currentWeek = Math.min(league.current_week!, Math.max(totalWeeks!, 1));
+  const currentWeek = Math.min(league.current_week, Math.max(totalWeeks, 1));
   const requested = Number(sp.week);
   const hasExplicitWeek =
-    Number.isInteger(requested) && requested >= 1 && requested <= totalWeeks!;
+    Number.isInteger(requested) && requested >= 1 && requested <= totalWeeks;
   const selectedWeek = hasExplicitWeek
     ? requested
-    : Math.min(Math.max(featuredWeek!, 1), totalWeeks!);
+    : Math.min(Math.max(featuredWeek, 1), totalWeeks);
   const weekTabs = schedule ? weekTabsFor(schedule) : [];
   const weekStrip = weekTabs.length > 0 && (
     <WeekSwitcher

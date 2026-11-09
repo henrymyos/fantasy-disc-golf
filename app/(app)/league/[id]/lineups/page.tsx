@@ -63,15 +63,15 @@ export default async function LineupsPage({
   // plan that becomes the real lineup when the week arrives.
   const schedule = await getLeagueSchedule(supabase, Number(id));
   const totalWeeks = schedule?.weeks.length ?? league.current_week;
-  const currentWeek = Math.min(league.current_week!, Math.max(totalWeeks!, 1));
+  const currentWeek = Math.min(league.current_week, Math.max(totalWeeks, 1));
   const featured = schedule
-    ? featuredWeekFor(schedule, league.current_week!)
+    ? featuredWeekFor(schedule, league.current_week)
     : league.current_week;
   const requested = Number(sp.week);
   const selectedWeek =
-    Number.isInteger(requested) && requested >= 1 && requested <= totalWeeks!
+    Number.isInteger(requested) && requested >= 1 && requested <= totalWeeks
       ? requested
-      : Math.min(Math.max(featured!, 1), totalWeeks!);
+      : Math.min(Math.max(featured, 1), totalWeeks);
   const mode: "past" | "current" | "future" =
     selectedWeek < currentWeek ? "past" : selectedWeek > currentWeek ? "future" : "current";
   const weekTabs = schedule ? weekTabsFor(schedule) : [];
@@ -203,8 +203,8 @@ export default async function LineupsPage({
       .filter(({ slotIndex: si }) => si !== skipIdx + 1);
   }
 
-  const overRoster = roster.length > league.roster_size!;
-  const toDrop = roster.length - league.roster_size!;
+  const overRoster = roster.length > league.roster_size;
+  const toDrop = roster.length - league.roster_size;
   const lineupsDisabled = overRoster || lineupLocked;
 
   // Compute the team's current W-L for the header.

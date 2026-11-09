@@ -190,7 +190,7 @@ export async function startNextSeason(leagueId: number): Promise<RolloverResult>
     .from("leagues")
     .update({
       current_week: 1,
-      draft_status: null,
+      draft_status: "pending",
       waivers_locked: false,
       selected_event_slugs: null,
     })

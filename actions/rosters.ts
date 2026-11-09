@@ -219,7 +219,7 @@ export async function addFreeAgent(leagueId: number, playerId: number, dropPlaye
     .select("id", { count: "exact", head: true })
     .eq("league_id", leagueId)
     .eq("team_id", member.id);
-  const atCap = (count ?? 0) >= league.roster_size!;
+  const atCap = (count ?? 0) >= league.roster_size;
 
   // At the cap you must drop someone, and that someone must actually be on your
   // roster — otherwise a stale drop (the player is already gone) would let the
@@ -353,7 +353,7 @@ export async function commissionerSetPlayerTeam(
       await admin.from("rosters").delete().eq("id", existing.id);
       await admin.from("roster_transactions").insert({
         league_id: leagueId,
-        team_id: existing.team_id!,
+        team_id: existing.team_id,
         player_id: playerId,
         action: "drop",
       });
@@ -413,7 +413,7 @@ export async function commissionerSetPlayerTeam(
       .eq("id", existing.id);
     await admin.from("roster_transactions").insert({
       league_id: leagueId,
-      team_id: existing.team_id!,
+      team_id: existing.team_id,
       player_id: playerId,
       action: "drop",
     });
@@ -696,7 +696,7 @@ export async function optimizeLineup(leagueId: number): Promise<void> {
   // fantasy_points column), zeroed for players not registered for the target
   // event. Optimizing off a different projection would bench a player the UI
   // ranks higher.
-  const playerIds = roster.map((r) => r.player_id as number);
+  const playerIds = roster.map((r) => r.player_id);
   const points = await loadPlayerPoints(admin, {
     rules: league.scoring_rules,
     playerIds,

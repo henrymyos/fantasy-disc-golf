@@ -48,7 +48,7 @@ export default async function DashboardPage({
     : { data: [] as { league_id: number }[] };
   const countByLeague = new Map<number, number>();
   (memberCountRows ?? []).forEach((r) => {
-    countByLeague.set(r.league_id!, (countByLeague.get(r.league_id!) ?? 0) + 1);
+    countByLeague.set(r.league_id, (countByLeague.get(r.league_id) ?? 0) + 1);
   });
 
   const hour = new Date().getHours();

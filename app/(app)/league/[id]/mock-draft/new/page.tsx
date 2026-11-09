@@ -72,8 +72,8 @@ export default async function MockDraftPage({
       <MockAuction
         leagueId={id}
         leagueName={league.name}
-        numTeams={league.max_teams!}
-        rosterSize={league.roster_size!}
+        numTeams={league.max_teams}
+        rosterSize={league.roster_size}
         mpoStarters={league.mpo_starters ?? 4}
         fpoStarters={league.fpo_starters ?? 2}
         budget={auctionBudget}
@@ -86,8 +86,8 @@ export default async function MockDraftPage({
     <MockDraft
       leagueId={id}
       leagueName={league.name}
-      numTeams={league.max_teams!}
-      rosterSize={league.roster_size!}
+      numTeams={league.max_teams}
+      rosterSize={league.roster_size}
       mpoStarters={league.mpo_starters ?? 4}
       fpoStarters={league.fpo_starters ?? 2}
       thirdRoundReversal={thirdRoundReversal}

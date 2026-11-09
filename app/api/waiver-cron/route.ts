@@ -149,8 +149,8 @@ export async function GET(request: Request) {
     .neq("status", "complete");
   const postponed: Record<number, string[]> = {};
   for (const d of liveDrafts ?? []) {
-    const dropped = await applyDraftPostponements(admin, d.league_id!);
-    if (dropped.length > 0) postponed[d.league_id!] = dropped;
+    const dropped = await applyDraftPostponements(admin, d.league_id);
+    if (dropped.length > 0) postponed[d.league_id] = dropped;
   }
 
   // 7) Pre-draft reminders (~1 day / ~1 hour out). Daily backstop only — for

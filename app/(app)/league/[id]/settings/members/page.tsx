@@ -37,7 +37,7 @@ export default async function MembersPage({ params }: { params: Promise<{ id: st
     .maybeSingle();
   const draftLocked = ["in_progress", "paused", "complete"].includes(draft?.status ?? "");
 
-  const commissionerUserId = league.commissioner_id as string;
+  const commissionerUserId = league.commissioner_id;
   const isCommissioner = commissionerUserId === user.id;
 
   return (

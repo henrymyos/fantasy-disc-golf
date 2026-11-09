@@ -219,8 +219,8 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
   }));
 
   const rosterCount = (myRoster ?? []).length;
-  const overLimit = rosterCount > league.roster_size!;
-  const openSpots = Math.max(0, league.roster_size! - rosterCount);
+  const overLimit = rosterCount > league.roster_size;
+  const openSpots = Math.max(0, league.roster_size - rosterCount);
 
   // League-scoped: a live tournament only pauses free agency when it's on
   // this league's schedule (activeT above, from getActiveTournament).
@@ -269,7 +269,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
             <p className="text-red-400 font-semibold text-sm">Roster over limit</p>
             <p className="text-red-300/80 text-xs mt-0.5">
               You have {rosterCount} players but the max is {league.roster_size}.
-              Drop {rosterCount - league.roster_size!} player{rosterCount - league.roster_size! !== 1 ? "s" : ""} before adding anyone new.
+              Drop {rosterCount - league.roster_size} player{rosterCount - league.roster_size !== 1 ? "s" : ""} before adding anyone new.
             </p>
           </div>
         </div>

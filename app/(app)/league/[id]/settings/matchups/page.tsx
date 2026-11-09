@@ -47,7 +47,7 @@ export default async function EditMatchupsPage({ params }: { params: Promise<{ i
 
       <MatchupsEditor
         leagueId={Number(id)}
-        currentWeek={league.current_week!}
+        currentWeek={league.current_week}
         members={(members ?? []).map((m) => ({
           id: m.id,
           team_name: m.team_name,

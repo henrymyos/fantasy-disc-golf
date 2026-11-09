@@ -119,9 +119,9 @@ export async function runWaiverProcessing(leagueId: number): Promise<void> {
   // chosen claim order (first listed is attempted first).
   const byTeam = new Map<number, any[]>();
   for (const c of claims) {
-    const list = byTeam.get(c.team_id!) ?? [];
+    const list = byTeam.get(c.team_id) ?? [];
     list.push(c);
-    byTeam.set(c.team_id!, list);
+    byTeam.set(c.team_id, list);
   }
   const teamsByPriority = [...byTeam.keys()].sort((a, b) => {
     const aP = (byTeam.get(a)![0] as any).league_members?.waiver_priority ?? 9999;
@@ -164,7 +164,7 @@ export async function runWaiverProcessing(leagueId: number): Promise<void> {
         .eq("league_id", leagueId)
         .eq("team_id", teamId);
       const rosterCount = count ?? 0;
-      const needsDrop = rosterCount >= league.roster_size!;
+      const needsDrop = rosterCount >= league.roster_size;
 
       if (needsDrop && !claim.drop_player_id) {
         await admin
@@ -269,10 +269,10 @@ export async function runWaiverProcessing(leagueId: number): Promise<void> {
     for (const o of outcomes ?? []) {
       const t = o.team_id;
       const name = (o as any).players?.name ?? "a player";
-      const cur = byTeam.get(t!) ?? {};
+      const cur = byTeam.get(t) ?? {};
       if (o.status === "processed") cur.won = name;
       else if (!cur.lost) cur.lost = name;
-      byTeam.set(t!, cur);
+      byTeam.set(t, cur);
     }
     const { data: teamRows } = await admin
       .from("league_members")
