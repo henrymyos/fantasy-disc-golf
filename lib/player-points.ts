@@ -83,7 +83,7 @@ export async function loadPlayerPoints(
         let q = supabase.from("tournament_results").select(RESULT_COLUMNS);
         if (opts.playerIds) q = q.in("player_id", opts.playerIds);
         if (opts.tournamentIds) q = q.in("tournament_id", opts.tournamentIds);
-        return q as any;
+        return q;
       });
 
   const byPlayer = new Map<number, PlayerEventPoints[]>();

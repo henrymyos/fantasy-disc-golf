@@ -12,7 +12,7 @@ export default async function KeepersPage({ params }: { params: Promise<{ id: st
   const { data: league } = await supabase
     .from("leagues")
     .select("id, name, keepers_per_team, season_year")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   if (!league) notFound();
   const limit = league.keepers_per_team ?? 0;
@@ -25,7 +25,7 @@ export default async function KeepersPage({ params }: { params: Promise<{ id: st
   const { data: member } = await supabase
     .from("league_members")
     .select("id, team_name")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("user_id", user.id)
     .single();
   if (!member) redirect(`/league/${id}`);
@@ -33,13 +33,13 @@ export default async function KeepersPage({ params }: { params: Promise<{ id: st
   const { data: roster } = await supabase
     .from("rosters")
     .select("player_id, players(id, name, division)")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("team_id", member.id);
 
   const { data: existing } = await supabase
     .from("keeper_picks")
     .select("player_id")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("season_year", keeperSeasonYear)
     .eq("team_id", member.id);
   const initialIds = (existing ?? []).map((k: any) => k.player_id);

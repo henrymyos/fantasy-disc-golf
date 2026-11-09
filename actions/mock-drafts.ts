@@ -41,7 +41,7 @@ export async function saveMockDraft(
   const { data: member } = await admin
     .from("league_members")
     .select("id")
-    .eq("league_id", leagueId)
+    .eq("league_id", Number(leagueId))
     .eq("user_id", user.id)
     .single();
   if (!member) throw new Error("Not a member of this league");
@@ -138,7 +138,7 @@ async function resolveDisplayName(
   const { data: member } = await admin
     .from("league_members")
     .select("team_name")
-    .eq("league_id", leagueId)
+    .eq("league_id", Number(leagueId))
     .eq("user_id", user.id)
     .maybeSingle();
   const teamName = (member as { team_name?: string | null } | null)?.team_name;
@@ -178,7 +178,7 @@ export async function shareMockDraft(
   const { data: member } = await admin
     .from("league_members")
     .select("id")
-    .eq("league_id", leagueId)
+    .eq("league_id", Number(leagueId))
     .eq("user_id", user.id)
     .single();
   if (!member) throw new Error("Not a member of this league");
@@ -213,9 +213,9 @@ export async function shareMockDraft(
     if (!existing || existing.user_id !== user.id) throw new Error("Not authorized");
     // Don't wipe a board that's already mid-draft.
     const keepPicks =
-      (existing as { status?: string }).status !== "lobby" &&
-      Array.isArray((existing as { picks?: unknown }).picks) &&
-      ((existing as { picks: SavedPick[] }).picks.some((p) => p.playerId != null));
+      existing.status !== "lobby" &&
+      Array.isArray(existing.picks) &&
+      ((existing.picks as unknown as SavedPick[]).some((p) => p.playerId != null));
     const { error } = await admin
       .from("mock_drafts")
       .update({
@@ -275,13 +275,13 @@ export async function joinMockDraft(
     .select("league_id, num_teams, status, is_shared, seats")
     .eq("id", mockDraftId)
     .single();
-  if (!mock || !(mock as { is_shared?: boolean }).is_shared) throw new Error("Draft not found");
-  if ((mock as { status?: string }).status !== "lobby") throw new Error("Draft already started");
-  if (teamIndex < 0 || teamIndex >= (mock as { num_teams: number }).num_teams) {
+  if (!mock || !mock.is_shared) throw new Error("Draft not found");
+  if (mock.status !== "lobby") throw new Error("Draft already started");
+  if (teamIndex < 0 || teamIndex >= mock.num_teams) {
     throw new Error("Invalid seat");
   }
 
-  const seats: MockSeats = { ...((mock as { seats?: MockSeats }).seats ?? {}) };
+  const seats: MockSeats = { ...((mock.seats as unknown as MockSeats | null) ?? {}) };
   const target = seats[String(teamIndex)];
   if (target && target.userId !== user.id) throw new Error("Seat already taken");
 
@@ -289,7 +289,7 @@ export async function joinMockDraft(
   for (const key of Object.keys(seats)) {
     if (seats[key].userId === user.id && !seats[key].isHost) delete seats[key];
   }
-  const name = await resolveDisplayName(admin, user, String((mock as { league_id: number }).league_id));
+  const name = await resolveDisplayName(admin, user, String(mock.league_id));
   seats[String(teamIndex)] = { userId: user.id, name };
 
   const { error } = await admin.from("mock_drafts").update({ seats }).eq("id", mockDraftId);
@@ -310,9 +310,9 @@ export async function leaveMockDraftSeat(mockDraftId: number): Promise<{ ok: tru
     .eq("id", mockDraftId)
     .single();
   if (!mock) throw new Error("Draft not found");
-  if ((mock as { status?: string }).status !== "lobby") throw new Error("Draft already started");
+  if (mock.status !== "lobby") throw new Error("Draft already started");
 
-  const seats: MockSeats = { ...((mock as { seats?: MockSeats }).seats ?? {}) };
+  const seats: MockSeats = { ...((mock.seats as unknown as MockSeats | null) ?? {}) };
   for (const key of Object.keys(seats)) {
     if (seats[key].userId === user.id && !seats[key].isHost) delete seats[key];
   }
@@ -333,9 +333,9 @@ export async function startSharedMockDraft(mockDraftId: number): Promise<{ ok: t
     .select("user_id, status, is_shared")
     .eq("id", mockDraftId)
     .single();
-  if (!mock || !(mock as { is_shared?: boolean }).is_shared) throw new Error("Draft not found");
-  if ((mock as { user_id: string }).user_id !== user.id) throw new Error("Only the host can start");
-  if ((mock as { status?: string }).status !== "lobby") throw new Error("Draft already started");
+  if (!mock || !mock.is_shared) throw new Error("Draft not found");
+  if (mock.user_id !== user.id) throw new Error("Only the host can start");
+  if (mock.status !== "lobby") throw new Error("Draft already started");
 
   const { error } = await admin
     .from("mock_drafts")
@@ -365,18 +365,18 @@ export async function makeSharedMockPick(
     .select("user_id, num_teams, status, is_shared, seats, picks")
     .eq("id", mockDraftId)
     .single();
-  if (!mock || !(mock as { is_shared?: boolean }).is_shared) throw new Error("Draft not found");
-  if ((mock as { status?: string }).status !== "in_progress") throw new Error("Draft is not live");
+  if (!mock || !mock.is_shared) throw new Error("Draft not found");
+  if (mock.status !== "in_progress") throw new Error("Draft is not live");
 
-  const picks = ((mock as { picks?: SavedPick[] }).picks ?? []) as SavedPick[];
+  const picks = (mock.picks as unknown as SavedPick[] | null) ?? [];
   const onClock = firstOpenPick(picks);
   if (onClock === -1) throw new Error("Draft is complete");
 
   // teamIndex is baked into each slot at share time (honouring 3RR).
   const teamIndex = picks[onClock].teamIndex;
-  const seats = (mock as { seats?: MockSeats }).seats ?? {};
+  const seats = (mock.seats as unknown as MockSeats | null) ?? {};
   const seat = seats[String(teamIndex)];
-  const hostId = (mock as { user_id: string }).user_id;
+  const hostId = mock.user_id;
 
   if (seat) {
     if (seat.userId !== user.id) throw new Error("It's not your pick");
@@ -416,16 +416,16 @@ export async function getMockDraftState(mockDraftId: number): Promise<{
     .select("id, user_id, status, is_shared, num_teams, roster_size, seats, picks")
     .eq("id", mockDraftId)
     .single();
-  if (!mock || !(mock as { is_shared?: boolean }).is_shared) return null;
+  if (!mock || !mock.is_shared) return null;
 
   return {
-    id: (mock as { id: number }).id,
-    hostId: (mock as { user_id: string }).user_id,
-    status: ((mock as { status?: string }).status ?? "lobby") as MockStatus,
+    id: mock.id,
+    hostId: mock.user_id,
+    status: (mock.status ?? "lobby") as MockStatus,
     isShared: true,
-    numTeams: (mock as { num_teams: number }).num_teams,
-    rosterSize: (mock as { roster_size: number }).roster_size,
-    seats: ((mock as { seats?: MockSeats }).seats ?? {}) as MockSeats,
-    picks: ((mock as { picks?: SavedPick[] }).picks ?? []) as SavedPick[],
+    numTeams: mock.num_teams,
+    rosterSize: mock.roster_size,
+    seats: (mock.seats as unknown as MockSeats | null) ?? {},
+    picks: (mock.picks as unknown as SavedPick[] | null) ?? [],
   };
 }

@@ -41,7 +41,7 @@ export async function GET(request: Request) {
       .eq("is_final", true)
       .gte("week", fromWeek)
       .lte("week", toWeek);
-    const uniqueWeeks = Array.from(new Set((weeks ?? []).map((w: any) => w.week as number))).sort((a, b) => a - b);
+    const uniqueWeeks = Array.from(new Set((weeks ?? []).map((w) => w.week as number))).sort((a, b) => a - b);
     for (const week of uniqueWeeks) {
       await finalizeWeekScoresCore(admin, leagueId, week, { notify: false, recap: false });
       refinalized.push(`${leagueId}:${week}`);

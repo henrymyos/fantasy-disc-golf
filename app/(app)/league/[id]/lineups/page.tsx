@@ -30,7 +30,7 @@ export default async function LineupsPage({
   const { data: league } = await supabase
     .from("leagues")
     .select("id, starters_count, roster_size, current_week, scoring_rules")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
 
   if (!league) notFound();
@@ -38,7 +38,7 @@ export default async function LineupsPage({
   const { data: divData } = await supabase
     .from("leagues")
     .select("mpo_starters, fpo_starters, scoring_mode")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
 
   const mpoSlots: number = divData?.mpo_starters ?? 4;
@@ -51,7 +51,7 @@ export default async function LineupsPage({
   const { data: myMember } = await supabase
     .from("league_members")
     .select("id, team_name")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("user_id", user.id)
     .single();
 
@@ -63,15 +63,15 @@ export default async function LineupsPage({
   // plan that becomes the real lineup when the week arrives.
   const schedule = await getLeagueSchedule(supabase, Number(id));
   const totalWeeks = schedule?.weeks.length ?? league.current_week;
-  const currentWeek = Math.min(league.current_week, Math.max(totalWeeks, 1));
+  const currentWeek = Math.min(league.current_week!, Math.max(totalWeeks!, 1));
   const featured = schedule
-    ? featuredWeekFor(schedule, league.current_week)
+    ? featuredWeekFor(schedule, league.current_week!)
     : league.current_week;
   const requested = Number(sp.week);
   const selectedWeek =
-    Number.isInteger(requested) && requested >= 1 && requested <= totalWeeks
+    Number.isInteger(requested) && requested >= 1 && requested <= totalWeeks!
       ? requested
-      : Math.min(Math.max(featured, 1), totalWeeks);
+      : Math.min(Math.max(featured!, 1), totalWeeks!);
   const mode: "past" | "current" | "future" =
     selectedWeek < currentWeek ? "past" : selectedWeek > currentWeek ? "future" : "current";
   const weekTabs = schedule ? weekTabsFor(schedule) : [];
@@ -81,7 +81,7 @@ export default async function LineupsPage({
   const { data: myRoster } = await supabase
     .from("rosters")
     .select("id, is_starter, player_id, lineup_order, players(id, name, division, avatar_url)")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("team_id", myMember.id)
     .order("lineup_order", { ascending: true, nullsFirst: false })
     .order("id", { ascending: true });
@@ -203,15 +203,15 @@ export default async function LineupsPage({
       .filter(({ slotIndex: si }) => si !== skipIdx + 1);
   }
 
-  const overRoster = roster.length > league.roster_size;
-  const toDrop = roster.length - league.roster_size;
+  const overRoster = roster.length > league.roster_size!;
+  const toDrop = roster.length - league.roster_size!;
   const lineupsDisabled = overRoster || lineupLocked;
 
   // Compute the team's current W-L for the header.
   const { data: allMatchups } = await supabase
     .from("matchups")
     .select("team1_id, team2_id, team1_score, team2_score, is_final")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("is_final", true);
   let myWins = 0;
   let myLosses = 0;
@@ -332,7 +332,7 @@ export default async function LineupsPage({
   const { data: txRows } = await supabase
     .from("roster_transactions")
     .select("id, action, created_at, players!roster_transactions_player_id_fkey(name, division), dropped:players!roster_transactions_dropped_player_id_fkey(name, division)")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("team_id", myMember.id)
     .order("created_at", { ascending: false })
     .limit(30);
@@ -356,7 +356,7 @@ export default async function LineupsPage({
       receiver:league_members!trades_receiver_id_fkey(id, team_name),
       trade_players(player_id, from_team_id, to_team_id, players(name))
     `)
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .in("status", ["accepted", "rejected"])
     .or(`proposer_id.eq.${myMember.id},receiver_id.eq.${myMember.id}`)
     .order("resolved_at", { ascending: false })
@@ -386,7 +386,7 @@ export default async function LineupsPage({
   const { data: claimRows } = await supabase
     .from("waiver_claims")
     .select("id, player_id, drop_player_id, claim_order, submitted_at")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("team_id", myMember.id)
     .eq("status", "pending")
     .order("claim_order", { ascending: true, nullsFirst: false })

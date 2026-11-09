@@ -31,7 +31,7 @@ export default async function MyMatchupPage({
   const { data: league } = await supabase
     .from("leagues")
     .select("id, name, current_week, mpo_starters, fpo_starters, scoring_rules")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   if (!league) notFound();
 
@@ -42,7 +42,7 @@ export default async function MyMatchupPage({
   const { data: myMember } = await supabase
     .from("league_members")
     .select("id")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("user_id", user.id)
     .single();
   if (!myMember) redirect(`/league/${id}`);
@@ -51,19 +51,19 @@ export default async function MyMatchupPage({
   // Wednesday midday, then the surfaces flip to the new current week.
   const schedule = await getLeagueSchedule(supabase, Number(id));
   const featuredWeek = schedule
-    ? featuredWeekFor(schedule, league.current_week)
+    ? featuredWeekFor(schedule, league.current_week!)
     : league.current_week;
 
   // Week navigation: ?week=N shows my matchup for any week of the season;
   // no param keeps the featured-week default.
   const totalWeeks = schedule?.weeks.length ?? league.current_week;
-  const currentWeek = Math.min(league.current_week, Math.max(totalWeeks, 1));
+  const currentWeek = Math.min(league.current_week!, Math.max(totalWeeks!, 1));
   const requested = Number(sp.week);
   const hasExplicitWeek =
-    Number.isInteger(requested) && requested >= 1 && requested <= totalWeeks;
+    Number.isInteger(requested) && requested >= 1 && requested <= totalWeeks!;
   const selectedWeek = hasExplicitWeek
     ? requested
-    : Math.min(Math.max(featuredWeek, 1), totalWeeks);
+    : Math.min(Math.max(featuredWeek!, 1), totalWeeks!);
   const weekTabs = schedule ? weekTabsFor(schedule) : [];
   const weekStrip = weekTabs.length > 0 && (
     <WeekSwitcher
@@ -81,7 +81,7 @@ export default async function MyMatchupPage({
     .select(
       "id, week, team1_id, team2_id, team1_score, team2_score, is_final, team1:league_members!matchups_team1_id_fkey(id, team_name, profiles(avatar_url, avatar_color)), team2:league_members!matchups_team2_id_fkey(id, team_name, profiles(avatar_url, avatar_color))",
     )
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("week", selectedWeek)
     .or(`team1_id.eq.${myMember.id},team2_id.eq.${myMember.id}`)
     .maybeSingle();
@@ -91,7 +91,7 @@ export default async function MyMatchupPage({
       .select(
         "id, week, team1_id, team2_id, team1_score, team2_score, is_final, team1:league_members!matchups_team1_id_fkey(id, team_name, profiles(avatar_url, avatar_color)), team2:league_members!matchups_team2_id_fkey(id, team_name, profiles(avatar_url, avatar_color))",
       )
-      .eq("league_id", id)
+      .eq("league_id", Number(id))
       .eq("is_final", false)
       .or(`team1_id.eq.${myMember.id},team2_id.eq.${myMember.id}`)
       .order("week", { ascending: true })
@@ -113,7 +113,7 @@ export default async function MyMatchupPage({
     const { data: members } = await supabase
       .from("league_members")
       .select("id, team_name, division_name, profiles(avatar_url, avatar_color)")
-      .eq("league_id", id)
+      .eq("league_id", Number(id))
       .order("joined_at");
     if (members && members.length >= 2) {
       const season = buildSeasonSchedule(

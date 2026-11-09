@@ -33,7 +33,7 @@ export async function getActiveTournament(
   // instant yet (e.g. tournament starts today but tee-off is still a few hours
   // away — including for non-US venues), the tournament is not actively locked
   // yet, so it doesn't count as live.
-  const live = (data ?? []).filter((t: any) => {
+  const live = (data ?? []).filter((t) => {
     if (!t.lock_at) return true;
     const lockMs = Date.parse(t.lock_at);
     return !Number.isFinite(lockMs) || Date.now() >= lockMs;
@@ -44,8 +44,8 @@ export async function getActiveTournament(
   // locks the league. If the schedule can't be resolved at all, fail closed
   // (locked) rather than allow mid-event edits.
   const schedule = await getLeagueSchedule(supabase, leagueId);
-  if (!schedule) return live[0] as any;
-  return (live.find((t: any) => schedule.tournamentIdToWeek.has(t.id)) as any) ?? null;
+  if (!schedule) return live[0];
+  return (live.find((t) => schedule.tournamentIdToWeek.has(t.id))) ?? null;
 }
 
 export async function isLineupLocked(supabase: SupabaseClient, leagueId: number): Promise<boolean> {

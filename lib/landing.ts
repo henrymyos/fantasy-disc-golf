@@ -19,7 +19,7 @@ export async function landingPathForUser(userId: string): Promise<string> {
   const rows = memberships ?? [];
   if (rows.length === 0) return "/dashboard";
 
-  const memberLeagueIds = new Set(rows.map((m: { league_id: number }) => String(m.league_id)));
+  const memberLeagueIds = new Set(rows.map((m) => String(m.league_id)));
   const cookieStore = await cookies();
   const last = cookieStore.get("last_league_id")?.value;
   if (last && memberLeagueIds.has(last)) return `/league/${last}`;

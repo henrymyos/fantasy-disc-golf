@@ -141,7 +141,7 @@ export async function joinLeague(
     .select("*", { count: "exact", head: true })
     .eq("league_id", league.id);
 
-  if ((count ?? 0) >= league.max_teams) {
+  if ((count ?? 0) >= league.max_teams!) {
     return { message: "This league is full." };
   }
 
@@ -177,7 +177,7 @@ export async function joinLeague(
     .select("*", { count: "exact", head: true })
     .eq("league_id", league.id);
 
-  if ((afterCount ?? 0) > league.max_teams) {
+  if ((afterCount ?? 0) > league.max_teams!) {
     if (inserted) await admin.from("league_members").delete().eq("id", inserted.id);
     return { message: "This league is full." };
   }
@@ -253,7 +253,7 @@ export async function updateLeague(
   const { data: league } = await admin
     .from("leagues")
     .select("commissioner_id")
-    .eq("id", leagueId)
+    .eq("id", Number(leagueId))
     .single();
 
   if (!league || league.commissioner_id !== user.id) {
@@ -265,7 +265,7 @@ export async function updateLeague(
   const { count: memberCount } = await admin
     .from("league_members")
     .select("*", { count: "exact", head: true })
-    .eq("league_id", leagueId);
+    .eq("league_id", Number(leagueId));
 
   if (maxTeams < (memberCount ?? 0)) {
     return {
@@ -281,7 +281,7 @@ export async function updateLeague(
   const { data: rosterRows } = await admin
     .from("rosters")
     .select("team_id")
-    .eq("league_id", leagueId);
+    .eq("league_id", Number(leagueId));
 
   let largestRoster = 0;
   if (rosterRows && rosterRows.length) {
@@ -307,7 +307,7 @@ export async function updateLeague(
   const { error } = await admin
     .from("leagues")
     .update({ name, max_teams: maxTeams, roster_size: rosterSize, starters_count: startersCount, mpo_starters: mpoStarters, fpo_starters: fpoStarters, waiver_order_mode: waiverOrderMode, scoring_mode: scoringMode, keepers_per_team: keepersPerTeam })
-    .eq("id", leagueId);
+    .eq("id", Number(leagueId));
 
   if (error) return { message: error.message };
 
@@ -328,7 +328,7 @@ export async function setSelectedEvents(
   const { data: league } = await admin
     .from("leagues")
     .select("commissioner_id, season_year")
-    .eq("id", leagueId)
+    .eq("id", Number(leagueId))
     .single();
 
   if (!league || league.commissioner_id !== user.id) {
@@ -354,7 +354,7 @@ export async function setSelectedEvents(
   const { data: current } = await admin
     .from("leagues")
     .select("selected_event_slugs")
-    .eq("id", leagueId)
+    .eq("id", Number(leagueId))
     .single();
   const currentSelected = new Set<string>((current?.selected_event_slugs ?? []) as string[]);
 
@@ -368,7 +368,7 @@ export async function setSelectedEvents(
   const { error } = await admin
     .from("leagues")
     .update({ selected_event_slugs: Array.from(final) })
-    .eq("id", leagueId);
+    .eq("id", Number(leagueId));
 
   if (error) throw new Error(error.message);
 
@@ -389,14 +389,14 @@ export async function deleteLeague(leagueId: string): Promise<void> {
   const { data: league } = await admin
     .from("leagues")
     .select("commissioner_id")
-    .eq("id", leagueId)
+    .eq("id", Number(leagueId))
     .single();
 
   if (!league || league.commissioner_id !== user.id) {
     throw new Error("Not authorized");
   }
 
-  const { error } = await admin.from("leagues").delete().eq("id", leagueId);
+  const { error } = await admin.from("leagues").delete().eq("id", Number(leagueId));
   if (error) {
     // Surface the failure instead of silently redirecting as if it succeeded.
     throw new Error(error.message);
@@ -424,7 +424,7 @@ async function requireCommissioner(leagueId: string) {
   const { data: league } = await admin
     .from("leagues")
     .select("commissioner_id")
-    .eq("id", leagueId)
+    .eq("id", Number(leagueId))
     .single();
   if (!league || league.commissioner_id !== user.id) {
     throw new Error("Not authorized");
@@ -460,7 +460,7 @@ export async function uploadLeagueLogo(
   const { error } = await admin
     .from("leagues")
     .update({ logo_url: pub.publicUrl })
-    .eq("id", leagueId);
+    .eq("id", Number(leagueId));
   if (error) return { error: error.message };
 
   revalidatePath("/", "layout");
@@ -475,7 +475,7 @@ export async function removeLeagueLogo(
   const { error } = await admin
     .from("leagues")
     .update({ logo_url: null })
-    .eq("id", leagueId);
+    .eq("id", Number(leagueId));
   if (error) return { error: error.message };
 
   revalidatePath("/", "layout");

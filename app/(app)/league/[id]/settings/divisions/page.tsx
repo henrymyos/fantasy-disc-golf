@@ -17,7 +17,7 @@ export default async function DivisionsAndMatchupsPage({
   const { data: league } = await supabase
     .from("leagues")
     .select("id, commissioner_id")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   if (!league) notFound();
   if (league.commissioner_id !== user.id) redirect(`/league/${id}/settings`);
@@ -25,7 +25,7 @@ export default async function DivisionsAndMatchupsPage({
   const { data: membersRaw } = await supabase
     .from("league_members")
     .select("id, team_name, division_name, joined_at")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .order("joined_at");
   const members = (membersRaw ?? []) as Array<{
     id: number;

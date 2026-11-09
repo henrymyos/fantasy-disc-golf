@@ -12,14 +12,14 @@ export default async function MembersPage({ params }: { params: Promise<{ id: st
   const { data: league } = await supabase
     .from("leagues")
     .select("id, name, commissioner_id, max_teams")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   if (!league) notFound();
 
   const { data: myMember } = await supabase
     .from("league_members")
     .select("id")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("user_id", user.id)
     .single();
   if (!myMember) redirect(`/league/${id}`);
@@ -27,15 +27,15 @@ export default async function MembersPage({ params }: { params: Promise<{ id: st
   const { data: members } = await supabase
     .from("league_members")
     .select("id, team_name, user_id, draft_position, joined_at")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .order("joined_at", { ascending: true });
 
   const { data: draft } = await supabase
     .from("drafts")
     .select("status")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .maybeSingle();
-  const draftLocked = ["in_progress", "paused", "complete"].includes(draft?.status);
+  const draftLocked = ["in_progress", "paused", "complete"].includes(draft?.status ?? "");
 
   const commissionerUserId = league.commissioner_id as string;
   const isCommissioner = commissionerUserId === user.id;
@@ -65,7 +65,7 @@ export default async function MembersPage({ params }: { params: Promise<{ id: st
         myMemberId={myMember.id}
         isCommissioner={isCommissioner}
         draftLocked={draftLocked}
-        members={(members ?? []).map((m: any) => ({
+        members={(members ?? []).map((m) => ({
           id: m.id,
           teamName: m.team_name,
           isCommissioner: m.user_id === commissionerUserId,

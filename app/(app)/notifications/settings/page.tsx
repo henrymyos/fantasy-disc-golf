@@ -59,7 +59,7 @@ export default async function NotificationSettingsPage() {
     .select("kind, enabled")
     .eq("user_id", user.id);
   const byKind = new Map<string, boolean>(
-    (prefs ?? []).map((p: any) => [p.kind, p.enabled]),
+    (prefs ?? []).map((p) => [p.kind, p.enabled]),
   );
 
   return (

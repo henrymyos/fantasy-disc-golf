@@ -74,7 +74,7 @@ export function PushSubscribeButton() {
         // signature is narrower than what Uint8Array<ArrayBufferLike> exposes.
         applicationServerKey: keyBytes.buffer as ArrayBuffer,
       });
-      const json = sub.toJSON() as any;
+      const json = sub.toJSON();
       startTransition(async () => {
         await subscribeToPush({
           endpoint: sub.endpoint,

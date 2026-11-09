@@ -30,7 +30,7 @@ export async function runGamedayPass(
       .gte("end_date", today)
       .order("start_date", { ascending: true });
     // Same start gate as getActiveTournament: not live until round-1 tee-off.
-    const liveTournaments = (liveRows ?? []).filter((t: any) => {
+    const liveTournaments = (liveRows ?? []).filter((t) => {
       if (!t.lock_at) return true;
       const lockMs = Date.parse(t.lock_at);
       return !Number.isFinite(lockMs) || Date.now() >= lockMs;
@@ -45,7 +45,7 @@ export async function runGamedayPass(
         .from("players")
         .select("id, name")
         .in("id", [...new Set(hotDeltas.map((d) => d.playerId))]);
-      (players ?? []).forEach((p: any) => nameByPlayer.set(p.id, p.name));
+      (players ?? []).forEach((p) => nameByPlayer.set(p.id, p.name));
     }
 
       const { data: leagues } = await admin
@@ -91,7 +91,7 @@ async function runLeaguePass(
     .select("id, user_id, team_name")
     .eq("league_id", league.id);
   const memberById = new Map<number, { user_id: string; team_name: string }>(
-    (members ?? []).map((m: any) => [m.id as number, m]),
+    (members ?? []).map((m) => [m.id as number, m]),
   );
   const weekIdSet = new Set(weekIds);
   const notified = new Set<string>();

@@ -15,14 +15,14 @@ export default async function RecapsPage({ params }: { params: Promise<{ id: str
   const { data: league } = await supabase
     .from("leagues")
     .select("id, name")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   if (!league) notFound();
 
   const { data: member } = await supabase
     .from("league_members")
     .select("id")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("user_id", user.id)
     .single();
   if (!member) redirect(`/league/${id}`);
@@ -30,14 +30,14 @@ export default async function RecapsPage({ params }: { params: Promise<{ id: str
   const { data: recaps } = await supabase
     .from("weekly_recaps")
     .select("week, body, created_at")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .order("week", { ascending: false });
 
   // Regenerate stale recap formats in place — generateWeeklyRecap upserts the
   // fresh body, so each one self-heals. Stale means: written before the awards
   // format (a single paragraph, no newlines), or with a points-based Blowout
   // line from before the percent-margin ranking (no % in the award).
-  const legacy = (recaps ?? []).filter((r: any) => {
+  const legacy = (recaps ?? []).filter((r) => {
     const body = String(r.body ?? "");
     if (!body.includes("\n")) return true;
     return body.includes("**Biggest Blowout:**") && !/\*\*Biggest Blowout:\*\*[^\n]*%/.test(body);
@@ -74,7 +74,7 @@ export default async function RecapsPage({ params }: { params: Promise<{ id: str
           </p>
         </div>
       ) : (
-        (recaps ?? []).map((r: any) => (
+        (recaps ?? []).map((r) => (
           <WeeklyRecapCard
             key={r.week}
             week={r.week}

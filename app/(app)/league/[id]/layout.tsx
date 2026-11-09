@@ -20,7 +20,7 @@ export default async function LeagueLayout({
   const { data: league } = await supabase
     .from("leagues")
     .select("id, name, commissioner_id, logo_url")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
 
   if (!league) notFound();
@@ -28,7 +28,7 @@ export default async function LeagueLayout({
   const { data: membership } = await supabase
     .from("league_members")
     .select("id, is_commissioner")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("user_id", user.id)
     .single();
 
@@ -41,13 +41,13 @@ export default async function LeagueLayout({
   const { data: members } = await supabase
     .from("league_members")
     .select("id, team_name, user_id, profiles(avatar_url, avatar_color)")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .order("joined_at");
 
   const { data: draft } = await supabase
     .from("drafts")
     .select("status")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .single();
 
   const draftComplete = draft?.status === "complete";
@@ -104,8 +104,8 @@ export default async function LeagueLayout({
           id: m.id,
           team_name: m.team_name,
           user_id: m.user_id ?? null,
-          avatarUrl: (m as any).profiles?.avatar_url ?? null,
-          avatarColor: (m as any).profiles?.avatar_color ?? null,
+          avatarUrl: m.profiles?.avatar_url ?? null,
+          avatarColor: m.profiles?.avatar_color ?? null,
         }))}
       />
     </div>

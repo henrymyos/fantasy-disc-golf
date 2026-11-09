@@ -69,7 +69,7 @@ export async function startDraft(leagueId: number): Promise<void> {
     .from("league_members")
     .select("id, draft_position")
     .eq("league_id", leagueId);
-  const allSet = (existingPositions ?? []).every((m: any) => m.draft_position != null);
+  const allSet = (existingPositions ?? []).every((m) => m.draft_position != null);
   if (!allSet) {
     const shuffled = [...members].sort(() => Math.random() - 0.5);
     await Promise.all(
@@ -295,7 +295,7 @@ export async function makeDraftPick(leagueId: number, playerId: number): Promise
     p_player_id: playerId,
   });
 
-  if (result?.complete) {
+  if ((result as { complete?: boolean } | null)?.complete) {
     await finalizeDraftCompletion(admin, leagueId);
   }
 
@@ -354,7 +354,7 @@ export async function undoPick(leagueId: number, pickNumber: number): Promise<vo
     .gte("pick_number", pickNumber);
   if (!rewindPicks || rewindPicks.length === 0) return;
 
-  const playerIds = rewindPicks.map((p: any) => p.player_id);
+  const playerIds = rewindPicks.map((p) => p.player_id);
   await admin
     .from("rosters")
     .delete()
@@ -501,12 +501,12 @@ export async function replacePick(
     .eq("is_starter", true);
   const usedOrders = new Set<number>(
     (starterRows ?? [])
-      .filter((r: any) => {
+      .filter((r) => {
         const rel = r.players;
         const div = Array.isArray(rel) ? rel[0]?.division : rel?.division;
         return div === division && r.lineup_order != null;
       })
-      .map((r: any) => r.lineup_order as number),
+      .map((r) => r.lineup_order as number),
   );
   let assignedOrder: number | null = null;
   for (let i = 1; i <= slotLimit; i++) {
@@ -565,8 +565,8 @@ export async function commissionerMakePick(leagueId: number, playerId: number): 
     .eq("draft_id", draft.id);
 
   const onClockId = resolvePickOwnerId(
-    draft.current_pick,
-    (members as any[]).map((m) => ({ id: m.id, draftPosition: m.draft_position })),
+    draft.current_pick!,
+    members.map((m) => ({ id: m.id, draftPosition: m.draft_position })),
     draft.third_round_reversal ?? false,
     buildPickOwnerOverrides(ownerRows as any),
   );
@@ -578,7 +578,7 @@ export async function commissionerMakePick(leagueId: number, playerId: number): 
     p_player_id: playerId,
   });
 
-  if (result?.complete) {
+  if ((result as { complete?: boolean } | null)?.complete) {
     await finalizeDraftCompletion(admin, leagueId);
   }
 

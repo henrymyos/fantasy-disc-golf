@@ -167,7 +167,7 @@ export function LeagueChat({
     setSystemEvents(events);
     if (memberData && memberData.length > 0) {
       setLiveMembers(
-        (memberData as any[]).map((m) => ({
+        memberData.map((m) => ({
           id: m.id,
           team_name: m.team_name,
           user_id: m.user_id ?? null,

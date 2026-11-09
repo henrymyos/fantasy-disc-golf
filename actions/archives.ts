@@ -86,14 +86,14 @@ export async function archiveSeason(leagueId: number): Promise<boolean> {
     .eq("league_id", leagueId);
   const rostersByTeam = new Map<number, any[]>();
   for (const r of rosterRows ?? []) {
-    const arr = rostersByTeam.get(r.team_id) ?? [];
+    const arr = rostersByTeam.get(r.team_id!) ?? [];
     arr.push({
       name: (r as any).players?.name ?? "Unknown",
       division: (r as any).players?.division ?? "MPO",
       isStarter: !!r.is_starter,
       lineupOrder: r.lineup_order ?? null,
     });
-    rostersByTeam.set(r.team_id, arr);
+    rostersByTeam.set(r.team_id!, arr);
   }
   const rosters = standings.map((s) => ({
     teamId: s.teamId,

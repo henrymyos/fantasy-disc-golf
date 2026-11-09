@@ -171,7 +171,7 @@ export async function buildWeekProjections(
         .in("id", tournamentIds)
         .order("start_date", { ascending: true })
     : { data: [] as any[] };
-  const weekTournamentIds = new Set((tournamentRows ?? []).map((t: any) => t.id as number));
+  const weekTournamentIds = new Set((tournamentRows ?? []).map((t) => t.id as number));
   const primary = (tournamentRows ?? [])[0] as any | undefined;
 
   // Event window. `lock_at` is round-1 tee time; `end_date` is the last
@@ -224,7 +224,7 @@ export async function buildWeekProjections(
         supabase
           .from("tournament_results")
           .select("player_id, tournament_id, finishing_position, hot_round_count, bogey_free_count, ace_count, under_par_strokes, over_par_strokes, eagle_count, players(division)")
-          .in("player_id", playerIds) as any,
+          .in("player_id", playerIds),
       )
     : [];
 
@@ -234,7 +234,7 @@ export async function buildWeekProjections(
   const totals = new Map<number, { sum: number; count: number }>();
   const actuals = new Map<number, number>();
   const weekStats = new Map<number, MatchupWeekStat>();
-  results.forEach((r: any) => {
+  results.forEach((r) => {
     const pts = fantasyPointsFromResult(rules, {
       finishing_position: r.finishing_position,
       hot_round_count: r.hot_round_count,
@@ -319,7 +319,7 @@ export async function buildWeekProjections(
     ];
 
     const starterRosterIds = new Set(
-      [...mpoSlotArr, ...fpoSlotArr].filter(Boolean).map((r: any) => r.id),
+      [...mpoSlotArr, ...fpoSlotArr].filter(Boolean).map((r) => r.id),
     );
     const bench: MatchupPlayerRow[] = teamRoster
       .filter((r) => !starterRosterIds.has(r.id))

@@ -73,10 +73,10 @@ export function AuctionPanel({
       .select("player_id, team_id")
       .eq("league_id", leagueId);
     setDraft(d as any);
-    setMembers((m ?? []) as any);
+    setMembers((m ?? []));
     setDraftedIds(new Set((rostered ?? []).map((r: any) => r.player_id)));
     const owned = new Map<number, number>();
-    for (const r of rostered ?? []) owned.set(r.team_id, (owned.get(r.team_id) ?? 0) + 1);
+    for (const r of rostered ?? []) owned.set(r.team_id!, (owned.get(r.team_id!) ?? 0) + 1);
     setOwnedByTeam(owned);
   }
 

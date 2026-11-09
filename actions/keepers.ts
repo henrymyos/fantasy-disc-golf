@@ -48,7 +48,7 @@ export async function setKeepers(
     .select("player_id")
     .eq("league_id", leagueId)
     .eq("team_id", member.id);
-  const owned = new Set((roster ?? []).map((r: any) => r.player_id));
+  const owned = new Set((roster ?? []).map((r) => r.player_id));
   const valid = cleaned.filter((id) => owned.has(id));
 
   await admin

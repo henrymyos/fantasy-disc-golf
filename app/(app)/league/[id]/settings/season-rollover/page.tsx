@@ -15,7 +15,7 @@ export default async function SeasonRolloverPage({ params }: { params: Promise<{
   const { data: league } = await supabase
     .from("leagues")
     .select("id, commissioner_id, season_year, keepers_per_team, selected_event_slugs")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   if (!league) notFound();
   if (league.commissioner_id !== user.id) redirect(`/league/${id}/settings`);
@@ -48,12 +48,12 @@ export default async function SeasonRolloverPage({ params }: { params: Promise<{
   }
 
   const [{ count: memberCount }, { data: keeperRows }, { count: nextScheduleCount }] = await Promise.all([
-    supabase.from("league_members").select("id", { count: "exact", head: true }).eq("league_id", id),
-    supabase.from("keeper_picks").select("team_id").eq("league_id", id).eq("season_year", nextYear),
+    supabase.from("league_members").select("id", { count: "exact", head: true }).eq("league_id", Number(id)),
+    supabase.from("keeper_picks").select("team_id").eq("league_id", Number(id)).eq("season_year", nextYear),
     supabase.from("schedule_events").select("id", { count: "exact", head: true }).eq("season_year", nextYear),
   ]);
 
-  const keeperReadyCount = new Set((keeperRows ?? []).map((r: any) => r.team_id)).size;
+  const keeperReadyCount = new Set((keeperRows ?? []).map((r) => r.team_id)).size;
 
   return (
     <SeasonRollover

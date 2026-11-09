@@ -21,7 +21,7 @@ export default async function ArchivePage({
   const { data: league } = await supabase
     .from("leagues")
     .select("id, name, commissioner_id")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   if (!league) notFound();
   const isCommissioner = league.commissioner_id === user.id;
@@ -29,7 +29,7 @@ export default async function ArchivePage({
   const { data: member } = await supabase
     .from("league_members")
     .select("id")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("user_id", user.id)
     .single();
   if (!member) redirect(`/league/${id}`);
@@ -37,12 +37,12 @@ export default async function ArchivePage({
   const { data: archives } = await supabase
     .from("season_archives")
     .select("season_year, payload, created_at")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .order("season_year", { ascending: false });
 
-  const years = (archives ?? []).map((a: any) => a.season_year as number);
+  const years = (archives ?? []).map((a) => a.season_year as number);
   const selectedYear = sp.year ? Number(sp.year) : years[0];
-  const current = (archives ?? []).find((a: any) => a.season_year === selectedYear);
+  const current = (archives ?? []).find((a) => a.season_year === selectedYear);
 
   return (
     <div className="max-w-3xl space-y-5">

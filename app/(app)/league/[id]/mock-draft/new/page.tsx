@@ -19,14 +19,14 @@ export default async function MockDraftPage({
   const { data: league } = await supabase
     .from("leagues")
     .select("id, name, max_teams, roster_size, mpo_starters, fpo_starters")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   if (!league) notFound();
 
   const { data: member } = await supabase
     .from("league_members")
     .select("id")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("user_id", user.id)
     .single();
   if (!member) redirect(`/league/${id}`);
@@ -36,7 +36,7 @@ export default async function MockDraftPage({
   const { data: draft } = await supabase
     .from("drafts")
     .select("type, auction_budget, third_round_reversal")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .single();
   const draftType = (draft?.type ?? "snake") as "snake" | "auction";
   const auctionBudget = (draft?.auction_budget ?? 200) as number;
@@ -46,7 +46,7 @@ export default async function MockDraftPage({
     supabase
       .from("players")
       .select("id, name, division, world_ranking, overall_rank")
-      .order("overall_rank", { ascending: true, nullsFirst: false }) as any,
+      .order("overall_rank", { ascending: true, nullsFirst: false }),
   );
 
   // Total fantasy points this season, used as the primary sort to match the
@@ -72,8 +72,8 @@ export default async function MockDraftPage({
       <MockAuction
         leagueId={id}
         leagueName={league.name}
-        numTeams={league.max_teams}
-        rosterSize={league.roster_size}
+        numTeams={league.max_teams!}
+        rosterSize={league.roster_size!}
         mpoStarters={league.mpo_starters ?? 4}
         fpoStarters={league.fpo_starters ?? 2}
         budget={auctionBudget}
@@ -86,8 +86,8 @@ export default async function MockDraftPage({
     <MockDraft
       leagueId={id}
       leagueName={league.name}
-      numTeams={league.max_teams}
-      rosterSize={league.roster_size}
+      numTeams={league.max_teams!}
+      rosterSize={league.roster_size!}
       mpoStarters={league.mpo_starters ?? 4}
       fpoStarters={league.fpo_starters ?? 2}
       thirdRoundReversal={thirdRoundReversal}

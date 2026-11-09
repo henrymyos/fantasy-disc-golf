@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --test tests/*.test.ts",
+    "db:types": "node --env-file=.env.local scripts/gen-db-types.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

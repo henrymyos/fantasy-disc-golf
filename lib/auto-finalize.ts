@@ -55,7 +55,7 @@ export async function autoFinalizeDueWeeks(admin: SupabaseClient): Promise<strin
       .eq("league_id", leagueId)
       .eq("week", week);
     const hasMatchups = (ms ?? []).length > 0;
-    const alreadyFinal = hasMatchups && (ms ?? []).every((m: any) => m.is_final);
+    const alreadyFinal = hasMatchups && (ms ?? []).every((m) => m.is_final);
 
     // Don't auto-advance a week that never had matchups (nothing to finalize).
     if (!hasMatchups) continue;

@@ -27,7 +27,7 @@ export default async function DraftPage({
   const { data: league } = await supabase
     .from("leagues")
     .select("id, commissioner_id, draft_status, mpo_starters, fpo_starters, roster_size")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
 
   if (!league) notFound();
@@ -41,7 +41,7 @@ export default async function DraftPage({
   const { data: draft } = await supabase
     .from("drafts")
     .select("id, status, current_pick, total_rounds, scheduled_at, type, auction_budget, seconds_per_pick, current_pick_started_at, third_round_reversal")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .single();
 
   // All members for the pre-draft commissioner panel (some may not have a
@@ -49,7 +49,7 @@ export default async function DraftPage({
   const { data: allMemberRows } = await supabase
     .from("league_members")
     .select("id, team_name, draft_position, joined_at")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .order("draft_position", { ascending: true, nullsFirst: false })
     .order("joined_at", { ascending: true });
 
@@ -59,7 +59,7 @@ export default async function DraftPage({
   const { data: memberRowsRaw } = await supabase
     .from("league_members")
     .select("id, team_name, draft_position, joined_at, profiles(avatar_url, avatar_color)")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .order("draft_position", { ascending: true, nullsFirst: false })
     .order("joined_at", { ascending: true });
 
@@ -75,7 +75,7 @@ export default async function DraftPage({
   const { data: myMemberRow } = await supabase
     .from("league_members")
     .select("id")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("user_id", user.id)
     .single();
 
@@ -99,7 +99,7 @@ export default async function DraftPage({
   const { data: rosteredSpots } = await supabase
     .from("rosters")
     .select("player_id")
-    .eq("league_id", id);
+    .eq("league_id", Number(id));
 
   const draftedIds = new Set((rosteredSpots ?? []).map((r) => r.player_id));
 
@@ -116,7 +116,7 @@ export default async function DraftPage({
     .from("user_player_rankings")
     .select("player_id, rank")
     .eq("user_id", user.id)
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .order("rank", { ascending: true });
   const myRankings = (myRankingRows ?? []).map((r: any) => ({
     playerId: r.player_id as number,
@@ -129,7 +129,7 @@ export default async function DraftPage({
     .from("draft_queue")
     .select("player_id, position")
     .eq("user_id", user.id)
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .order("position", { ascending: true });
   const queue = (queueRows ?? []).map((r: any) => r.player_id as number);
 
@@ -185,10 +185,10 @@ export default async function DraftPage({
           leagueId: Number(id),
           draft: draft ? {
             id: draft.id,
-            status: draft.status,
-            type: draft.type,
-            currentPick: draft.current_pick,
-            totalRounds: draft.total_rounds,
+            status: draft.status!,
+            type: draft.type!,
+            currentPick: draft.current_pick!,
+            totalRounds: draft.total_rounds!,
             secondsPerPick: draft.seconds_per_pick ?? 60,
             currentPickStartedAt: draft.current_pick_started_at ?? null,
             thirdRoundReversal: !!draft.third_round_reversal,

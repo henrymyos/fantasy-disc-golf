@@ -15,14 +15,14 @@ export default async function DraftResultsPage({
   const { data: league } = await supabase
     .from("leagues")
     .select("id")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   if (!league) notFound();
 
   const { data: member } = await supabase
     .from("league_members")
     .select("id")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("user_id", user.id)
     .single();
   if (!member) redirect(`/league/${id}`);
@@ -30,7 +30,7 @@ export default async function DraftResultsPage({
   const { data: completedDrafts } = await supabase
     .from("drafts")
     .select("id, total_rounds, started_at")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("status", "complete")
     .order("started_at", { ascending: false });
 

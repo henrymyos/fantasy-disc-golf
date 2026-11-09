@@ -17,7 +17,7 @@ export default async function CommissionerRostersPage({
   const { data: league } = await supabase
     .from("leagues")
     .select("id, commissioner_id")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   if (!league) notFound();
   if (league.commissioner_id !== user.id) redirect(`/league/${id}/settings`);
@@ -25,14 +25,14 @@ export default async function CommissionerRostersPage({
   const { data: members } = await supabase
     .from("league_members")
     .select("id, team_name, joined_at")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .order("joined_at");
   const teams = (members ?? []).map((m: any) => ({ id: m.id, teamName: m.team_name }));
 
   const { data: rostersRaw } = await supabase
     .from("rosters")
     .select("player_id, team_id, is_starter, players(name, division)")
-    .eq("league_id", id);
+    .eq("league_id", Number(id));
   const rostered = (rostersRaw ?? []).map((r: any) => ({
     playerId: r.player_id,
     playerName: r.players?.name ?? "Unknown",

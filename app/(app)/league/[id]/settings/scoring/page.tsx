@@ -18,14 +18,14 @@ export default async function ScoringPage({
   const { data: league } = await supabase
     .from("leagues")
     .select("id, mpo_starters, fpo_starters, commissioner_id, scoring_rules")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   if (!league) notFound();
 
   const { data: member } = await supabase
     .from("league_members")
     .select("id")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("user_id", user.id)
     .single();
   if (!member) redirect(`/league/${id}`);

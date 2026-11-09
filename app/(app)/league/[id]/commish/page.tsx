@@ -19,7 +19,7 @@ export default async function CommishDashboard({ params }: { params: Promise<{ i
     .select(
       "id, name, commissioner_id, max_teams, current_week, selected_event_slugs, scoring_rules, scoring_mode, dues_amount, waivers_locked, keepers_per_team, season_year",
     )
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
   if (!league) notFound();
   if (league.commissioner_id !== user.id) redirect(`/league/${id}/settings`);
@@ -42,19 +42,19 @@ export default async function CommishDashboard({ params }: { params: Promise<{ i
     supabase
       .from("league_members")
       .select("id, team_name, dues_paid, is_commissioner, division_name, profiles(username)")
-      .eq("league_id", id)
+      .eq("league_id", Number(id))
       .order("joined_at"),
-    supabase.from("drafts").select("status, scheduled_at").eq("league_id", id).maybeSingle(),
-    supabase.from("matchups").select("id", { count: "exact", head: true }).eq("league_id", id),
-    supabase.from("waiver_claims").select("id", { count: "exact", head: true }).eq("league_id", id).eq("status", "pending"),
-    supabase.from("trades").select("id", { count: "exact", head: true }).eq("league_id", id).eq("status", "pending"),
+    supabase.from("drafts").select("status, scheduled_at").eq("league_id", Number(id)).maybeSingle(),
+    supabase.from("matchups").select("id", { count: "exact", head: true }).eq("league_id", Number(id)),
+    supabase.from("waiver_claims").select("id", { count: "exact", head: true }).eq("league_id", Number(id)).eq("status", "pending"),
+    supabase.from("trades").select("id", { count: "exact", head: true }).eq("league_id", Number(id)).eq("status", "pending"),
   ]);
 
   const memberList = members ?? [];
   const memberCount = memberList.length;
   const duesAmount = league.dues_amount as number | null;
-  const paidCount = memberList.filter((m: any) => m.dues_paid).length;
-  const hasDivisions = memberList.some((m: any) => !!m.division_name);
+  const paidCount = memberList.filter((m) => m.dues_paid).length;
+  const hasDivisions = memberList.some((m) => !!m.division_name);
 
   const steps = computeSetupSteps(base, {
     memberCount,
@@ -79,7 +79,7 @@ export default async function CommishDashboard({ params }: { params: Promise<{ i
     ? await supabase.from("tournaments").select("name").in("id", weekTournamentIds)
     : { data: [] as any[] };
   const weekEventName =
-    (weekTournaments ?? []).map((t: any) => t.name).join(", ")
+    (weekTournaments ?? []).map((t) => t.name).join(", ")
     || currentLeagueWeek?.event.name
     || "No event this week";
 
@@ -154,7 +154,7 @@ export default async function CommishDashboard({ params }: { params: Promise<{ i
             <span className="text-white font-semibold">${(paidCount * duesAmount).toFixed(0)}</span> of ${(memberCount * duesAmount).toFixed(0)} collected
           </p>
           <div className="mt-3 flex flex-wrap gap-1.5">
-            {memberList.map((m: any) => (
+            {memberList.map((m) => (
               <span
                 key={m.id}
                 className={`text-[11px] px-2 py-1 rounded-full border ${

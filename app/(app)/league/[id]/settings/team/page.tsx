@@ -18,7 +18,7 @@ export default async function TeamSettingsPage({
   const { data: member } = await supabase
     .from("league_members")
     .select("id, team_name")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("user_id", user.id)
     .single();
   if (!member) notFound();
@@ -26,7 +26,7 @@ export default async function TeamSettingsPage({
   const { data: roster } = await supabase
     .from("rosters")
     .select("player_id, players(id, name, division)")
-    .eq("league_id", id)
+    .eq("league_id", Number(id))
     .eq("team_id", member.id);
 
   const { data: nicknameRows } = await supabase

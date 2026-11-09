@@ -62,8 +62,8 @@ export async function getPlayoffOutcome(
     .eq("is_final", true);
 
   const winsMap: Record<number, { wins: number; losses: number; ties: number; points: number }> = {};
-  (members ?? []).forEach((m: any) => { winsMap[m.id] = { wins: 0, losses: 0, ties: 0, points: 0 }; });
-  (finals ?? []).forEach((m: any) => {
+  (members ?? []).forEach((m) => { winsMap[m.id] = { wins: 0, losses: 0, ties: 0, points: 0 }; });
+  (finals ?? []).forEach((m) => {
     if (!winsMap[m.team1_id]) winsMap[m.team1_id] = { wins: 0, losses: 0, ties: 0, points: 0 };
     if (!winsMap[m.team2_id]) winsMap[m.team2_id] = { wins: 0, losses: 0, ties: 0, points: 0 };
     winsMap[m.team1_id].points += Number(m.team1_score);
@@ -96,8 +96,8 @@ export async function getPlayoffOutcome(
     }
   }
 
-  const ranked = rankTeams(winsMap, (finals ?? []) as any, { headToHead: scoringMode === "head_to_head" });
-  const memberById = new Map((members ?? []).map((m: any) => [m.id, m]));
+  const ranked = rankTeams(winsMap, (finals ?? []), { headToHead: scoringMode === "head_to_head" });
+  const memberById = new Map((members ?? []).map((m) => [m.id, m]));
   const standings: StandingEntry[] = ranked
     .map((e) => {
       const m = memberById.get(e.teamId);

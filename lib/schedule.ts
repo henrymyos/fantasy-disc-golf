@@ -88,7 +88,7 @@ export async function getScheduleSeasons(supabase: SupabaseClient): Promise<numb
     .from("schedule_events")
     .select("season_year")
     .order("season_year", { ascending: false });
-  const years = new Set<number>((data ?? []).map((r: any) => r.season_year as number));
+  const years = new Set<number>((data ?? []).map((r) => r.season_year as number));
   years.add(DEFAULT_SEASON_YEAR);
   return Array.from(years).sort((a, b) => b - a);
 }

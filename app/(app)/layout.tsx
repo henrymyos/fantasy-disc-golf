@@ -37,7 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .eq("user_id", user.id)
     .order("joined_at", { ascending: false });
   const sidebarLeagues = (leagueMemberships ?? [])
-    .map((m: any) => ({
+    .map((m) => ({
       id: m.leagues?.id as number,
       name: (m.leagues?.name as string) ?? "League",
       logoUrl: (m.leagues?.logo_url as string | null) ?? null,
