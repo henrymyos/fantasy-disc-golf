@@ -175,10 +175,10 @@ export async function finalizeWeekScoresCore(
     .select("id, team_name, user_id")
     .eq("league_id", leagueId);
   const teamUserMap = new Map<number, string | null>(
-    (teamMembers ?? []).map((m: any) => [m.id, m.user_id ?? null]),
+    (teamMembers ?? []).map((m) => [m.id, m.user_id ?? null]),
   );
   const nameById = new Map<number, string>(
-    (teamMembers ?? []).map((m: any) => [m.id, m.team_name as string]),
+    (teamMembers ?? []).map((m) => [m.id, m.team_name as string]),
   );
 
   for (const m of matchups ?? []) {
@@ -246,7 +246,7 @@ export async function advanceWeekCore(admin: SupabaseClient, leagueId: number): 
     if ((existing ?? 0) === 0) {
       // Division-aware pairing for this week, matching regenerateLeagueMatchups.
       const schedule = buildSeasonSchedule(
-        members.map((m: any) => ({ id: m.id, divisionName: m.division_name })),
+        members.map((m) => ({ id: m.id, divisionName: m.division_name })),
         nextWeek,
       );
       const wk = schedule.find((s) => s.week === nextWeek);

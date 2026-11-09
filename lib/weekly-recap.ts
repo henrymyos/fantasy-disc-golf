@@ -61,7 +61,7 @@ export async function generateWeeklyRecap(
     .eq("league_id", leagueId)
     .in("team_id", Array.from(teamIds));
 
-  const playerIds = (rosterRows ?? []).map((s: any) => s.player_id);
+  const playerIds = (rosterRows ?? []).map((s) => s.player_id);
   const { data: results } = playerIds.length > 0 && tournamentIds.length > 0
     ? await supabase
         .from("tournament_results")
@@ -80,7 +80,7 @@ export async function generateWeeklyRecap(
   };
   const performances: Performance[] = [];
   for (const s of rosterRows ?? []) {
-    const r = (results ?? []).find((rr: any) => rr.player_id === s.player_id);
+    const r = (results ?? []).find((rr) => rr.player_id === s.player_id);
     if (!r) continue;
     performances.push({
       name: (s as any).players?.name ?? "Unknown",

@@ -46,7 +46,7 @@ export async function resetWaiverPriority(leagueId: number): Promise<void> {
       .eq("league_id", leagueId)
       .eq("is_final", true);
 
-    (matchups ?? []).forEach((m: any) => {
+    (matchups ?? []).forEach((m) => {
       points[m.team1_id] = (points[m.team1_id] ?? 0) + Number(m.team1_score);
       points[m.team2_id] = (points[m.team2_id] ?? 0) + Number(m.team2_score);
       if (m.team1_score > m.team2_score) wins[m.team1_id] = (wins[m.team1_id] ?? 0) + 1;
@@ -67,7 +67,7 @@ export async function resetWaiverPriority(leagueId: number): Promise<void> {
       .order("created_at", { ascending: false });
 
     const lastAdd = new Map<number, string>();
-    (adds ?? []).forEach((row: any) => {
+    (adds ?? []).forEach((row) => {
       if (!lastAdd.has(row.team_id)) lastAdd.set(row.team_id, row.created_at);
     });
 
@@ -260,7 +260,7 @@ export async function runWaiverProcessing(leagueId: number): Promise<void> {
   // Notify each team of their waiver outcome (best-effort). One message per
   // team: their win if they got one, otherwise that a claim didn't go through.
   try {
-    const claimIds = claims.map((c: any) => c.id);
+    const claimIds = claims.map((c) => c.id);
     const { data: outcomes } = await admin
       .from("waiver_claims")
       .select("team_id, status, players(name)")

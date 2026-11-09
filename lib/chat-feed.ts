@@ -133,9 +133,9 @@ export async function buildLeagueSystemFeed(
   for (const t of txs ?? []) {
     const teamId = t.team_id;
     const actor = (t as any).team?.team_name ?? "A team";
-    const player = playerAsset((t as any).player, nickOf(teamId, (t as any).player_id), (t as any).player_id ?? null);
+    const player = playerAsset((t as any).player, nickOf(teamId, t.player_id), t.player_id ?? null);
     const dropped = t.dropped
-      ? playerAsset((t as any).dropped, nickOf(teamId, (t as any).dropped_player_id), (t as any).dropped_player_id ?? null)
+      ? playerAsset((t as any).dropped, nickOf(teamId, t.dropped_player_id), t.dropped_player_id ?? null)
       : null;
     if (t.action === "add") {
       events.push({

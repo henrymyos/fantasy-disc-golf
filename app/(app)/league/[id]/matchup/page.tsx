@@ -37,7 +37,7 @@ export default async function MyMatchupPage({
 
   // Score live under THIS league's rules (placement table + bonus values), not
   // the default-rule fantasy_points stored on the shared results row.
-  const rules = resolveScoringRules((league as any).scoring_rules);
+  const rules = resolveScoringRules(league.scoring_rules);
 
   const { data: myMember } = await supabase
     .from("league_members")
@@ -117,14 +117,14 @@ export default async function MyMatchupPage({
       .order("joined_at");
     if (members && members.length >= 2) {
       const season = buildSeasonSchedule(
-        members.map((m: any) => ({ id: m.id, divisionName: m.division_name })),
+        members.map((m) => ({ id: m.id, divisionName: m.division_name })),
         selectedWeek,
       );
       const pair = season
         .find((s) => s.week === selectedWeek)
         ?.pairs.find(([a, b]) => a === myMember.id || b === myMember.id);
       if (pair) {
-        const memberById = new Map<number, any>((members ?? []).map((m: any) => [m.id, m]));
+        const memberById = new Map<number, any>((members ?? []).map((m) => [m.id, m]));
         matchup = {
           id: null,
           week: selectedWeek,
@@ -158,10 +158,10 @@ export default async function MyMatchupPage({
     );
   }
 
-  const t1 = (matchup as any).team1;
-  const t2 = (matchup as any).team2;
-  const t1Id = (matchup as any).team1_id;
-  const t2Id = (matchup as any).team2_id;
+  const t1 = matchup.team1;
+  const t2 = matchup.team2;
+  const t1Id = matchup.team1_id;
+  const t2Id = matchup.team2_id;
 
   // All the week's numbers come from buildWeekProjections — the same helper
   // the dashboard, the matchups list and the matchup detail page use, so this
@@ -171,9 +171,9 @@ export default async function MyMatchupPage({
   // Sunday finish and the Monday auto-finalize).
   const wk = await buildWeekProjections(supabase, {
     leagueId: Number(id),
-    week: (matchup as any).week,
+    week: matchup.week,
     schedule,
-    league: league as any,
+    league: league,
     teamIds: [t1Id, t2Id],
   });
   const { inProgress, ended, settled } = wk;
@@ -210,11 +210,11 @@ export default async function MyMatchupPage({
 
   const t1Finishing = t1Team.finishing;
   const t2Finishing = t2Team.finishing;
-  const isFinal = !!(matchup as any).is_final;
+  const isFinal = !!matchup.is_final;
   // The headline number is always points actually scored this week (0.0 until
   // the event starts); the projection lives in the ~X line below it.
-  const t1Display = isFinal ? Number((matchup as any).team1_score) : t1Team.actual;
-  const t2Display = isFinal ? Number((matchup as any).team2_score) : t2Team.actual;
+  const t1Display = isFinal ? Number(matchup.team1_score) : t1Team.actual;
+  const t2Display = isFinal ? Number(matchup.team2_score) : t2Team.actual;
 
   // Win % uses each team's *finishing* estimate (pace where available),
   // and the residual variance shrinks as the tournament progresses.
@@ -224,11 +224,11 @@ export default async function MyMatchupPage({
 
   // Win-probability history (snapshotted by the gameday pass on each refresh).
   // Skipped for derived future pairings, which have no matchup row yet.
-  const { data: snapshots } = (matchup as any).id != null
+  const { data: snapshots } = matchup.id != null
     ? await supabase
         .from("matchup_prob_snapshots")
         .select("t1_win_pct, created_at")
-        .eq("matchup_id", (matchup as any).id)
+        .eq("matchup_id", matchup.id)
         .order("created_at", { ascending: true })
         .limit(500)
     : { data: [] as any[] };
@@ -287,9 +287,9 @@ export default async function MyMatchupPage({
       <div>
         <h2 className="text-white font-bold text-xl">Your Matchup</h2>
         <p className="text-gray-400 text-sm mt-1">
-          Week {(matchup as any).week}
+          Week {matchup.week}
           {weekTournamentName && <> · <span className="text-gray-300">{weekTournamentName}</span></>}
-          {isFinal ? " · Final" : settled ? " · unofficial result" : (matchup as any).id == null ? " · projected pairing" : " · live projection"}
+          {isFinal ? " · Final" : settled ? " · unofficial result" : matchup.id == null ? " · projected pairing" : " · live projection"}
         </p>
       </div>
 

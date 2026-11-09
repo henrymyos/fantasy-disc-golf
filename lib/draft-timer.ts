@@ -93,12 +93,12 @@ export async function pickBestAvailableForTeam(
     .from("rosters")
     .select("player_id, team_id, players(division)")
     .eq("league_id", leagueId);
-  const draftedIds = new Set((drafted ?? []).map((r: any) => r.player_id));
+  const draftedIds = new Set((drafted ?? []).map((r) => r.player_id));
   let mpoCount = 0;
   let fpoCount = 0;
   for (const r of drafted ?? []) {
     if (r.team_id !== teamId) continue;
-    const div = (r as any).players?.division;
+    const div = r.players?.division;
     if (div === "MPO") mpoCount++;
     else if (div === "FPO") fpoCount++;
   }
@@ -220,7 +220,7 @@ export async function runExpiredSnakePick(admin: AdminClient, leagueId: number):
     draft.current_pick,
     (members as any[]).map((m) => ({ id: m.id, draftPosition: m.draft_position })),
     draft.third_round_reversal ?? false,
-    buildPickOwnerOverrides(ownerRows as any),
+    buildPickOwnerOverrides(ownerRows),
   );
   const onClock = (members as any[]).find((m) => m.id === onClockId);
   if (!onClock) return false;
@@ -309,7 +309,7 @@ export async function runExpiredAuctionFinalize(admin: AdminClient, leagueId: nu
     .select("id");
   if (!claimedRows || claimedRows.length === 0) return false;
 
-  const positionedCount = members.filter((m: any) => m.draft_position != null).length;
+  const positionedCount = members.filter((m) => m.draft_position != null).length;
 
   // Award the player — assign an open starter slot in their division (like the
   // snake claim_draft_pick path) so auction winners aren't stuck on the bench
@@ -332,7 +332,7 @@ export async function runExpiredAuctionFinalize(admin: AdminClient, leagueId: nu
     .eq("is_starter", true)
     .eq("players.division", division);
   const taken = new Set(
-    (divStarters ?? []).map((r: any) => r.lineup_order).filter((o: number | null) => o != null),
+    (divStarters ?? []).map((r) => r.lineup_order).filter((o: number | null) => o != null),
   );
   let assignedOrder: number | null = null;
   for (let i = 1; i <= slotLimit; i++) { if (!taken.has(i)) { assignedOrder = i; break; } }
@@ -385,10 +385,10 @@ export async function runExpiredAuctionFinalize(admin: AdminClient, leagueId: nu
   for (const r of rosterRows ?? []) {
     ownedByTeam.set(r.team_id, (ownedByTeam.get(r.team_id) ?? 0) + 1);
   }
-  const positioned = members.filter((m: any) => m.draft_position != null);
+  const positioned = members.filter((m) => m.draft_position != null);
   const allFull =
     positioned.length > 0 &&
-    positioned.every((m: any) => (ownedByTeam.get(m.id) ?? 0) >= draft.total_rounds);
+    positioned.every((m) => (ownedByTeam.get(m.id) ?? 0) >= draft.total_rounds);
 
   if (allFull) {
     await admin
@@ -460,7 +460,7 @@ export async function runExpiredAuctionNomination(
 
   const nominator =
     (draft.auction_nominator_team_id != null
-      ? members.find((m: any) => m.id === draft.auction_nominator_team_id)
+      ? members.find((m) => m.id === draft.auction_nominator_team_id)
       : null) ?? currentNominator(members, draft.current_pick);
   if (!nominator) return false;
 
@@ -526,7 +526,7 @@ export async function runDueDraftTimers(
   const now = Date.now();
 
   for (const d of drafts ?? []) {
-    const draft = d as any;
+    const draft = d;
     if (draft.type === "auction") {
       if (!draft.auction_ends_at) {
         // No live nomination — nudge an idle nominator instead.

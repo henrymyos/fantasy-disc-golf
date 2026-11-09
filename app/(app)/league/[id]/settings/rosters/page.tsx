@@ -27,13 +27,13 @@ export default async function CommissionerRostersPage({
     .select("id, team_name, joined_at")
     .eq("league_id", Number(id))
     .order("joined_at");
-  const teams = (members ?? []).map((m: any) => ({ id: m.id, teamName: m.team_name }));
+  const teams = (members ?? []).map((m) => ({ id: m.id, teamName: m.team_name }));
 
   const { data: rostersRaw } = await supabase
     .from("rosters")
     .select("player_id, team_id, is_starter, players(name, division)")
     .eq("league_id", Number(id));
-  const rostered = (rostersRaw ?? []).map((r: any) => ({
+  const rostered = (rostersRaw ?? []).map((r) => ({
     playerId: r.player_id,
     playerName: r.players?.name ?? "Unknown",
     division: (r.players?.division ?? "MPO") as "MPO" | "FPO",
@@ -46,7 +46,7 @@ export default async function CommissionerRostersPage({
     supabase
       .from("players")
       .select("id, name, division")
-      .order("name") as any,
+      .order("name"),
   );
   const rosteredIds = new Set(rostered.map((r) => r.playerId));
   const freeAgents = (allPlayers ?? [])

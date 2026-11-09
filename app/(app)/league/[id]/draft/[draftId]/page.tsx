@@ -60,7 +60,7 @@ export default async function DraftResultPage({
     draftPosition: m.draft_position as number,
   }));
 
-  const picks = (pickRows ?? []).map((p: any) => ({
+  const picks = (pickRows ?? []).map((p) => ({
     pickNumber: p.pick_number,
     teamId: p.team_id,
     playerId: p.player_id ?? null,

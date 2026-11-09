@@ -14,14 +14,14 @@ const s = createClient(
 );
 
 async function main() {
-  const r = await runPdgaImport(s as any);
+  const r = await runPdgaImport(s);
   console.log(`Scraped ${r.events.length} events:`);
-  r.events.forEach((e: any) =>
+  r.events.forEach((e) =>
     console.log(`  ${e.name.padEnd(45)}  MPO=${String(e.mpoRows).padStart(3)}  FPO=${String(e.fpoRows).padStart(3)}`),
   );
   if (r.unmatchedSample.length > 0) {
     console.log(`\nUnmatched PDGA entries (${r.unmatchedSample.length} shown):`);
-    r.unmatchedSample.forEach((u: any) =>
+    r.unmatchedSample.forEach((u) =>
       console.log(`  ${u.event} :: ${u.division} ${u.name} (#${u.pdgaNumber})`),
     );
   }

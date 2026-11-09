@@ -433,7 +433,7 @@ export async function respondToTrade(
         .eq("league_id", trade.league_id)
         .not("draft_position", "is", null)
         .order("draft_position");
-      const memberSlots = (membs ?? []).map((m: any) => ({ id: m.id, draftPosition: m.draft_position }));
+      const memberSlots = (membs ?? []).map((m) => ({ id: m.id, draftPosition: m.draft_position }));
       const trr = !!draftRow.third_round_reversal;
       for (const cp of currentPicks!) {
         // original_team_id = the true snake-default owner (for display/chains).

@@ -725,7 +725,7 @@ export async function optimizeLineup(leagueId: number): Promise<void> {
   const byDivision = (div: string) =>
     roster
       .filter((r) => (r.players?.division ?? "MPO") === div)
-      .sort((a: any, b: any) => projFor(b.player_id) - projFor(a.player_id));
+      .sort((a, b) => projFor(b.player_id) - projFor(a.player_id));
   const picked = [
     ...byDivision("MPO").slice(0, mpoSlots).map((r, i) => ({ id: r.id as number, order: i + 1 })),
     ...byDivision("FPO").slice(0, fpoSlots).map((r, i) => ({ id: r.id as number, order: i + 1 })),

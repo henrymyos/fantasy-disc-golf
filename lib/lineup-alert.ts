@@ -56,7 +56,7 @@ export async function getLineupIssues(
   if (!rosterRows || rosterRows.length === 0) return null;
 
   const starterRows: StarterRow[] = rosterRows
-    .filter((r: any) => r.is_starter)
+    .filter((r) => r.is_starter)
     .map((r: any) => ({
       player_id: r.player_id,
       division: r.players?.division ?? "MPO",

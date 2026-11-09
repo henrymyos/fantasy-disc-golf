@@ -61,7 +61,7 @@ export default async function TeamPage({
     (nickRows ?? []).map((n) => [n.player_id as number, n.nickname as string]),
   );
   for (const r of roster) {
-    (r as any).nickname = nickByPlayer.get((r as any).player_id) ?? null;
+    (r as any).nickname = nickByPlayer.get(r.player_id) ?? null;
   }
 
   function buildSlotArray(starters: any[], numSlots: number): (any | null)[] {

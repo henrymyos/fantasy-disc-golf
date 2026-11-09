@@ -63,8 +63,8 @@ export default async function DraftPage({
     .order("draft_position", { ascending: true, nullsFirst: false })
     .order("joined_at", { ascending: true });
 
-  const orderSet = (memberRowsRaw ?? []).every((m: any) => m.draft_position != null);
-  const memberRows = (memberRowsRaw ?? []).map((m: any, i: number) => ({
+  const orderSet = (memberRowsRaw ?? []).every((m) => m.draft_position != null);
+  const memberRows = (memberRowsRaw ?? []).map((m, i: number) => ({
     id: m.id,
     team_name: orderSet ? m.team_name : `Team ${i + 1}`,
     draft_position: orderSet ? m.draft_position : i + 1,
@@ -91,7 +91,7 @@ export default async function DraftPage({
     .from("current_draft_pick_owners")
     .select("overall_pick, owner_team_id")
     .eq("draft_id", draft?.id ?? 0);
-  const pickOwnerOverrides = (pickOwnerRows ?? []).map((r: any) => ({
+  const pickOwnerOverrides = (pickOwnerRows ?? []).map((r) => ({
     overallPick: r.overall_pick as number,
     ownerTeamId: r.owner_team_id as number,
   }));
@@ -106,7 +106,7 @@ export default async function DraftPage({
   const allPlayers = await selectAllRows<any>(() =>
     supabase
       .from("players")
-      .select("id, name, division, world_ranking, overall_rank, pdga_rating") as any,
+      .select("id, name, division, world_ranking, overall_rank, pdga_rating"),
   );
 
   // This user's personal player rankings for this league (set on the
@@ -118,7 +118,7 @@ export default async function DraftPage({
     .eq("user_id", user.id)
     .eq("league_id", Number(id))
     .order("rank", { ascending: true });
-  const myRankings = (myRankingRows ?? []).map((r: any) => ({
+  const myRankings = (myRankingRows ?? []).map((r) => ({
     playerId: r.player_id as number,
     rank: r.rank as number,
   }));
@@ -131,7 +131,7 @@ export default async function DraftPage({
     .eq("user_id", user.id)
     .eq("league_id", Number(id))
     .order("position", { ascending: true });
-  const queue = (queueRows ?? []).map((r: any) => r.player_id as number);
+  const queue = (queueRows ?? []).map((r) => r.player_id as number);
 
   // Sum each player's fantasy points this season so the available list can
   // be ordered like the points leaders view (highest first).
@@ -150,7 +150,7 @@ export default async function DraftPage({
     avatarColor: m.avatar_color,
   }));
 
-  const picks = (pickRows ?? []).map((p: any) => ({
+  const picks = (pickRows ?? []).map((p) => ({
     pickNumber: p.pick_number,
     teamId: p.team_id,
     playerId: p.players?.id ?? null,
@@ -278,11 +278,11 @@ export default async function DraftPage({
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex-1 min-w-[220px]">
               <p className="text-xs text-gray-400 mb-2">Draft order</p>
-              {(allMemberRows ?? []).every((m: any) => m.draft_position == null) ? (
+              {(allMemberRows ?? []).every((m) => m.draft_position == null) ? (
                 <p className="text-gray-400 text-sm italic">Not set yet — click Randomize to assign positions.</p>
               ) : (
                 <ol className="space-y-1">
-                  {(allMemberRows ?? []).map((m: any) => (
+                  {(allMemberRows ?? []).map((m) => (
                     <li key={m.id} className="flex items-center gap-3 text-sm">
                       <span className="text-gray-400 text-xs font-mono w-6 text-right">
                         {m.draft_position ? `#${m.draft_position}` : "—"}

@@ -36,7 +36,7 @@ export async function archiveSeason(leagueId: number): Promise<boolean> {
     | "all_play"
     | "median";
   const winsMap: Record<number, { wins: number; losses: number; points: number }> = {};
-  (members ?? []).forEach((m: any) => {
+  (members ?? []).forEach((m) => {
     winsMap[m.id] = { wins: 0, losses: 0, points: 0 };
   });
 
@@ -45,7 +45,7 @@ export async function archiveSeason(leagueId: number): Promise<boolean> {
     .select("team1_id, team2_id, team1_score, team2_score")
     .eq("league_id", leagueId)
     .eq("is_final", true);
-  (finalMatchups ?? []).forEach((m: any) => {
+  (finalMatchups ?? []).forEach((m) => {
     if (!winsMap[m.team1_id]) winsMap[m.team1_id] = { wins: 0, losses: 0, points: 0 };
     if (!winsMap[m.team2_id]) winsMap[m.team2_id] = { wins: 0, losses: 0, points: 0 };
     winsMap[m.team1_id].points += Number(m.team1_score);
@@ -71,7 +71,7 @@ export async function archiveSeason(leagueId: number): Promise<boolean> {
   }
 
   const standings = (members ?? [])
-    .map((m: any) => ({
+    .map((m) => ({
       teamId: m.id,
       teamName: m.team_name,
       userId: m.user_id ?? null,
@@ -88,8 +88,8 @@ export async function archiveSeason(leagueId: number): Promise<boolean> {
   for (const r of rosterRows ?? []) {
     const arr = rostersByTeam.get(r.team_id) ?? [];
     arr.push({
-      name: (r as any).players?.name ?? "Unknown",
-      division: (r as any).players?.division ?? "MPO",
+      name: r.players?.name ?? "Unknown",
+      division: r.players?.division ?? "MPO",
       isStarter: !!r.is_starter,
       lineupOrder: r.lineup_order ?? null,
     });
@@ -110,7 +110,7 @@ export async function archiveSeason(leagueId: number): Promise<boolean> {
     .order("started_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  let draftSummary: any = null;
+  let draftSummary = null;
   if (draft) {
     const { data: picks } = await admin
       .from("draft_picks")
@@ -121,7 +121,7 @@ export async function archiveSeason(leagueId: number): Promise<boolean> {
       type: draft.type,
       totalRounds: draft.total_rounds,
       startedAt: draft.started_at,
-      picks: (picks ?? []).map((p: any) => ({
+      picks: (picks ?? []).map((p) => ({
         pickNumber: p.pick_number,
         round: p.round,
         teamId: p.team_id,

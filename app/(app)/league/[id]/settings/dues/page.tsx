@@ -39,14 +39,14 @@ export default async function DuesPage({
     | "median");
 
   const wins: Record<number, { wins: number; losses: number; points: number }> = {};
-  (members ?? []).forEach((m: any) => { wins[m.id] = { wins: 0, losses: 0, points: 0 }; });
+  (members ?? []).forEach((m) => { wins[m.id] = { wins: 0, losses: 0, points: 0 }; });
 
   const { data: finals } = await supabase
     .from("matchups")
     .select("team1_id, team2_id, team1_score, team2_score")
     .eq("league_id", Number(id))
     .eq("is_final", true);
-  (finals ?? []).forEach((m: any) => {
+  (finals ?? []).forEach((m) => {
     if (!wins[m.team1_id]) wins[m.team1_id] = { wins: 0, losses: 0, points: 0 };
     if (!wins[m.team2_id]) wins[m.team2_id] = { wins: 0, losses: 0, points: 0 };
     wins[m.team1_id].points += Number(m.team1_score);
@@ -72,7 +72,7 @@ export default async function DuesPage({
   }
 
   const standings = (members ?? [])
-    .map((m: any) => ({
+    .map((m) => ({
       teamId: m.id,
       teamName: m.team_name,
       wins: wins[m.id]?.wins ?? 0,
@@ -107,7 +107,7 @@ export default async function DuesPage({
           leagueId={Number(id)}
           initialDuesAmount={Number(league.dues_amount ?? 0)}
           initialPayoutSplits={(league.payout_splits as PayoutSplit[] | null) ?? []}
-          members={(members ?? []).map((m: any) => ({
+          members={(members ?? []).map((m) => ({
             id: m.id,
             team_name: m.team_name,
             dues_paid: !!m.dues_paid,

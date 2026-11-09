@@ -568,7 +568,7 @@ export async function commissionerMakePick(leagueId: number, playerId: number): 
     draft.current_pick,
     members.map((m) => ({ id: m.id, draftPosition: m.draft_position })),
     draft.third_round_reversal ?? false,
-    buildPickOwnerOverrides(ownerRows as any),
+    buildPickOwnerOverrides(ownerRows),
   );
   if (onClockId == null) return;
 

@@ -53,7 +53,7 @@ export default async function EditMatchupsPage({ params }: { params: Promise<{ i
           team_name: m.team_name,
           division_name: m.division_name,
         }))}
-        matchups={(matchups ?? []).map((m: any) => ({
+        matchups={(matchups ?? []).map((m) => ({
           id: m.id,
           week: m.week,
           team1_id: m.team1_id,

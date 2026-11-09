@@ -42,9 +42,9 @@ export default async function KeepersPage({ params }: { params: Promise<{ id: st
     .eq("league_id", Number(id))
     .eq("season_year", keeperSeasonYear)
     .eq("team_id", member.id);
-  const initialIds = (existing ?? []).map((k: any) => k.player_id);
+  const initialIds = (existing ?? []).map((k) => k.player_id);
 
-  const myRoster = (roster ?? []).map((r: any) => ({
+  const myRoster = (roster ?? []).map((r) => ({
     id: r.players?.id ?? r.player_id,
     name: r.players?.name ?? "Unknown",
     division: r.players?.division ?? "MPO",
