@@ -18,7 +18,7 @@ export default async function NotificationsPage() {
     .order("created_at", { ascending: false })
     .limit(100);
 
-  const unreadCount = (notifications ?? []).filter((n: any) => n.read_at == null).length;
+  const unreadCount = (notifications ?? []).filter((n) => n.read_at == null).length;
 
   return (
     <div className="max-w-2xl space-y-5">

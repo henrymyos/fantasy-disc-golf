@@ -20,11 +20,11 @@ async function main() {
   if (error) throw error;
 
   const mpo = (players ?? [])
-    .filter((p: any) => p.division === "MPO")
-    .sort((a: any, b: any) => (a.world_ranking ?? 9999) - (b.world_ranking ?? 9999));
+    .filter((p) => p.division === "MPO")
+    .sort((a, b) => (a.world_ranking ?? 9999) - (b.world_ranking ?? 9999));
   const fpo = (players ?? [])
-    .filter((p: any) => p.division === "FPO")
-    .sort((a: any, b: any) => (a.world_ranking ?? 9999) - (b.world_ranking ?? 9999));
+    .filter((p) => p.division === "FPO")
+    .sort((a, b) => (a.world_ranking ?? 9999) - (b.world_ranking ?? 9999));
 
   const total = mpo.length + fpo.length;
   const fpoRatio = fpo.length / total;

@@ -53,7 +53,7 @@ export async function getTeamWeeklyTotals(
     .from("league_members")
     .select("id")
     .eq("league_id", leagueId);
-  const allTeamIds = (teamRows ?? []).map((m: any) => m.id as number);
+  const allTeamIds = (teamRows ?? []).map((m) => m.id as number);
 
   // Starters in this league with division + lineup_order so we can slot-cap.
   const { data: starters } = await supabase
@@ -83,7 +83,7 @@ export async function getTeamWeeklyTotals(
       supabase
         .from("tournament_results")
         .select("player_id, tournament_id, finishing_position, hot_round_count, bogey_free_count, ace_count, under_par_strokes, over_par_strokes, eagle_count, players(division)")
-        .in("tournament_id", tournamentIds) as any,
+        .in("tournament_id", tournamentIds),
     );
     results.forEach((r: any) => {
       const pts = fantasyPointsFromResult(rules, {

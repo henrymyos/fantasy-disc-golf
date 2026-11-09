@@ -44,8 +44,8 @@ export default async function MatchupDetailPage({
     .single();
   const rules = resolveScoringRules(league?.scoring_rules);
 
-  const team1 = matchup.team1 as any;
-  const team2 = matchup.team2 as any;
+  const team1 = matchup.team1;
+  const team2 = matchup.team2;
 
   // Every matchup surface (dashboard, matchups list, this page) reads its
   // numbers from buildWeekProjections so the same matchup can't project or
@@ -55,8 +55,8 @@ export default async function MatchupDetailPage({
   const wk = await buildWeekProjections(supabase, {
     leagueId: Number(id),
     week: matchup.week,
-    league: league as any,
-    teamIds: [matchup.team1_id!, matchup.team2_id!],
+    league: league,
+    teamIds: [matchup.team1_id, matchup.team2_id],
   });
   const { inProgress, ended, settled } = wk;
   const weekTournamentName = wk.eventName;
@@ -71,9 +71,9 @@ export default async function MatchupDetailPage({
   const { data: nickRows } = await supabase
     .from("player_nicknames")
     .select("team_id, player_id, nickname")
-    .in("team_id", [matchup.team1_id!, matchup.team2_id!]);
+    .in("team_id", [matchup.team1_id, matchup.team2_id]);
   const nickByTeamPlayer = new Map<string, string>(
-    (nickRows ?? []).map((n: any) => [`${n.team_id}:${n.player_id}`, n.nickname as string]),
+    (nickRows ?? []).map((n) => [`${n.team_id}:${n.player_id}`, n.nickname as string]),
   );
 
   // Decorate the shared rows with this page's nickname + score-breakdown lines.
@@ -98,19 +98,19 @@ export default async function MatchupDetailPage({
     };
   };
 
-  const t1Team = buildTeam(matchup.team1_id!);
-  const t2Team = buildTeam(matchup.team2_id!);
+  const t1Team = buildTeam(matchup.team1_id);
+  const t2Team = buildTeam(matchup.team2_id);
 
   const team1Finishing = t1Team.finishing;
   const team2Finishing = t2Team.finishing;
   const isFinal = !!matchup.is_final;
   // The headline number is always points actually scored this week (0.0 until
   // the event starts); the projection lives in the ~X line below it.
-  const team1Display = isFinal ? matchup.team1_score! : t1Team.actual;
-  const team2Display = isFinal ? matchup.team2_score! : t2Team.actual;
+  const team1Display = isFinal ? matchup.team1_score : t1Team.actual;
+  const team2Display = isFinal ? matchup.team2_score : t2Team.actual;
 
   // Win %: residual variance shrinks as the tournament progresses.
-  const t1WinPct = wk.winPctFor(matchup.team1_id!, matchup.team2_id!);
+  const t1WinPct = wk.winPctFor(matchup.team1_id, matchup.team2_id);
   const t2WinPct = 100 - t1WinPct;
 
   const benchPairCount = Math.max(t1Team.benchRows.length, t2Team.benchRows.length);
@@ -122,7 +122,7 @@ export default async function MatchupDetailPage({
     .eq("matchup_id", matchup.id)
     .order("created_at", { ascending: true })
     .limit(500);
-  const probPoints = (snapshots ?? []).map((s: any) => ({
+  const probPoints = (snapshots ?? []).map((s) => ({
     pct: s.t1_win_pct as number,
     ts: s.created_at as string,
   }));

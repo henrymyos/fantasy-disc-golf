@@ -99,7 +99,7 @@ async function main() {
     .select("id, name")
     .eq("division", "FPO");
   const ourNames = new Set(
-    (ourPlayers ?? []).map((p: any) => norm(p.name)),
+    (ourPlayers ?? []).map((p) => norm(p.name)),
   );
 
   // 3. Find the highest-ranked PDGA name NOT in our pool

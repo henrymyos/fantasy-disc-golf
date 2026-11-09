@@ -34,11 +34,11 @@ export default async function TeamSettingsPage({
     .select("player_id, nickname")
     .eq("team_id", member.id);
   const nicknameByPlayer = new Map<number, string>(
-    (nicknameRows ?? []).map((r: any) => [r.player_id as number, r.nickname as string]),
+    (nicknameRows ?? []).map((r) => [r.player_id as number, r.nickname as string]),
   );
 
   const players = (roster ?? [])
-    .map((r: any) => ({
+    .map((r) => ({
       id: r.player_id as number,
       name: (r.players?.name as string) ?? "Unknown",
       division: (r.players?.division as string) ?? "MPO",

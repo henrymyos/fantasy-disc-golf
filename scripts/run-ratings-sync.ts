@@ -13,7 +13,7 @@ const s = createClient(
 );
 
 async function main() {
-  const r = await runRatingsSync(s as any);
+  const r = await runRatingsSync(s);
   console.log(`Scanned ${r.scanned} players · ${r.updated} updated · ${r.unresolved} unresolved`);
   if (r.movers.length > 0) {
     console.log("\nRating changes:");

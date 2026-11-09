@@ -145,8 +145,8 @@ async function main() {
   console.log(`Parsed ${mpoRankings.length} MPO, ${fpoRankings.length} FPO rankings.`);
 
   const { data: ourPlayers } = await s.from("players").select("name, division, overall_rank");
-  const mpoNorms = new Set((ourPlayers ?? []).filter((p: any) => p.division === "MPO").map((p: any) => norm(p.name)));
-  const fpoNorms = new Set((ourPlayers ?? []).filter((p: any) => p.division === "FPO").map((p: any) => norm(p.name)));
+  const mpoNorms = new Set((ourPlayers ?? []).filter((p) => p.division === "MPO").map((p) => norm(p.name)));
+  const fpoNorms = new Set((ourPlayers ?? []).filter((p) => p.division === "FPO").map((p) => norm(p.name)));
   console.log(`Current pool: ${mpoNorms.size} MPO, ${fpoNorms.size} FPO.`);
 
   const mpoMissing = await findMissing(mpoRankings, mpoNorms, ADD_MPO);
@@ -154,7 +154,7 @@ async function main() {
   console.log(`\nTop ${ADD_MPO} missing MPO and top ${ADD_FPO} missing FPO:`);
 
   // Next available overall_rank slots — appended at the bottom.
-  let nextOverall = (Math.max(0, ...((ourPlayers ?? []).map((p: any) => p.overall_rank ?? 0) as number[])) + 1) || 1;
+  let nextOverall = (Math.max(0, ...((ourPlayers ?? []).map((p) => p.overall_rank ?? 0) as number[])) + 1) || 1;
 
   console.log("\nInserting MPO additions…");
   const mpoCount = await addPlayers("MPO", mpoMissing, nextOverall);

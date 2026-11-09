@@ -979,30 +979,30 @@ export type Database = {
       draft_picks: {
         Row: {
           id: number;
-          draft_id: number | null;
+          draft_id: number;
           pick_number: number;
           round: number;
-          team_id: number | null;
-          player_id: number | null;
-          picked_at: string | null;
+          team_id: number;
+          player_id: number;
+          picked_at: string;
         };
         Insert: {
           id?: number;
-          draft_id?: number | null;
+          draft_id: number;
           pick_number: number;
           round: number;
-          team_id?: number | null;
-          player_id?: number | null;
-          picked_at?: string | null;
+          team_id: number;
+          player_id: number;
+          picked_at?: string;
         };
         Update: {
           id?: number;
-          draft_id?: number | null;
+          draft_id?: number;
           pick_number?: number;
           round?: number;
-          team_id?: number | null;
-          player_id?: number | null;
-          picked_at?: string | null;
+          team_id?: number;
+          player_id?: number;
+          picked_at?: string;
         };
         Relationships: [
           {
@@ -1031,23 +1031,23 @@ export type Database = {
       draft_queue: {
         Row: {
           id: number;
-          user_id: string | null;
-          league_id: number | null;
-          player_id: number | null;
+          user_id: string;
+          league_id: number;
+          player_id: number;
           position: number;
         };
         Insert: {
           id?: number;
-          user_id?: string | null;
-          league_id?: number | null;
-          player_id?: number | null;
+          user_id: string;
+          league_id: number;
+          player_id: number;
           position: number;
         };
         Update: {
           id?: number;
-          user_id?: string | null;
-          league_id?: number | null;
-          player_id?: number | null;
+          user_id?: string;
+          league_id?: number;
+          player_id?: number;
           position?: number;
         };
         Relationships: [
@@ -1077,12 +1077,12 @@ export type Database = {
       drafts: {
         Row: {
           id: number;
-          league_id: number | null;
-          status: string | null;
-          type: string | null;
-          current_pick: number | null;
-          total_rounds: number | null;
-          seconds_per_pick: number | null;
+          league_id: number;
+          status: string;
+          type: string;
+          current_pick: number;
+          total_rounds: number;
+          seconds_per_pick: number;
           started_at: string | null;
           scheduled_at: string | null;
           auction_budget: number;
@@ -1099,12 +1099,12 @@ export type Database = {
         };
         Insert: {
           id?: number;
-          league_id?: number | null;
-          status?: string | null;
-          type?: string | null;
-          current_pick?: number | null;
-          total_rounds?: number | null;
-          seconds_per_pick?: number | null;
+          league_id: number;
+          status?: string;
+          type?: string;
+          current_pick?: number;
+          total_rounds?: number;
+          seconds_per_pick?: number;
           started_at?: string | null;
           scheduled_at?: string | null;
           auction_budget?: number;
@@ -1121,12 +1121,12 @@ export type Database = {
         };
         Update: {
           id?: number;
-          league_id?: number | null;
-          status?: string | null;
-          type?: string | null;
-          current_pick?: number | null;
-          total_rounds?: number | null;
-          seconds_per_pick?: number | null;
+          league_id?: number;
+          status?: string;
+          type?: string;
+          current_pick?: number;
+          total_rounds?: number;
+          seconds_per_pick?: number;
           started_at?: string | null;
           scheduled_at?: string | null;
           auction_budget?: number;
@@ -1175,26 +1175,26 @@ export type Database = {
       keeper_picks: {
         Row: {
           id: number;
-          league_id: number | null;
+          league_id: number;
           season_year: number;
-          team_id: number | null;
-          player_id: number | null;
+          team_id: number;
+          player_id: number;
           created_at: string;
         };
         Insert: {
           id?: number;
-          league_id?: number | null;
+          league_id: number;
           season_year: number;
-          team_id?: number | null;
-          player_id?: number | null;
+          team_id: number;
+          player_id: number;
           created_at?: string;
         };
         Update: {
           id?: number;
-          league_id?: number | null;
+          league_id?: number;
           season_year?: number;
-          team_id?: number | null;
-          player_id?: number | null;
+          team_id?: number;
+          player_id?: number;
           created_at?: string;
         };
         Relationships: [
@@ -1224,12 +1224,12 @@ export type Database = {
       league_members: {
         Row: {
           id: number;
-          league_id: number | null;
-          user_id: string | null;
+          league_id: number;
+          user_id: string;
           team_name: string;
-          is_commissioner: boolean | null;
+          is_commissioner: boolean;
           draft_position: number | null;
-          joined_at: string | null;
+          joined_at: string;
           waiver_priority: number | null;
           division_name: string | null;
           auction_budget_remaining: number | null;
@@ -1239,12 +1239,12 @@ export type Database = {
         };
         Insert: {
           id?: number;
-          league_id?: number | null;
-          user_id?: string | null;
+          league_id: number;
+          user_id: string;
           team_name: string;
-          is_commissioner?: boolean | null;
+          is_commissioner?: boolean;
           draft_position?: number | null;
-          joined_at?: string | null;
+          joined_at?: string;
           waiver_priority?: number | null;
           division_name?: string | null;
           auction_budget_remaining?: number | null;
@@ -1254,12 +1254,12 @@ export type Database = {
         };
         Update: {
           id?: number;
-          league_id?: number | null;
-          user_id?: string | null;
+          league_id?: number;
+          user_id?: string;
           team_name?: string;
-          is_commissioner?: boolean | null;
+          is_commissioner?: boolean;
           draft_position?: number | null;
-          joined_at?: string | null;
+          joined_at?: string;
           waiver_priority?: number | null;
           division_name?: string | null;
           auction_budget_remaining?: number | null;
@@ -1288,16 +1288,16 @@ export type Database = {
         Row: {
           id: number;
           name: string;
-          commissioner_id: string | null;
+          commissioner_id: string;
           invite_code: string;
-          max_teams: number | null;
-          roster_size: number | null;
-          starters_count: number | null;
-          season_year: number | null;
-          current_week: number | null;
-          draft_status: string | null;
-          scoring_type: string | null;
-          created_at: string | null;
+          max_teams: number;
+          roster_size: number;
+          starters_count: number;
+          season_year: number;
+          current_week: number;
+          draft_status: string;
+          scoring_type: string;
+          created_at: string;
           mpo_starters: number;
           fpo_starters: number;
           selected_event_slugs: string[] | null;
@@ -1313,16 +1313,16 @@ export type Database = {
         Insert: {
           id?: number;
           name: string;
-          commissioner_id?: string | null;
+          commissioner_id: string;
           invite_code?: string;
-          max_teams?: number | null;
-          roster_size?: number | null;
-          starters_count?: number | null;
-          season_year?: number | null;
-          current_week?: number | null;
-          draft_status?: string | null;
-          scoring_type?: string | null;
-          created_at?: string | null;
+          max_teams?: number;
+          roster_size?: number;
+          starters_count?: number;
+          season_year?: number;
+          current_week?: number;
+          draft_status?: string;
+          scoring_type?: string;
+          created_at?: string;
           mpo_starters?: number;
           fpo_starters?: number;
           selected_event_slugs?: string[] | null;
@@ -1338,16 +1338,16 @@ export type Database = {
         Update: {
           id?: number;
           name?: string;
-          commissioner_id?: string | null;
+          commissioner_id?: string;
           invite_code?: string;
-          max_teams?: number | null;
-          roster_size?: number | null;
-          starters_count?: number | null;
-          season_year?: number | null;
-          current_week?: number | null;
-          draft_status?: string | null;
-          scoring_type?: string | null;
-          created_at?: string | null;
+          max_teams?: number;
+          roster_size?: number;
+          starters_count?: number;
+          season_year?: number;
+          current_week?: number;
+          draft_status?: string;
+          scoring_type?: string;
+          created_at?: string;
           mpo_starters?: number;
           fpo_starters?: number;
           selected_event_slugs?: string[] | null;
@@ -1544,35 +1544,35 @@ export type Database = {
       matchups: {
         Row: {
           id: number;
-          league_id: number | null;
+          league_id: number;
           week: number;
-          team1_id: number | null;
-          team2_id: number | null;
-          team1_score: number | null;
-          team2_score: number | null;
-          is_final: boolean | null;
+          team1_id: number;
+          team2_id: number;
+          team1_score: number;
+          team2_score: number;
+          is_final: boolean;
           finalized_at: string | null;
         };
         Insert: {
           id?: number;
-          league_id?: number | null;
+          league_id: number;
           week: number;
-          team1_id?: number | null;
-          team2_id?: number | null;
-          team1_score?: number | null;
-          team2_score?: number | null;
-          is_final?: boolean | null;
+          team1_id: number;
+          team2_id: number;
+          team1_score?: number;
+          team2_score?: number;
+          is_final?: boolean;
           finalized_at?: string | null;
         };
         Update: {
           id?: number;
-          league_id?: number | null;
+          league_id?: number;
           week?: number;
-          team1_id?: number | null;
-          team2_id?: number | null;
-          team1_score?: number | null;
-          team2_score?: number | null;
-          is_final?: boolean | null;
+          team1_id?: number;
+          team2_id?: number;
+          team1_score?: number;
+          team2_score?: number;
+          is_final?: boolean;
           finalized_at?: string | null;
         };
         Relationships: [
@@ -1961,29 +1961,29 @@ export type Database = {
       rosters: {
         Row: {
           id: number;
-          league_id: number | null;
-          team_id: number | null;
-          player_id: number | null;
-          is_starter: boolean | null;
-          acquired_week: number | null;
+          league_id: number;
+          team_id: number;
+          player_id: number;
+          is_starter: boolean;
+          acquired_week: number;
           lineup_order: number | null;
         };
         Insert: {
           id?: number;
-          league_id?: number | null;
-          team_id?: number | null;
-          player_id?: number | null;
-          is_starter?: boolean | null;
-          acquired_week?: number | null;
+          league_id: number;
+          team_id: number;
+          player_id: number;
+          is_starter?: boolean;
+          acquired_week?: number;
           lineup_order?: number | null;
         };
         Update: {
           id?: number;
-          league_id?: number | null;
-          team_id?: number | null;
-          player_id?: number | null;
-          is_starter?: boolean | null;
-          acquired_week?: number | null;
+          league_id?: number;
+          team_id?: number;
+          player_id?: number;
+          is_starter?: boolean;
+          acquired_week?: number;
           lineup_order?: number | null;
         };
         Relationships: [
@@ -2093,10 +2093,10 @@ export type Database = {
       tournament_results: {
         Row: {
           id: number;
-          tournament_id: number | null;
-          player_id: number | null;
+          tournament_id: number;
+          player_id: number;
           finishing_position: number | null;
-          fantasy_points: number | null;
+          fantasy_points: number;
           hot_round_count: number;
           bogey_free_count: number;
           ace_count: number;
@@ -2106,10 +2106,10 @@ export type Database = {
         };
         Insert: {
           id?: number;
-          tournament_id?: number | null;
-          player_id?: number | null;
+          tournament_id: number;
+          player_id: number;
           finishing_position?: number | null;
-          fantasy_points?: number | null;
+          fantasy_points?: number;
           hot_round_count?: number;
           bogey_free_count?: number;
           ace_count?: number;
@@ -2119,10 +2119,10 @@ export type Database = {
         };
         Update: {
           id?: number;
-          tournament_id?: number | null;
-          player_id?: number | null;
+          tournament_id?: number;
+          player_id?: number;
           finishing_position?: number | null;
-          fantasy_points?: number | null;
+          fantasy_points?: number;
           hot_round_count?: number;
           bogey_free_count?: number;
           ace_count?: number;
@@ -2152,7 +2152,7 @@ export type Database = {
           id: number;
           name: string;
           week: number;
-          season_year: number | null;
+          season_year: number;
           start_date: string | null;
           end_date: string | null;
           pdga_event_id: number | null;
@@ -2163,7 +2163,7 @@ export type Database = {
           id?: number;
           name: string;
           week: number;
-          season_year?: number | null;
+          season_year?: number;
           start_date?: string | null;
           end_date?: string | null;
           pdga_event_id?: number | null;
@@ -2174,7 +2174,7 @@ export type Database = {
           id?: number;
           name?: string;
           week?: number;
-          season_year?: number | null;
+          season_year?: number;
           start_date?: string | null;
           end_date?: string | null;
           pdga_event_id?: number | null;
@@ -2281,30 +2281,30 @@ export type Database = {
       trade_picks: {
         Row: {
           id: number;
-          trade_id: number | null;
+          trade_id: number;
           season_year: number;
           round: number;
-          original_team_id: number | null;
-          from_team_id: number | null;
-          to_team_id: number | null;
+          original_team_id: number;
+          from_team_id: number;
+          to_team_id: number;
         };
         Insert: {
           id?: number;
-          trade_id?: number | null;
+          trade_id: number;
           season_year: number;
           round: number;
-          original_team_id?: number | null;
-          from_team_id?: number | null;
-          to_team_id?: number | null;
+          original_team_id: number;
+          from_team_id: number;
+          to_team_id: number;
         };
         Update: {
           id?: number;
-          trade_id?: number | null;
+          trade_id?: number;
           season_year?: number;
           round?: number;
-          original_team_id?: number | null;
-          from_team_id?: number | null;
-          to_team_id?: number | null;
+          original_team_id?: number;
+          from_team_id?: number;
+          to_team_id?: number;
         };
         Relationships: [
           {
@@ -2340,24 +2340,24 @@ export type Database = {
       trade_players: {
         Row: {
           id: number;
-          trade_id: number | null;
-          player_id: number | null;
-          from_team_id: number | null;
-          to_team_id: number | null;
+          trade_id: number;
+          player_id: number;
+          from_team_id: number;
+          to_team_id: number;
         };
         Insert: {
           id?: number;
-          trade_id?: number | null;
-          player_id?: number | null;
-          from_team_id?: number | null;
-          to_team_id?: number | null;
+          trade_id: number;
+          player_id: number;
+          from_team_id: number;
+          to_team_id: number;
         };
         Update: {
           id?: number;
-          trade_id?: number | null;
-          player_id?: number | null;
-          from_team_id?: number | null;
-          to_team_id?: number | null;
+          trade_id?: number;
+          player_id?: number;
+          from_team_id?: number;
+          to_team_id?: number;
         };
         Relationships: [
           {
@@ -2393,29 +2393,29 @@ export type Database = {
       traded_draft_picks: {
         Row: {
           id: number;
-          league_id: number | null;
+          league_id: number;
           season_year: number;
           round: number;
-          original_team_id: number | null;
-          current_team_id: number | null;
+          original_team_id: number;
+          current_team_id: number;
           created_at: string;
         };
         Insert: {
           id?: number;
-          league_id?: number | null;
+          league_id: number;
           season_year: number;
           round: number;
-          original_team_id?: number | null;
-          current_team_id?: number | null;
+          original_team_id: number;
+          current_team_id: number;
           created_at?: string;
         };
         Update: {
           id?: number;
-          league_id?: number | null;
+          league_id?: number;
           season_year?: number;
           round?: number;
-          original_team_id?: number | null;
-          current_team_id?: number | null;
+          original_team_id?: number;
+          current_team_id?: number;
           created_at?: string;
         };
         Relationships: [
@@ -2445,32 +2445,32 @@ export type Database = {
       trades: {
         Row: {
           id: number;
-          league_id: number | null;
-          proposer_id: number | null;
-          receiver_id: number | null;
-          status: string | null;
+          league_id: number;
+          proposer_id: number;
+          receiver_id: number;
+          status: string;
           message: string | null;
-          proposed_at: string | null;
+          proposed_at: string;
           resolved_at: string | null;
         };
         Insert: {
           id?: number;
-          league_id?: number | null;
-          proposer_id?: number | null;
-          receiver_id?: number | null;
-          status?: string | null;
+          league_id: number;
+          proposer_id: number;
+          receiver_id: number;
+          status?: string;
           message?: string | null;
-          proposed_at?: string | null;
+          proposed_at?: string;
           resolved_at?: string | null;
         };
         Update: {
           id?: number;
-          league_id?: number | null;
-          proposer_id?: number | null;
-          receiver_id?: number | null;
-          status?: string | null;
+          league_id?: number;
+          proposer_id?: number;
+          receiver_id?: number;
+          status?: string;
           message?: string | null;
-          proposed_at?: string | null;
+          proposed_at?: string;
           resolved_at?: string | null;
         };
         Relationships: [
@@ -2567,37 +2567,37 @@ export type Database = {
       waiver_claims: {
         Row: {
           id: number;
-          league_id: number | null;
-          team_id: number | null;
-          player_id: number | null;
+          league_id: number;
+          team_id: number;
+          player_id: number;
           drop_player_id: number | null;
           priority: number | null;
-          status: string | null;
-          submitted_at: string | null;
+          status: string;
+          submitted_at: string;
           claim_order: number | null;
           processed_at: string | null;
         };
         Insert: {
           id?: number;
-          league_id?: number | null;
-          team_id?: number | null;
-          player_id?: number | null;
+          league_id: number;
+          team_id: number;
+          player_id: number;
           drop_player_id?: number | null;
           priority?: number | null;
-          status?: string | null;
-          submitted_at?: string | null;
+          status?: string;
+          submitted_at?: string;
           claim_order?: number | null;
           processed_at?: string | null;
         };
         Update: {
           id?: number;
-          league_id?: number | null;
-          team_id?: number | null;
-          player_id?: number | null;
+          league_id?: number;
+          team_id?: number;
+          player_id?: number;
           drop_player_id?: number | null;
           priority?: number | null;
-          status?: string | null;
-          submitted_at?: string | null;
+          status?: string;
+          submitted_at?: string;
           claim_order?: number | null;
           processed_at?: string | null;
         };

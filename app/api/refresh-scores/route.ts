@@ -84,7 +84,7 @@ export async function POST() {
     // Deltas are one-refresh-only data — keep them out of the cached result.
     const cacheable: Partial<typeof result> = { ...result };
     delete cacheable.liveDeltas;
-    await admin.from("pdga_import_state").update({ last_result: cacheable as any }).eq("id", 1);
+    await admin.from("pdga_import_state").update({ last_result: cacheable }).eq("id", 1);
     localLastAttempt = now;
     localCached = cacheable;
     return NextResponse.json({ ok: true, cached: false, ...cacheable });

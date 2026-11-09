@@ -202,7 +202,7 @@ export async function respondToTrade(
   const { data: member } = await admin
     .from("league_members")
     .select("id")
-    .eq("league_id", trade.league_id!)
+    .eq("league_id", trade.league_id)
     .eq("user_id", user.id)
     .single();
   if (!member) return {};
@@ -222,7 +222,7 @@ export async function respondToTrade(
   // the points they already carded to their new team (and take them off the
   // old one's live score). Lineup changes and free-agent adds are locked for
   // the same reason — accepting a trade is just a slower way to do both.
-  if (accept && (await getActiveTournament(supabase, trade.league_id!)) !== null) {
+  if (accept && (await getActiveTournament(supabase, trade.league_id)) !== null) {
     return { error: "Trades can't be accepted while an event is live. Try again once it wraps up." };
   }
 
@@ -259,7 +259,7 @@ export async function respondToTrade(
         if (!uid) continue;
         await enqueueNotification(admin, {
           userId: uid,
-          leagueId: tradeLeagueId!,
+          leagueId: tradeLeagueId,
           kind: "trade_proposed",
           body,
           link: `/league/${tradeLeagueId}/trades`,
@@ -333,9 +333,9 @@ export async function respondToTrade(
     const { data: owns } = await admin
       .from("rosters")
       .select("id")
-      .eq("league_id", trade.league_id!)
-      .eq("player_id", tp.player_id!)
-      .eq("team_id", tp.from_team_id!)
+      .eq("league_id", trade.league_id)
+      .eq("player_id", tp.player_id)
+      .eq("team_id", tp.from_team_id)
       .maybeSingle();
     if (!owns) {
       await admin
@@ -358,20 +358,20 @@ export async function respondToTrade(
     const { data: leagueRow } = await admin
       .from("leagues")
       .select("roster_size")
-      .eq("id", trade.league_id!)
+      .eq("id", trade.league_id)
       .single();
     const rosterSize = leagueRow?.roster_size ?? 10;
 
     const involvedTeams = new Set<number>();
     for (const tp of playerLegs) {
-      involvedTeams.add(tp.from_team_id!);
-      involvedTeams.add(tp.to_team_id!);
+      involvedTeams.add(tp.from_team_id);
+      involvedTeams.add(tp.to_team_id);
     }
     for (const teamId of involvedTeams) {
       const { count } = await admin
         .from("rosters")
         .select("id", { count: "exact", head: true })
-        .eq("league_id", trade.league_id!)
+        .eq("league_id", trade.league_id)
         .eq("team_id", teamId);
       const current = count ?? 0;
       const leaving = playerLegs.filter((tp) => tp.from_team_id === teamId).length;
@@ -390,9 +390,9 @@ export async function respondToTrade(
 
   for (const tp of tradePlayers ?? []) {
     await admin.from("rosters").update({ team_id: tp.to_team_id })
-      .eq("league_id", trade.league_id!)
-      .eq("player_id", tp.player_id!)
-      .eq("team_id", tp.from_team_id!);
+      .eq("league_id", trade.league_id)
+      .eq("player_id", tp.player_id)
+      .eq("team_id", tp.from_team_id);
   }
 
   // Execute pick swaps: the to_team_id becomes the current owner of each
@@ -424,16 +424,16 @@ export async function respondToTrade(
     const { data: draftRow } = await admin
       .from("drafts")
       .select("id, status, third_round_reversal")
-      .eq("league_id", trade.league_id!)
+      .eq("league_id", trade.league_id)
       .single();
     if (draftRow && draftRow.status === "pending") {
       const { data: membs } = await admin
         .from("league_members")
         .select("id, draft_position")
-        .eq("league_id", trade.league_id!)
+        .eq("league_id", trade.league_id)
         .not("draft_position", "is", null)
         .order("draft_position");
-      const memberSlots = (membs ?? []).map((m: any) => ({ id: m.id, draftPosition: m.draft_position }));
+      const memberSlots = (membs ?? []).map((m) => ({ id: m.id, draftPosition: m.draft_position }));
       const trr = !!draftRow.third_round_reversal;
       for (const cp of currentPicks!) {
         // original_team_id = the true snake-default owner (for display/chains).
@@ -475,7 +475,7 @@ export async function cancelTrade(tradeId: number): Promise<void> {
   const { data: member } = await admin
     .from("league_members")
     .select("id")
-    .eq("league_id", trade.league_id!)
+    .eq("league_id", trade.league_id)
     .eq("user_id", user.id)
     .single();
 
@@ -506,7 +506,7 @@ export async function cancelTrade(tradeId: number): Promise<void> {
         if (!uid) continue;
         await enqueueNotification(admin, {
           userId: uid,
-          leagueId: trade.league_id!,
+          leagueId: trade.league_id,
           kind: "trade_proposed",
           body: "A trade you were offered was canceled.",
           link: `/league/${trade.league_id}/trades`,

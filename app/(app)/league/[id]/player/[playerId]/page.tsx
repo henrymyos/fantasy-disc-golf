@@ -47,7 +47,7 @@ export default async function PlayerPage({
     .eq("player_id", Number(playerId))
     .maybeSingle();
   const ownerTeamId = rosterEntry?.team_id ?? null;
-  const ownerTeamName = (rosterEntry as any)?.league_members?.team_name ?? null;
+  const ownerTeamName = rosterEntry?.league_members?.team_name ?? null;
   const isFreeAgent = ownerTeamId == null;
   const isMine = ownerTeamId === member.id;
 
@@ -79,7 +79,7 @@ export default async function PlayerPage({
 
   // Upcoming-event projection per roster player (per-event scoring pace, 0 if
   // not registered for the next event), shown in the add-with-drop popup.
-  const rosterPlayerIds = (myRosterRows ?? []).map((r: any) => r.player_id as number);
+  const rosterPlayerIds = (myRosterRows ?? []).map((r) => r.player_id as number);
   const nextTournamentId: number | null =
     activeTournament?.id ?? (await getLeagueNextTournamentId(supabase, Number(id)));
   let nextRegisteredSet: Set<number> | null = null;
@@ -101,7 +101,7 @@ export default async function PlayerPage({
     return rosterPoints.projectionFor(pid, 3);
   };
 
-  const myRoster = (myRosterRows ?? []).map((r: any) => ({
+  const myRoster = (myRosterRows ?? []).map((r) => ({
     ...r,
     projection: rosterProjectionFor(r.player_id),
   }));
@@ -131,7 +131,7 @@ export default async function PlayerPage({
   // compute event-level field sizes and to tier this player's season totals
   // and average finish against same-division peers.
   const divPlayerRows = await selectAllRows<any>(() =>
-    supabase.from("players").select("id").eq("division", player.division!) as any,
+    supabase.from("players").select("id").eq("division", player.division!),
   );
   const divPlayerIds = divPlayerRows.map((p: any) => p.id as number);
   // League-rule points (not the default-rule fantasy_points column) and paged,
@@ -213,7 +213,7 @@ export default async function PlayerPage({
   const avgFinish = playedEvents.length > 0
     ? Math.round(
         playedEvents.reduce((sum, e) => {
-          const r = (e.tournament_results as any)[0];
+          const r = e.tournament_results[0];
           return sum + (r?.finishing_position ?? 0);
         }, 0) / playedEvents.length
       )
@@ -381,7 +381,7 @@ export default async function PlayerPage({
             </div>
 
             {(events ?? []).map((event, i) => {
-              const r = (event.tournament_results as any)[0];
+              const r = event.tournament_results[0];
               const pts: number = divPoints.pointsAt(player.id, event.id) ?? 0;
               const finish: number | null = r?.finishing_position ?? null;
               const hot: number = r?.hot_round_count ?? 0;

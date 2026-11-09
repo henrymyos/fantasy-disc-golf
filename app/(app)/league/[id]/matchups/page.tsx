@@ -32,15 +32,15 @@ export default async function MatchupsPage({
   // ── Week selection: any week in the season, default the featured week ──────
   const schedule = await getLeagueSchedule(supabase, Number(id));
   const totalWeeks = schedule?.weeks.length ?? league.current_week;
-  const currentWeek = Math.min(league.current_week!, Math.max(totalWeeks!, 1));
+  const currentWeek = Math.min(league.current_week, Math.max(totalWeeks, 1));
   const featured = schedule
-    ? featuredWeekFor(schedule, league.current_week!)
+    ? featuredWeekFor(schedule, league.current_week)
     : league.current_week;
   const requested = Number(sp.week);
   const selectedWeek =
-    Number.isInteger(requested) && requested >= 1 && requested <= totalWeeks!
+    Number.isInteger(requested) && requested >= 1 && requested <= totalWeeks
       ? requested
-      : Math.min(Math.max(featured!, 1), totalWeeks!);
+      : Math.min(Math.max(featured, 1), totalWeeks);
   const weekTabs = schedule ? weekTabsFor(schedule) : [];
   const scheduleWeek = schedule?.weeks.find((w) => w.week === selectedWeek) ?? null;
 

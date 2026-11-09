@@ -46,7 +46,7 @@ async function resolveOnClock(admin: AdminClient, draft: any, members: Member[])
     draft.current_pick,
     positioned.map((m) => ({ id: m.id, draftPosition: m.draft_position as number })),
     draft.third_round_reversal ?? false,
-    buildPickOwnerOverrides(ownerRows as any),
+    buildPickOwnerOverrides(ownerRows),
   );
   return members.find((m) => m.id === ownerId) ?? null;
 }

@@ -63,8 +63,8 @@ async function main() {
   const live = (all.data ?? []).length > 0
     ? (await a.from("tournaments").select("id,name").lte("start_date", today).gte("end_date", today)).data ?? []
     : [];
-  const recentIds = new Set((recent.data ?? []).map((t: any) => t.id));
-  eq("every live event is in the recent scope", live.every((t: any) => recentIds.has(t.id)), true);
+  const recentIds = new Set((recent.data ?? []).map((t) => t.id));
+  eq("every live event is in the recent scope", live.every((t) => recentIds.has(t.id)), true);
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);

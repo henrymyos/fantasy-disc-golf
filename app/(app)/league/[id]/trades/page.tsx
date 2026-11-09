@@ -93,7 +93,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
           .eq("season_year", NEXT_SEASON)
       : { data: [] };
     const swapByOriginal = new Map<string, number>();
-    (swaps ?? []).forEach((s: any) =>
+    (swaps ?? []).forEach((s) =>
       swapByOriginal.set(`${s.round}:${s.original_team_id}`, s.current_team_id),
     );
 
@@ -113,8 +113,8 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
       .select("id, draft_position")
       .eq("league_id", lid);
     const positioned = (posMembers ?? [])
-      .filter((m: any) => m.draft_position != null)
-      .map((m: any) => ({ id: m.id as number, draftPosition: m.draft_position as number }));
+      .filter((m) => m.draft_position != null)
+      .map((m) => ({ id: m.id as number, draftPosition: m.draft_position as number }));
     const cdNumTeams = positioned.length;
     const cdOrderAssigned = (posMembers ?? []).length > 0 && cdNumTeams === (posMembers ?? []).length;
 
@@ -125,7 +125,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
           .eq("draft_id", cdDraftId)
       : { data: [] };
     const cdOverrides = new Map<number, number>(
-      (cdOwnerRows ?? []).map((r: any) => [r.overall_pick, r.owner_team_id]),
+      (cdOwnerRows ?? []).map((r) => [r.overall_pick, r.owner_team_id]),
     );
 
     function labelFor(overall: number): string {
@@ -139,7 +139,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
       ? await supabase.from("draft_picks").select("pick_number, player_id").eq("draft_id", cdDraftId)
       : { data: [] };
     const pickLabelByPlayer = new Map<number, string>();
-    (cdMade ?? []).forEach((p: any) => {
+    (cdMade ?? []).forEach((p) => {
       if (p.player_id != null) pickLabelByPlayer.set(p.player_id, labelFor(p.pick_number));
     });
 
@@ -192,7 +192,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
           picks.push({
             seasonYear: s.season_year,
             round: s.round,
-            originalTeamId: s.original_team_id!,
+            originalTeamId: s.original_team_id,
             currentTeamId: m.id,
           });
         }

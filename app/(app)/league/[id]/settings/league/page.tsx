@@ -59,8 +59,8 @@ export default async function LeagueSettingsSubpage({
             leagueId={id}
             initial={{
               name: league.name,
-              maxTeams: league.max_teams!,
-              rosterSize: league.roster_size!,
+              maxTeams: league.max_teams,
+              rosterSize: league.roster_size,
               mpoStarters: league.mpo_starters ?? 4,
               fpoStarters: league.fpo_starters ?? 2,
               waiverOrderMode: (league.waiver_order_mode ?? "reverse_standings") as
@@ -76,8 +76,8 @@ export default async function LeagueSettingsSubpage({
         ) : (
           <ReadOnlySettings
             name={league.name}
-            maxTeams={league.max_teams!}
-            rosterSize={league.roster_size!}
+            maxTeams={league.max_teams}
+            rosterSize={league.roster_size}
             mpoStarters={league.mpo_starters ?? 4}
             fpoStarters={league.fpo_starters ?? 2}
           />

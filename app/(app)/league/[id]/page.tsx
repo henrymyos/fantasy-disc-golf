@@ -97,7 +97,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   // Wednesday midday, then the dashboard flips to the new current week.
   const leagueSchedule = await getLeagueSchedule(supabase, Number(id));
   const featuredWeek = leagueSchedule
-    ? featuredWeekFor(leagueSchedule, league.current_week!)
+    ? featuredWeekFor(leagueSchedule, league.current_week)
     : league.current_week;
 
   const { data: matchups } = await supabase
@@ -108,7 +108,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
       team2:league_members!matchups_team2_id_fkey(id, team_name)
     `)
     .eq("league_id", Number(id))
-    .eq("week", featuredWeek!);
+    .eq("week", featuredWeek);
 
   // Compute standings from all matchups
   const { data: allMatchups } = await supabase
@@ -135,28 +135,28 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   // Total points always come from finalized matchups (or the alt total below).
   (allMatchups ?? []).forEach((m) => {
-    if (!winsMap[m.team1_id!]) winsMap[m.team1_id!] = { wins: 0, losses: 0, ties: 0, points: 0 };
-    if (!winsMap[m.team2_id!]) winsMap[m.team2_id!] = { wins: 0, losses: 0, ties: 0, points: 0 };
-    winsMap[m.team1_id!].points += m.team1_score!;
-    winsMap[m.team2_id!].points += m.team2_score!;
-    pointsAgainst.set(m.team1_id!, (pointsAgainst.get(m.team1_id!) ?? 0) + m.team2_score!);
-    pointsAgainst.set(m.team2_id!, (pointsAgainst.get(m.team2_id!) ?? 0) + m.team1_score!);
+    if (!winsMap[m.team1_id]) winsMap[m.team1_id] = { wins: 0, losses: 0, ties: 0, points: 0 };
+    if (!winsMap[m.team2_id]) winsMap[m.team2_id] = { wins: 0, losses: 0, ties: 0, points: 0 };
+    winsMap[m.team1_id].points += m.team1_score;
+    winsMap[m.team2_id].points += m.team2_score;
+    pointsAgainst.set(m.team1_id, (pointsAgainst.get(m.team1_id) ?? 0) + m.team2_score);
+    pointsAgainst.set(m.team2_id, (pointsAgainst.get(m.team2_id) ?? 0) + m.team1_score);
     if (scoringMode === "head_to_head") {
-      if (m.team1_score! > m.team2_score!) {
-        winsMap[m.team1_id!].wins++;
-        winsMap[m.team2_id!].losses++;
-        pushResult(m.team1_id!, m.week, "W");
-        pushResult(m.team2_id!, m.week, "L");
-      } else if (m.team2_score! > m.team1_score!) {
-        winsMap[m.team2_id!].wins++;
-        winsMap[m.team1_id!].losses++;
-        pushResult(m.team2_id!, m.week, "W");
-        pushResult(m.team1_id!, m.week, "L");
+      if (m.team1_score > m.team2_score) {
+        winsMap[m.team1_id].wins++;
+        winsMap[m.team2_id].losses++;
+        pushResult(m.team1_id, m.week, "W");
+        pushResult(m.team2_id, m.week, "L");
+      } else if (m.team2_score > m.team1_score) {
+        winsMap[m.team2_id].wins++;
+        winsMap[m.team1_id].losses++;
+        pushResult(m.team2_id, m.week, "W");
+        pushResult(m.team1_id, m.week, "L");
       } else {
-        winsMap[m.team1_id!].ties++;
-        winsMap[m.team2_id!].ties++;
-        pushResult(m.team1_id!, m.week, "T");
-        pushResult(m.team2_id!, m.week, "T");
+        winsMap[m.team1_id].ties++;
+        winsMap[m.team2_id].ties++;
+        pushResult(m.team1_id, m.week, "T");
+        pushResult(m.team2_id, m.week, "T");
       }
     }
   });
@@ -190,7 +190,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
     }
   }
 
-  const ranked = rankTeams(winsMap, (allMatchups ?? []) as any, {
+  const ranked = rankTeams(winsMap, (allMatchups ?? []), {
     headToHead: scoringMode === "head_to_head",
   });
   const membersById = new Map((members ?? []).map((m) => [m.id, m]));
@@ -274,7 +274,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
   const wk = (matchups ?? []).length > 0
     ? await buildWeekProjections(supabase, {
         leagueId: Number(id),
-        week: featuredWeek!,
+        week: featuredWeek,
         schedule: leagueSchedule,
         league: league,
       })

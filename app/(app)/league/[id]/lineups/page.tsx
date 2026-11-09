@@ -63,15 +63,15 @@ export default async function LineupsPage({
   // plan that becomes the real lineup when the week arrives.
   const schedule = await getLeagueSchedule(supabase, Number(id));
   const totalWeeks = schedule?.weeks.length ?? league.current_week;
-  const currentWeek = Math.min(league.current_week!, Math.max(totalWeeks!, 1));
+  const currentWeek = Math.min(league.current_week, Math.max(totalWeeks, 1));
   const featured = schedule
-    ? featuredWeekFor(schedule, league.current_week!)
+    ? featuredWeekFor(schedule, league.current_week)
     : league.current_week;
   const requested = Number(sp.week);
   const selectedWeek =
-    Number.isInteger(requested) && requested >= 1 && requested <= totalWeeks!
+    Number.isInteger(requested) && requested >= 1 && requested <= totalWeeks
       ? requested
-      : Math.min(Math.max(featured!, 1), totalWeeks!);
+      : Math.min(Math.max(featured, 1), totalWeeks);
   const mode: "past" | "current" | "future" =
     selectedWeek < currentWeek ? "past" : selectedWeek > currentWeek ? "future" : "current";
   const weekTabs = schedule ? weekTabsFor(schedule) : [];
@@ -94,7 +94,7 @@ export default async function LineupsPage({
     .select("player_id, nickname")
     .eq("team_id", myMember.id);
   const nickByPlayer = new Map<number, string>(
-    (nickRows ?? []).map((n: any) => [n.player_id as number, n.nickname as string]),
+    (nickRows ?? []).map((n) => [n.player_id as number, n.nickname as string]),
   );
   for (const r of roster) {
     r.nickname = nickByPlayer.get(r.player_id) ?? null;
@@ -203,8 +203,8 @@ export default async function LineupsPage({
       .filter(({ slotIndex: si }) => si !== skipIdx + 1);
   }
 
-  const overRoster = roster.length > league.roster_size!;
-  const toDrop = roster.length - league.roster_size!;
+  const overRoster = roster.length > league.roster_size;
+  const toDrop = roster.length - league.roster_size;
   const lineupsDisabled = overRoster || lineupLocked;
 
   // Compute the team's current W-L for the header.
@@ -216,7 +216,7 @@ export default async function LineupsPage({
   let myWins = 0;
   let myLosses = 0;
   if (scoringMode === "head_to_head") {
-    (allMatchups ?? []).forEach((m: any) => {
+    (allMatchups ?? []).forEach((m) => {
       if (m.team1_id === myMember.id) {
         if (m.team1_score > m.team2_score) myWins++;
         else if (m.team2_score > m.team1_score) myLosses++;
@@ -270,7 +270,7 @@ export default async function LineupsPage({
       const { data: pRows } = ids.length > 0
         ? await supabase.from("players").select("id, name, division, avatar_url").in("id", ids)
         : { data: [] };
-      const pById = new Map<number, any>((pRows ?? []).map((p: any) => [p.id, p]));
+      const pById = new Map<number, any>((pRows ?? []).map((p) => [p.id, p]));
       const actuals = await weekActualFor(ids);
       const toRow = (pid: number): HistoryRow => ({
         playerId: pid,
@@ -337,7 +337,7 @@ export default async function LineupsPage({
     .order("created_at", { ascending: false })
     .limit(30);
 
-  const rosterTxs = (txRows ?? []).map((t: any) => ({
+  const rosterTxs = (txRows ?? []).map((t) => ({
     id: t.id,
     action: t.action as "add" | "drop",
     createdAt: t.created_at,
@@ -362,7 +362,7 @@ export default async function LineupsPage({
     .order("resolved_at", { ascending: false })
     .limit(20);
 
-  const completedTrades = (tradeRows ?? []).map((t: any) => {
+  const completedTrades = (tradeRows ?? []).map((t) => {
     const proposer = t.proposer;
     const receiver = t.receiver;
     const otherTeam = proposer?.id === myMember.id ? receiver?.team_name : proposer?.team_name;
@@ -392,13 +392,13 @@ export default async function LineupsPage({
     .order("claim_order", { ascending: true, nullsFirst: false })
     .order("submitted_at", { ascending: true });
   const claimPlayerIds = [
-    ...new Set((claimRows ?? []).flatMap((c: any) => [c.player_id, c.drop_player_id]).filter(Boolean)),
+    ...new Set((claimRows ?? []).flatMap((c) => [c.player_id, c.drop_player_id]).filter(Boolean)),
   ] as number[];
   const { data: claimPlayers } = claimPlayerIds.length > 0
     ? await supabase.from("players").select("id, name, division").in("id", claimPlayerIds)
     : { data: [] };
-  const claimPmap = new Map<number, any>((claimPlayers ?? []).map((p: any) => [p.id, p]));
-  const pendingWaiverClaims = (claimRows ?? []).map((c: any) => ({
+  const claimPmap = new Map<number, any>((claimPlayers ?? []).map((p) => [p.id, p]));
+  const pendingWaiverClaims = (claimRows ?? []).map((c) => ({
     id: c.id as number,
     addName: claimPmap.get(c.player_id)?.name ?? "Unknown",
     addDivision: claimPmap.get(c.player_id)?.division ?? "MPO",
@@ -641,7 +641,7 @@ export default async function LineupsPage({
                   division="MPO"
                   slotIndex={i + 1}
                   occupant={occupant}
-                  benchPlayers={mpoBench as any}
+                  benchPlayers={mpoBench}
                   otherStarters={otherSlotsFor(mpoSlotArray, i)}
                   locked={lineupsDisabled}
                   weekPoints={occupant ? weekPointsByPlayer.get(occupant.player_id) ?? null : null}
@@ -655,7 +655,7 @@ export default async function LineupsPage({
                   division="FPO"
                   slotIndex={i + 1}
                   occupant={occupant}
-                  benchPlayers={fpoBench as any}
+                  benchPlayers={fpoBench}
                   otherStarters={otherSlotsFor(fpoSlotArray, i)}
                   locked={lineupsDisabled}
                   weekPoints={occupant ? weekPointsByPlayer.get(occupant.player_id) ?? null : null}

@@ -71,7 +71,7 @@ export default async function CommishDashboard({ params }: { params: Promise<{ i
   // tournaments.week is a global per-import counter, not this league's week
   // index — filtering on it named a different event here than every matchup
   // surface showed for the same week.
-  const currentWeek = league.current_week as number;
+  const currentWeek = league.current_week;
   const leagueSchedule = await getLeagueSchedule(supabase, Number(id));
   const currentLeagueWeek = leagueSchedule?.weeks.find((w) => w.week === currentWeek) ?? null;
   const weekTournamentIds = currentLeagueWeek?.tournamentIds ?? [];

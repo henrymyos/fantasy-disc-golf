@@ -139,7 +139,7 @@ async function autoPickExpired(client: SupabaseClient, leagueId: number): Promis
   if (!onClock) return "rejected_state";
 
   const { data: drafted } = await client.from("rosters").select("player_id").eq("league_id", leagueId);
-  const draftedSet = new Set((drafted ?? []).map((r: any) => r.player_id));
+  const draftedSet = new Set((drafted ?? []).map((r) => r.player_id));
   const { data: bestAvail } = await client
     .from("players")
     .select("id, overall_rank")
@@ -374,9 +374,9 @@ async function main() {
     ok("every pick.team_id matches snake-order expected team");
 
     // Round 1 vs 2 vs 3: confirm reversal pattern in the pick rows.
-    const round1 = (allPicks ?? []).filter((p: any) => p.round === 1).map((p: any) => p.team_id);
-    const round2 = (allPicks ?? []).filter((p: any) => p.round === 2).map((p: any) => p.team_id);
-    const round3 = (allPicks ?? []).filter((p: any) => p.round === 3).map((p: any) => p.team_id);
+    const round1 = (allPicks ?? []).filter((p) => p.round === 1).map((p) => p.team_id);
+    const round2 = (allPicks ?? []).filter((p) => p.round === 2).map((p) => p.team_id);
+    const round3 = (allPicks ?? []).filter((p) => p.round === 3).map((p) => p.team_id);
     if (JSON.stringify(round1) === JSON.stringify(memberIds)) ok("round 1 order = [1..6]");
     else flag("round 1 order incorrect: " + round1.join(","));
     if (JSON.stringify(round2) === JSON.stringify([...memberIds].reverse())) ok("round 2 order = [6..1] (reversed)");

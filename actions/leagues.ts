@@ -141,7 +141,7 @@ export async function joinLeague(
     .select("*", { count: "exact", head: true })
     .eq("league_id", league.id);
 
-  if ((count ?? 0) >= league.max_teams!) {
+  if ((count ?? 0) >= league.max_teams) {
     return { message: "This league is full." };
   }
 
@@ -177,7 +177,7 @@ export async function joinLeague(
     .select("*", { count: "exact", head: true })
     .eq("league_id", league.id);
 
-  if ((afterCount ?? 0) > league.max_teams!) {
+  if ((afterCount ?? 0) > league.max_teams) {
     if (inserted) await admin.from("league_members").delete().eq("id", inserted.id);
     return { message: "This league is full." };
   }

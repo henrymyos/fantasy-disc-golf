@@ -407,7 +407,7 @@ export async function runPdgaImport(
   // deterministic about what it covered.
   const { data: tournaments } = await query.order("start_date", { ascending: true });
 
-  const events = (tournaments ?? []).map((t: any) => ({
+  const events = (tournaments ?? []).map((t) => ({
     dbId: t.id as number,
     pdgaId: t.pdga_event_id as number,
     name: t.name as string,
@@ -572,8 +572,8 @@ export async function runPdgaImport(
         .map((r) => r.player_id as number),
     );
     const existingBirdie = (existing ?? [])
-      .filter((r: any) => !zeroedIds.has(r.player_id as number))
-      .reduce((s, r: any) => s + Number(r.under_par_strokes ?? 0), 0);
+      .filter((r) => !zeroedIds.has(r.player_id as number))
+      .reduce((s, r) => s + Number(r.under_par_strokes ?? 0), 0);
     if (existingBirdie > 0 && newBirdie < existingBirdie) continue; // keep the fuller data
 
     // Upsert on the (tournament_id, player_id) unique constraint instead of a
@@ -601,11 +601,11 @@ export async function runPdgaImport(
 
       if (rosteredIds == null) {
         const { data: rosterRows } = await supabase.from("rosters").select("player_id");
-        rosteredIds = new Set((rosterRows ?? []).map((r: any) => r.player_id as number));
+        rosteredIds = new Set((rosterRows ?? []).map((r) => r.player_id as number));
       }
 
       const prevByPlayer = new Map<number, any>(
-        (existing ?? []).map((r: any) => [r.player_id as number, r]),
+        (existing ?? []).map((r) => [r.player_id as number, r]),
       );
       const feedRows: any[] = [];
       for (const row of evRows) {

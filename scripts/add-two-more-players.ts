@@ -85,7 +85,7 @@ async function topMissing(div: "MPO" | "FPO", n: number) {
   const html = await fetchHtml(`https://www.pdga.com/${slug}`);
   const rankings = parseRankings(html);
   const { data: ourPlayers } = await s.from("players").select("name, division, overall_rank").eq("division", div);
-  const ourNorms = new Set((ourPlayers ?? []).map((p: any) => norm(p.name)));
+  const ourNorms = new Set((ourPlayers ?? []).map((p) => norm(p.name)));
   const picks: Array<{ rank: number; name: string }> = [];
   for (const r of rankings) {
     const lookupKey = normalizeForLookup(r.name);
@@ -94,10 +94,10 @@ async function topMissing(div: "MPO" | "FPO", n: number) {
     picks.push(r);
     if (picks.length >= n) break;
   }
-  let nextOverall = ((Math.max(0, ...((ourPlayers ?? []).map((p: any) => p.overall_rank ?? 0) as number[])) + 1) || 1);
+  let nextOverall = ((Math.max(0, ...((ourPlayers ?? []).map((p) => p.overall_rank ?? 0) as number[])) + 1) || 1);
   // Append at the very end of the overall sequence (across all players).
   const { data: anyPlayers } = await s.from("players").select("overall_rank");
-  nextOverall = (Math.max(0, ...((anyPlayers ?? []).map((p: any) => p.overall_rank ?? 0) as number[])) + 1) || 1;
+  nextOverall = (Math.max(0, ...((anyPlayers ?? []).map((p) => p.overall_rank ?? 0) as number[])) + 1) || 1;
   for (const p of picks) {
     const pdga = await lookupPdga(p.name);
     const { error } = await s.from("players").insert({

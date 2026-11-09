@@ -59,7 +59,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
     .eq("league_id", Number(id));
 
   const rosteredOwner = new Map<number, { teamId: number; teamName: string }>();
-  (rosteredSpots ?? []).forEach((r: any) => {
+  (rosteredSpots ?? []).forEach((r) => {
     rosteredOwner.set(r.player_id, {
       teamId: r.team_id,
       teamName: r.league_members?.team_name ?? "Unknown",
@@ -70,7 +70,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
   const allPlayers = await selectAllRows<any>(() =>
     supabase
       .from("players")
-      .select("id, name, division, world_ranking, overall_rank, pdga_rating, avatar_url") as any,
+      .select("id, name, division, world_ranking, overall_rank, pdga_rating, avatar_url"),
   );
 
   // Points under THIS league's scoring rules (never the default-rule
@@ -85,7 +85,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
     .from("tournaments")
     .select("id, name, start_date");
   const tournamentById = new Map<number, { name: string; startDate: string }>(
-    (tournamentRows ?? []).map((t: any) => [t.id as number, { name: t.name as string, startDate: (t.start_date as string) ?? "" }]),
+    (tournamentRows ?? []).map((t) => [t.id as number, { name: t.name as string, startDate: (t.start_date as string) ?? "" }]),
   );
   const historyByPlayer = new Map<number, Array<{ startDate: string; name: string; pts: number; finish: number | null }>>();
   for (const p of allPlayers) {
@@ -200,7 +200,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
       .from("player_watchlist")
       .select("player_id")
       .eq("team_id", myMember.id);
-    if (!watchErr) watchlistIds = (watchRows ?? []).map((w: any) => w.player_id as number);
+    if (!watchErr) watchlistIds = (watchRows ?? []).map((w) => w.player_id as number);
   } catch {
     // table missing — stars just start unsaved
   }
@@ -213,14 +213,14 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
     .order("player_id");
   // Upcoming-event projection per roster player, shown in the add-with-drop
   // popup to inform who to let go.
-  const myRoster = (myRosterRows ?? []).map((r: any) => ({
+  const myRoster = (myRosterRows ?? []).map((r) => ({
     ...r,
     projection: nextProjectionFor(r.player_id),
   }));
 
   const rosterCount = (myRoster ?? []).length;
-  const overLimit = rosterCount > league.roster_size!;
-  const openSpots = Math.max(0, league.roster_size! - rosterCount);
+  const overLimit = rosterCount > league.roster_size;
+  const openSpots = Math.max(0, league.roster_size - rosterCount);
 
   // League-scoped: a live tournament only pauses free agency when it's on
   // this league's schedule (activeT above, from getActiveTournament).
@@ -234,7 +234,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
     .eq("status", "pending")
     .order("submitted_at", { ascending: true });
 
-  const pendingClaims = (myClaims ?? []).map((c: any) => ({
+  const pendingClaims = (myClaims ?? []).map((c) => ({
     id: c.id,
     playerId: c.player_id,
     playerName: c.players?.name ?? "Unknown",
@@ -269,7 +269,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
             <p className="text-red-400 font-semibold text-sm">Roster over limit</p>
             <p className="text-red-300/80 text-xs mt-0.5">
               You have {rosterCount} players but the max is {league.roster_size}.
-              Drop {rosterCount - league.roster_size!} player{rosterCount - league.roster_size! !== 1 ? "s" : ""} before adding anyone new.
+              Drop {rosterCount - league.roster_size} player{rosterCount - league.roster_size !== 1 ? "s" : ""} before adding anyone new.
             </p>
           </div>
         </div>

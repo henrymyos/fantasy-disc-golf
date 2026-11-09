@@ -60,7 +60,7 @@ export default async function DraftResultPage({
     draftPosition: m.draft_position as number,
   }));
 
-  const picks = (pickRows ?? []).map((p: any) => ({
+  const picks = (pickRows ?? []).map((p) => ({
     pickNumber: p.pick_number,
     teamId: p.team_id,
     playerId: p.player_id ?? null,
@@ -78,7 +78,7 @@ export default async function DraftResultPage({
       </Link>
       <DraftBoard
         leagueId={Number(id)}
-        draft={{ id: draft.id, status: draft.status!, type: draft.type!, currentPick: draft.current_pick!, totalRounds: draft.total_rounds!, thirdRoundReversal: !!draft.third_round_reversal }}
+        draft={{ id: draft.id, status: draft.status!, type: draft.type, currentPick: draft.current_pick, totalRounds: draft.total_rounds, thirdRoundReversal: !!draft.third_round_reversal }}
         members={members}
         picks={picks}
         availablePlayers={[]}
