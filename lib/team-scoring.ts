@@ -80,13 +80,16 @@ export async function getTeamWeeklyTotals(
     // Paged: a full season's events cross the 1000-row select cap, and the
     // truncated page comes back without an error — every weekly total (and the
     // all-play / points-mode records built on them) would quietly run low.
-    const results = await selectAllRows<any>(() =>
+    type ResultRow = Omit<Database["public"]["Tables"]["tournament_results"]["Row"], "id" | "fantasy_points"> & {
+      players: { division: string | null } | null;
+    };
+    const results = await selectAllRows<ResultRow>(() =>
       supabase
         .from("tournament_results")
         .select("player_id, tournament_id, finishing_position, hot_round_count, bogey_free_count, ace_count, under_par_strokes, over_par_strokes, eagle_count, players(division)")
         .in("tournament_id", tournamentIds),
     );
-    results.forEach((r: any) => {
+    results.forEach((r) => {
       const pts = fantasyPointsFromResult(rules, {
         finishing_position: r.finishing_position,
         hot_round_count: r.hot_round_count,

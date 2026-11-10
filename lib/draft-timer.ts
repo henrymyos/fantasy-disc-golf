@@ -50,7 +50,7 @@ export async function loadAuctionContext(admin: AdminClient, leagueId: number) {
 
 /** Team whose turn it is to nominate, given the snake-ordered nomination
  *  sequence. */
-export function currentNominator(members: any[], currentPick: number): any | null {
+export function currentNominator<M extends { draft_position: number | null }>(members: M[], currentPick: number): M | null {
   const ordered = members.filter((m) => m.draft_position != null);
   const n = ordered.length;
   if (n === 0) return null;
@@ -218,11 +218,11 @@ export async function runExpiredSnakePick(admin: AdminClient, leagueId: number):
 
   const onClockId = resolvePickOwnerId(
     draft.current_pick,
-    (members as any[]).map((m) => ({ id: m.id, draftPosition: m.draft_position })),
+    members.map((m) => ({ id: m.id, draftPosition: m.draft_position })),
     draft.third_round_reversal ?? false,
     buildPickOwnerOverrides(ownerRows),
   );
-  const onClock = (members as any[]).find((m) => m.id === onClockId);
+  const onClock = members.find((m) => m.id === onClockId);
   if (!onClock) return false;
 
   // Claim this expiry before picking. Every client watching the board fires
