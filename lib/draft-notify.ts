@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/supabase/database.types";
 import { sendPushToUser } from "@/lib/push";
 import { resolvePickOwnerId, buildPickOwnerOverrides } from "@/lib/draft-pick-owners";
 
@@ -8,7 +9,8 @@ import { resolvePickOwnerId, buildPickOwnerOverrides } from "@/lib/draft-pick-ow
 // commissionerMakePick, autoPickFromRankings) and the shared timer core
 // (runExpiredSnakePick), plus startDraft for the opening pick.
 
-type AdminClient = SupabaseClient;
+type AdminClient = SupabaseClient<Database>;
+type Draft = Awaited<ReturnType<typeof loadContext>>["draft"];
 type Member = { id: number; user_id: string | null; draft_position: number | null; team_name: string | null };
 
 /** "1.4"-style label (round.positionInRound) for an overall pick number. */
@@ -30,10 +32,10 @@ async function loadContext(admin: AdminClient, leagueId: number) {
     .select("id, user_id, draft_position, team_name")
     .eq("league_id", leagueId)
     .order("draft_position", { ascending: true, nullsFirst: false });
-  return { draft: draft as any, members: (members ?? []) as Member[] };
+  return { draft, members: (members ?? []) as Member[] };
 }
 
-async function resolveOnClock(admin: AdminClient, draft: any, members: Member[]): Promise<Member | null> {
+async function resolveOnClock(admin: AdminClient, draft: Draft, members: Member[]): Promise<Member | null> {
   const positioned = members.filter((m) => m.draft_position != null);
   if (!draft || draft.status !== "in_progress" || positioned.length === 0) return null;
   // After the final pick, current_pick runs past the last slot — no one is up.
@@ -55,7 +57,7 @@ async function resolveOnClock(admin: AdminClient, draft: any, members: Member[])
 export async function notifyOnClock(admin: AdminClient, leagueId: number): Promise<void> {
   const { draft, members } = await loadContext(admin, leagueId);
   const oc = await resolveOnClock(admin, draft, members);
-  if (!oc || !oc.user_id) return;
+  if (!draft || !oc || !oc.user_id) return;
   const n = members.filter((m) => m.draft_position != null).length;
   const label = pickLabel(draft.current_pick, n);
   await sendPushToUser(admin, oc.user_id, {
@@ -83,7 +85,7 @@ export async function notifyDraftPick(admin: AdminClient, leagueId: number): Pro
     .eq("draft_id", draft.id)
     .order("pick_number", { ascending: false })
     .limit(1);
-  const last = (lastRows ?? [])[0] as any;
+  const last = (lastRows ?? [])[0];
 
   const oc = await resolveOnClock(admin, draft, members);
   const onClockUserId = oc?.user_id ?? null;

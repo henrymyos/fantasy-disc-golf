@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/supabase/database.types";
 import { cappedStarterIds, type StarterRow } from "@/lib/lineup-slots";
 import { getLeagueNextTournamentId, getLeagueSchedule } from "@/lib/league-schedule";
 
@@ -17,7 +18,7 @@ export type LineupIssues = {
  * mobile bottom nav badge.
  */
 export async function getLineupIssues(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   leagueId: number,
   teamId: number,
 ): Promise<LineupIssues | null> {
@@ -57,14 +58,14 @@ export async function getLineupIssues(
 
   const starterRows: StarterRow[] = rosterRows
     .filter((r) => r.is_starter)
-    .map((r: any) => ({
+    .map((r) => ({
       player_id: r.player_id,
       division: r.players?.division ?? "MPO",
       lineup_order: r.lineup_order ?? null,
     }));
   const cappedIds = cappedStarterIds(starterRows, mpoSlots, fpoSlots);
   const nameByPlayer = new Map<number, string>(
-    rosterRows.map((r: any) => [r.player_id as number, (r.players?.name as string) ?? "Unknown"]),
+    rosterRows.map((r) => [r.player_id, (r.players?.name) ?? "Unknown"]),
   );
 
   const emptySlots = Math.max(0, mpoSlots + fpoSlots - cappedIds.length);

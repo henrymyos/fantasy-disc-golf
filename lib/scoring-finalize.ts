@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/supabase/database.types";
 import { fantasyPointsFromResult, resolveScoringRules } from "@/lib/scoring-rules";
 import { generateWeeklyRecap } from "@/lib/weekly-recap";
 import { enqueueNotification } from "@/lib/notifications";
@@ -37,7 +38,7 @@ export function generateMatchups(teamIds: number[], week: number): [number, numb
  * appropriately. Uses the service-role `admin` client.
  */
 export async function finalizeWeekScoresCore(
-  admin: SupabaseClient,
+  admin: SupabaseClient<Database>,
   leagueId: number,
   week: number,
   opts: { notify?: boolean; recap?: boolean } = {},
@@ -67,7 +68,7 @@ export async function finalizeWeekScoresCore(
     .in("tournament_id", tournamentIds);
 
   const playerPoints: Record<number, number> = {};
-  (results ?? []).forEach((r: any) => {
+  (results ?? []).forEach((r) => {
     const pts = fantasyPointsFromResult(rules, {
       finishing_position: r.finishing_position,
       hot_round_count: r.hot_round_count,
@@ -90,7 +91,7 @@ export async function finalizeWeekScoresCore(
   // so the official score matches the lineup the UI shows, not every starter row.
   const rowsByTeam = new Map<number, StarterRow[]>();
   const allByTeam = new Map<number, Array<{ player_id: number; division: string }>>();
-  (rosterRows ?? []).forEach((s: any) => {
+  (rosterRows ?? []).forEach((s) => {
     const division = s.players?.division ?? "MPO";
     if (s.is_starter) {
       const list = rowsByTeam.get(s.team_id) ?? [];
@@ -213,7 +214,7 @@ export async function finalizeWeekScoresCore(
 }
 
 /** Advances the league to the next week, creating its matchups if missing. */
-export async function advanceWeekCore(admin: SupabaseClient, leagueId: number): Promise<void> {
+export async function advanceWeekCore(admin: SupabaseClient<Database>, leagueId: number): Promise<void> {
   const { data: league } = await admin
     .from("leagues")
     .select("current_week, selected_event_slugs, season_year, max_teams, mpo_starters, fpo_starters")
