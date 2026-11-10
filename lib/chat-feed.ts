@@ -269,16 +269,16 @@ export async function buildLeagueSystemFeed(
   if (draftRow?.status === "complete") {
     const { data: lastPick } = await supabase
       .from("draft_picks")
-      .select("created_at")
+      .select("picked_at")
       .eq("draft_id", draftRow.id)
       .order("pick_number", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (lastPick?.created_at) {
+    if (lastPick?.picked_at) {
       events.push({
         id: `draft-done-${draftRow.id}`,
         kind: "notice",
-        ts: lastPick.created_at,
+        ts: lastPick.picked_at,
         variant: "draft_done",
         title: "The draft is complete",
       });
