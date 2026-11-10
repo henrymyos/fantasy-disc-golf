@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/supabase/database.types";
 
 export type FeedItem = {
   id: string;
@@ -9,7 +10,7 @@ export type FeedItem = {
 
 /** Aggregates recent league moves into a single timeline. */
 export async function getActivityFeed(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   leagueId: number,
   limit = 25,
 ): Promise<FeedItem[]> {
@@ -48,9 +49,9 @@ export async function getActivityFeed(
   const items: FeedItem[] = [];
 
   for (const t of txs ?? []) {
-    const team = (t as any).team?.team_name ?? "A team";
-    const player = (t as any).player?.name ?? "a player";
-    const dropped = (t as any).dropped?.name;
+    const team = t.team?.team_name ?? "A team";
+    const player = t.player?.name ?? "a player";
+    const dropped = t.dropped?.name;
     if (t.action === "add") {
       items.push({
         id: `tx-${t.id}`,
@@ -72,10 +73,10 @@ export async function getActivityFeed(
 
   for (const tr of trades ?? []) {
     if (!tr.resolved_at) continue;
-    const proposer = (tr as any).proposer?.team_name ?? "A team";
+    const proposer = tr.proposer?.team_name ?? "A team";
     if (tr.status === "accepted") {
-      const tps: any[] = tr.trade_players ?? [];
-      const tpicks: any[] = tr.trade_picks ?? [];
+      const tps = tr.trade_players ?? [];
+      const tpicks = tr.trade_picks ?? [];
       const playerCount = tps.length;
       const pickCount = tpicks.length;
       const teamsInvolved = new Set<number>();
@@ -115,8 +116,8 @@ export async function getActivityFeed(
 
   for (const w of waiverFails ?? []) {
     if (!w.processed_at) continue;
-    const team = (w as any).team?.team_name ?? "A team";
-    const player = (w as any).player?.name ?? "a player";
+    const team = w.team?.team_name ?? "A team";
+    const player = w.player?.name ?? "a player";
     items.push({
       id: `waiver-${w.id}`,
       ts: w.processed_at,

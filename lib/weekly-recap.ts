@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/supabase/database.types";
 
 // Returns a verb keyed to the margin of victory.
 function verbForMargin(margin: number): string {
@@ -21,7 +22,7 @@ function fmt(n: number): string {
  * unique (league_id, week) constraint.
  */
 export async function generateWeeklyRecap(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   leagueId: number,
   week: number,
   tournamentIds: number[] = [],
@@ -40,14 +41,14 @@ export async function generateWeeklyRecap(
   // (resolved via the league's selected-event order, not tournaments.week).
   const { data: tournaments } = tournamentIds.length > 0
     ? await supabase.from("tournaments").select("id, name").in("id", tournamentIds)
-    : { data: [] as any[] };
+    : { data: [] as { id: number; name: string }[] };
   const tournamentNameById = new Map<number, string>(
-    (tournaments ?? []).map((t: any) => [t.id, t.name]),
+    (tournaments ?? []).map((t) => [t.id, t.name]),
   );
 
   const teamIds = new Set<number>();
   const teamNameById = new Map<number, string>();
-  (matchups ?? []).forEach((m: any) => {
+  (matchups ?? []).forEach((m) => {
     teamIds.add(m.team1_id);
     teamIds.add(m.team2_id);
     if (m.team1?.team_name) teamNameById.set(m.team1_id, m.team1.team_name);
@@ -83,7 +84,7 @@ export async function generateWeeklyRecap(
     const r = (results ?? []).find((rr) => rr.player_id === s.player_id);
     if (!r) continue;
     performances.push({
-      name: (s as any).players?.name ?? "Unknown",
+      name: s.players?.name ?? "Unknown",
       teamId: s.team_id,
       position: Number(r.finishing_position ?? 0),
       tournamentName: tournamentNameById.get(r.tournament_id) ?? "the event",
@@ -114,7 +115,7 @@ export async function generateWeeklyRecap(
     text: string;
   };
   const lines: Line[] = [];
-  for (const m of matchups as any[]) {
+  for (const m of matchups) {
     const t1 = m.team1?.team_name ?? "Team 1";
     const t2 = m.team2?.team_name ?? "Team 2";
     const s1 = Number(m.team1_score);
@@ -161,7 +162,7 @@ export async function generateWeeklyRecap(
 
   // Team of the Week: highest score anywhere in the round.
   const scored: { teamId: number; score: number; won: boolean }[] = [];
-  for (const m of matchups as any[]) {
+  for (const m of matchups) {
     const s1 = Number(m.team1_score);
     const s2 = Number(m.team2_score);
     scored.push({ teamId: m.team1_id, score: s1, won: s1 > s2 });
