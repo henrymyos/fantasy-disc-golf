@@ -9,6 +9,7 @@
 // pace divisor → different projections and win %).
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/supabase/database.types";
 import {
   getLeagueNextTournamentId,
   getLeagueSchedule,
@@ -125,7 +126,7 @@ function formatDateRange(start?: string | null, end?: string | null): string | n
 }
 
 export async function buildWeekProjections(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   opts: {
     leagueId: number;
     week: number;
@@ -170,9 +171,9 @@ export async function buildWeekProjections(
         .select("id, name, start_date, end_date, lock_at, registered_player_ids")
         .in("id", tournamentIds)
         .order("start_date", { ascending: true })
-    : { data: [] as any[] };
+    : { data: [] };
   const weekTournamentIds = new Set((tournamentRows ?? []).map((t) => t.id as number));
-  const primary = (tournamentRows ?? [])[0] as any | undefined;
+  const primary = (tournamentRows ?? [])[0] as (NonNullable<typeof tournamentRows>[number] | undefined);
 
   // Event window. `lock_at` is round-1 tee time; `end_date` is the last
   // competition day, treated as ending 23:59:59 UTC.
@@ -213,7 +214,7 @@ export async function buildWeekProjections(
   const { data: roster } = await rosterQuery
     .order("lineup_order", { ascending: true, nullsFirst: false })
     .order("id", { ascending: true });
-  const allRoster = (roster ?? []) as any[];
+  const allRoster = roster ?? [];
 
   const playerIds = [...new Set(allRoster.map((r) => r.player_id as number))];
   // Paged: a whole league's rostered players cross the 1000-row select cap
@@ -271,7 +272,7 @@ export async function buildWeekProjections(
   const settled = ended && actuals.size > 0;
   const effectiveProgress = settled ? 1 : progressFrac;
 
-  function rowFor(s: any, slotLabel: string): MatchupPlayerRow {
+  function rowFor(s: (typeof allRoster)[number], slotLabel: string): MatchupPlayerRow {
     const t = totals.get(s.player_id);
     const actual = actuals.has(s.player_id)
       ? Math.round(actuals.get(s.player_id)! * 10) / 10
@@ -319,7 +320,7 @@ export async function buildWeekProjections(
     ];
 
     const starterRosterIds = new Set(
-      [...mpoSlotArr, ...fpoSlotArr].filter(Boolean).map((r) => r.id),
+      [...mpoSlotArr, ...fpoSlotArr].flatMap((r) => (r ? [r.id] : [])),
     );
     const bench: MatchupPlayerRow[] = teamRoster
       .filter((r) => !starterRosterIds.has(r.id))

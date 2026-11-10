@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/supabase/database.types";
 import { fantasyPointsFromResult, resolveScoringRules } from "@/lib/scoring-rules";
 import { cappedStarterIds, type StarterRow } from "@/lib/lineup-slots";
 import { getLeagueSchedule, type LeagueSchedule } from "@/lib/league-schedule";
@@ -17,7 +18,7 @@ import { selectAllRows } from "@/lib/supabase/select-all";
  * the current starter set.
  */
 export async function getTeamWeeklyTotals(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   leagueId: number,
   opts: { weeks?: "regular" | "all"; schedule?: LeagueSchedule | null } = {},
 ): Promise<Map<number, Map<number, number>>> {
@@ -62,7 +63,7 @@ export async function getTeamWeeklyTotals(
     .eq("league_id", leagueId)
     .eq("is_starter", true);
   const rowsByTeam = new Map<number, StarterRow[]>();
-  (starters ?? []).forEach((r: any) => {
+  (starters ?? []).forEach((r) => {
     const list = rowsByTeam.get(r.team_id) ?? [];
     list.push({
       player_id: r.player_id,

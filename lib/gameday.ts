@@ -8,6 +8,7 @@
 // import that triggered it.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/supabase/database.types";
 import { getLeagueSchedule } from "@/lib/league-schedule";
 import { buildWeekProjections } from "@/lib/matchup-projections";
 import { enqueueNotification } from "@/lib/notifications";
@@ -18,7 +19,7 @@ import type { LiveDelta } from "@/lib/pdga-import";
 const SNAPSHOT_MIN_AGE_MS = 150_000;
 
 export async function runGamedayPass(
-  admin: SupabaseClient,
+  admin: SupabaseClient<Database>,
   liveDeltas: LiveDelta[] = [],
 ): Promise<void> {
   try {
@@ -54,7 +55,7 @@ export async function runGamedayPass(
 
     for (const league of leagues ?? []) {
       try {
-        await runLeaguePass(admin, league, liveTournaments as any[], hotDeltas, nameByPlayer);
+        await runLeaguePass(admin, league, liveTournaments, hotDeltas, nameByPlayer);
       } catch (e) {
         console.warn(`gameday pass failed for league ${league.id}`, e);
       }
@@ -65,9 +66,9 @@ export async function runGamedayPass(
 }
 
 async function runLeaguePass(
-  admin: SupabaseClient,
+  admin: SupabaseClient<Database>,
   league: { id: number; scoring_rules: unknown; mpo_starters?: number | null; fpo_starters?: number | null },
-  liveTournaments: Array<{ id: number; name: string; lock_at: string | null; start_date: string; end_date: string; registered_player_ids: number[] | null }>,
+  liveTournaments: Array<{ id: number; name: string; lock_at: string | null; start_date: string | null; end_date: string | null; registered_player_ids: number[] | null }>,
   hotDeltas: LiveDelta[],
   nameByPlayer: Map<number, string>,
 ): Promise<void> {
@@ -139,7 +140,7 @@ async function runLeaguePass(
     league,
   });
 
-  for (const m of matchups as any[]) {
+  for (const m of matchups) {
     const t1 = wk.teamNumbers(m.team1_id);
     const t2 = wk.teamNumbers(m.team2_id);
     const t1WinPct = wk.winPctFor(m.team1_id, m.team2_id);
@@ -159,7 +160,7 @@ async function runLeaguePass(
       leadChanged = prevLeader !== 0 && curLeader !== 0 && prevLeader !== curLeader;
     }
 
-    const prevAge = prev ? Date.now() - Date.parse(prev.created_at) : Infinity;
+    const prevAge = prev ? Date.now() - Date.parse(prev.created_at ?? "") : Infinity;
     if (leadChanged || prevAge >= SNAPSHOT_MIN_AGE_MS) {
       await admin.from("matchup_prob_snapshots").insert({
         matchup_id: m.id,
