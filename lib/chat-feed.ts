@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/supabase/database.types";
 import { getLeagueSchedule } from "@/lib/league-schedule";
 import { getPlayoffOutcome } from "@/lib/playoff-outcome";
 
@@ -75,7 +76,7 @@ function playerAsset(
 
 /** Builds the trade + roster-move timeline for a league, newest last. */
 export async function buildLeagueSystemFeed(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   leagueId: number,
   limit = 40,
 ): Promise<SystemEvent[]> {
@@ -132,10 +133,10 @@ export async function buildLeagueSystemFeed(
 
   for (const t of txs ?? []) {
     const teamId = t.team_id;
-    const actor = (t as any).team?.team_name ?? "A team";
-    const player = playerAsset((t as any).player, nickOf(teamId, t.player_id), t.player_id ?? null);
+    const actor = t.team?.team_name ?? "A team";
+    const player = playerAsset(t.player, nickOf(teamId, t.player_id), t.player_id ?? null);
     const dropped = t.dropped
-      ? playerAsset((t as any).dropped, nickOf(teamId, t.dropped_player_id), t.dropped_player_id ?? null)
+      ? playerAsset(t.dropped, nickOf(teamId, t.dropped_player_id), t.dropped_player_id ?? null)
       : null;
     if (t.action === "add") {
       events.push({
@@ -164,8 +165,8 @@ export async function buildLeagueSystemFeed(
   for (const tr of trades ?? []) {
     const ts = tr.resolved_at;
     if (!ts) continue;
-    const tps: any[] = tr.trade_players ?? [];
-    const tpicks: any[] = tr.trade_picks ?? [];
+    const tps = tr.trade_players ?? [];
+    const tpicks = tr.trade_picks ?? [];
 
     // Gather every team involved, then bucket each asset as a gain/loss per team.
     const order: number[] = [];
@@ -269,16 +270,16 @@ export async function buildLeagueSystemFeed(
   if (draftRow?.status === "complete") {
     const { data: lastPick } = await supabase
       .from("draft_picks")
-      .select("created_at")
+      .select("picked_at")
       .eq("draft_id", draftRow.id)
       .order("pick_number", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (lastPick?.created_at) {
+    if (lastPick?.picked_at) {
       events.push({
         id: `draft-done-${draftRow.id}`,
         kind: "notice",
-        ts: lastPick.created_at,
+        ts: lastPick.picked_at,
         variant: "draft_done",
         title: "The draft is complete",
       });

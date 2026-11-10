@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/supabase/database.types";
 import { enqueueNotification } from "@/lib/notifications";
 
 /**
@@ -8,7 +9,7 @@ import { enqueueNotification } from "@/lib/notifications";
  * (user, league, tournament) within a 12-hour window.
  */
 export async function runLineupUnsetCheck(
-  admin: SupabaseClient,
+  admin: SupabaseClient<Database>,
   withinHours = 6,
 ): Promise<{ leaguesChecked: number; notificationsSent: number }> {
   const now = new Date();
@@ -67,7 +68,7 @@ export async function runLineupUnsetCheck(
   for (const r of starterRows ?? []) {
     const key = `${r.league_id}:${r.team_id}`;
     const counts = startersByTeam.get(key) ?? { mpo: 0, fpo: 0 };
-    if (((r as any).players?.division ?? "MPO") === "FPO") counts.fpo++;
+    if ((r.players?.division ?? "MPO") === "FPO") counts.fpo++;
     else counts.mpo++;
     startersByTeam.set(key, counts);
   }
@@ -80,7 +81,7 @@ export async function runLineupUnsetCheck(
     notified.add(`${n.league_id}:${n.user_id}`);
   }
 
-  const membersByLeague = new Map<number, any[]>();
+  const membersByLeague = new Map<number, NonNullable<typeof members>>();
   for (const m of members ?? []) {
     const lid = m.league_id as number;
     const list = membersByLeague.get(lid) ?? [];

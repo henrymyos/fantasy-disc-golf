@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/supabase/database.types";
 import { rankTeams } from "@/lib/standings";
 import { computeAltRecords, getTeamWeeklyTotals } from "@/lib/team-scoring";
 import { getLeagueSchedule } from "@/lib/league-schedule";
@@ -37,7 +38,7 @@ export type PlayoffOutcome = {
  * so they always agree on who won.
  */
 export async function getPlayoffOutcome(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   leagueId: number,
 ): Promise<PlayoffOutcome> {
   const { data: league } = await supabase
@@ -99,13 +100,13 @@ export async function getPlayoffOutcome(
   const ranked = rankTeams(winsMap, (finals ?? []), { headToHead: scoringMode === "head_to_head" });
   const memberById = new Map((members ?? []).map((m) => [m.id, m]));
   const standings: StandingEntry[] = ranked
-    .map((e) => {
+    .map((e): StandingEntry | null => {
       const m = memberById.get(e.teamId);
       if (!m) return null;
       return {
         teamId: e.teamId,
         teamName: m.team_name as string,
-        username: (m.profiles as any)?.username ?? null,
+        username: m.profiles?.username ?? null,
         wins: e.wins,
         losses: e.losses,
         ties: e.ties,
