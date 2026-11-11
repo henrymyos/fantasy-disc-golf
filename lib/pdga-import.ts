@@ -6,6 +6,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 // Relative (not "@/") so the standalone tsx import scripts resolve it too.
 import { DGPT_2026_SCHEDULE } from "./dgpt-2026-schedule";
+import type { Database } from "./supabase/database.types";
+
+type Tables = Database["public"]["Tables"];
+
+// Fields we read from PDGA Live round JSON (external data: every use still checks types at runtime).
+type LiveScore = {
+  PDGANum?: number; Name?: string; FirstName?: string; LastName?: string;
+  GrandTotal?: number | string; RoundtoPar?: number | string;
+  RoundScore?: number; HoleScores?: string[]; Pars?: string; TeeTime?: string;
+};
+type LiveRound = { scores?: LiveScore[]; layouts?: Array<{ Holes?: number }> };
 
 const MPO_PLACEMENT_POINTS: Record<number, number> = {
   1: 82,  2: 70,  3: 60,  4: 53,  5: 47,  6: 42,  7: 38,  8: 35,  9: 32,  10: 29,
@@ -124,7 +135,7 @@ async function fetchFirstTeeTime(pdgaId: number, startDate: string | null): Prom
   ]);
   const teeTimes: string[] = [];
   for (const data of [mpo, fpo]) {
-    for (const s of (data?.scores ?? []) as any[]) {
+    for (const s of data?.scores ?? []) {
       if (typeof s?.TeeTime === "string" && /^\d{2}:\d{2}:\d{2}$/.test(s.TeeTime)) {
         teeTimes.push(s.TeeTime);
       }
@@ -142,7 +153,7 @@ async function fetchFirstTeeTime(pdgaId: number, startDate: string | null): Prom
   return new Date(ms).toISOString();
 }
 
-async function fetchRoundJson(pdgaId: number, division: "MPO" | "FPO", round: number): Promise<any | null> {
+async function fetchRoundJson(pdgaId: number, division: "MPO" | "FPO", round: number): Promise<LiveRound | null> {
   const url = `https://www.pdga.com/apps/tournament/live-api/live_results_fetch_round?TournID=${pdgaId}&Division=${division}&Round=${round}`;
   // Retry transient failures (rate-limit 429 / 5xx / network) with backoff so a
   // full-season import gets complete round data instead of silently dropping
@@ -191,7 +202,7 @@ async function computeBonusesForEvent(pdgaId: number): Promise<{
     // Fetch rounds sequentially with a small gap instead of a 12-wide burst —
     // PDGA's live API rate-limits concurrent bursts, which silently returns
     // empty bonus data for some events when importing the whole season at once.
-    const roundResponses: Array<any | null> = [];
+    const roundResponses: Array<LiveRound | null> = [];
     for (const r of [1, 2, 3, 4, 5, 6]) {
       roundResponses.push(await fetchRoundJson(pdgaId, division, r));
       await new Promise((res) => setTimeout(res, 120));
@@ -202,7 +213,7 @@ async function computeBonusesForEvent(pdgaId: number): Promise<{
       // Anyone appearing in any round JSON counts as registered for the event
       // — they show up even when no scores are posted yet. Capture name so
       // we can fall back to name-matching when pdga_number is unknown.
-      for (const s of data.scores as any[]) {
+      for (const s of data.scores) {
         const pdgaNum = typeof s.PDGANum === "number" && s.PDGANum > 0 ? s.PDGANum : null;
         const name = typeof s.Name === "string" && s.Name.trim()
           ? s.Name.trim()
@@ -225,8 +236,8 @@ async function computeBonusesForEvent(pdgaId: number): Promise<{
       const holesInRound = data.layouts?.[0]?.Holes ?? 18;
 
       // Only count players who actually completed the round.
-      const completed = (data.scores as any[]).filter(
-        (s) =>
+      const completed = data.scores.filter(
+        (s): s is LiveScore & { RoundScore: number; HoleScores: string[] } =>
           typeof s.RoundScore === "number" &&
           Array.isArray(s.HoleScores) &&
           s.HoleScores.length === holesInRound &&
@@ -374,7 +385,7 @@ function feedKindFor(d: LiveDelta): string {
  * pdga_event_id and it's automatically picked up.
  */
 export async function runPdgaImport(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   opts: {
     /**
      * Which events to scrape. "all" walks the whole season (weekly cron,
@@ -418,17 +429,18 @@ export async function runPdgaImport(
   const { data: players } = await supabase
     .from("players")
     .select("id, name, division, pdga_number");
-  const byPdga = new Map<string, any>();
+  type PlayerRow = NonNullable<typeof players>[number];
+  const byPdga = new Map<string, PlayerRow>();
   // Key name lookups by "division:name" so two players who share a name but
   // play different divisions don't collide (and a result can't be mis-attributed
   // across divisions). pdga_number is still the primary, division-agnostic key.
-  const byName = new Map<string, any>();
+  const byName = new Map<string, PlayerRow>();
   for (const p of players ?? []) {
     if (p.pdga_number) byPdga.set(String(p.pdga_number), p);
     byName.set(`${p.division ?? "MPO"}:${normalizeName(p.name)}`, p);
   }
 
-  const rowsToInsert: any[] = [];
+  const rowsToInsert: Tables["tournament_results"]["Insert"][] = [];
   const unmatched: Array<{ event: string; name: string; pdgaNumber: number; division: "MPO" | "FPO" }> = [];
   const eventSummaries: ImportResult["events"] = [];
 
@@ -604,10 +616,10 @@ export async function runPdgaImport(
         rosteredIds = new Set((rosterRows ?? []).map((r) => r.player_id as number));
       }
 
-      const prevByPlayer = new Map<number, any>(
-        (existing ?? []).map((r) => [r.player_id as number, r]),
+      const prevByPlayer = new Map(
+        (existing ?? []).map((r) => [r.player_id, r] as const),
       );
-      const feedRows: any[] = [];
+      const feedRows: Tables["live_feed_events"]["Insert"][] = [];
       for (const row of evRows) {
         if (!rosteredIds.has(row.player_id)) continue;
         const prev = prevByPlayer.get(row.player_id);
