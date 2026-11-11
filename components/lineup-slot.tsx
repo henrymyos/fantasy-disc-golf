@@ -7,7 +7,7 @@ import { swapStarter, swapStarterPositions, moveStarterToSlot, toggleStarter } f
 type RosterSpot = {
   id: number;
   player_id: number;
-  players: { name: string; division: string; avatar_url?: string | null } | null;
+  players: { name: string; division: string | null; avatar_url?: string | null } | null;
   nickname?: string | null;
 };
 
@@ -398,7 +398,7 @@ export function BenchSlot({
 }) {
   const [open, setOpen] = useState(false);
   const player = benchSpot.players;
-  const div: "MPO" | "FPO" = (player?.division as any) ?? "MPO";
+  const div = (player?.division ?? "MPO") as "MPO" | "FPO";
   const color = divColor(div);
   const slotsFull = starterSlots.every((s) => s !== null);
 
