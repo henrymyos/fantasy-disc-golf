@@ -86,8 +86,6 @@ export default async function LineupsPage({
     .order("lineup_order", { ascending: true, nullsFirst: false })
     .order("id", { ascending: true });
 
-  const roster = (myRoster ?? []) as any[];
-
   // Attach this team's player nicknames, shown under each name.
   const { data: nickRows } = await supabase
     .from("player_nicknames")
@@ -96,9 +94,8 @@ export default async function LineupsPage({
   const nickByPlayer = new Map<number, string>(
     (nickRows ?? []).map((n) => [n.player_id as number, n.nickname as string]),
   );
-  for (const r of roster) {
-    r.nickname = nickByPlayer.get(r.player_id) ?? null;
-  }
+  const roster = (myRoster ?? []).map((r) => ({ ...r, nickname: nickByPlayer.get(r.player_id) ?? null }));
+  type Spot = (typeof roster)[number];
 
   const activeTournament = mode === "current" ? await getActiveTournament(supabase, Number(id)) : null;
   const lineupLocked = activeTournament !== null;
@@ -109,7 +106,7 @@ export default async function LineupsPage({
   // Per-player projected and actual points for the SELECTED week's event.
   // Current week keeps the live chain (active → pollable → next scheduled);
   // other weeks target that week's own event.
-  const playerIds = roster.map((r: any) => r.player_id);
+  const playerIds = roster.map((r) => r.player_id);
   const nextTournamentId: number | null =
     mode === "current"
       ? activeTournament?.id
@@ -157,9 +154,9 @@ export default async function LineupsPage({
     pointsByPlayerId[pid] = entry;
   }
 
-  function buildSlotArray(starters: any[], numSlots: number): (any | null)[] {
-    const result: (any | null)[] = new Array(numSlots).fill(null);
-    const unordered: any[] = [];
+  function buildSlotArray(starters: Spot[], numSlots: number): (Spot | null)[] {
+    const result: (Spot | null)[] = new Array(numSlots).fill(null);
+    const unordered: Spot[] = [];
     for (const s of starters) {
       const o = s.lineup_order;
       if (o != null && o >= 1 && o <= numSlots && result[o - 1] === null) {
@@ -175,31 +172,31 @@ export default async function LineupsPage({
     return result;
   }
 
-  const allMpoStarters = roster.filter((r) => r.is_starter && (r.players as any)?.division === "MPO");
-  const allFpoStarters = roster.filter((r) => r.is_starter && (r.players as any)?.division === "FPO");
+  const allMpoStarters = roster.filter((r) => r.is_starter && r.players?.division === "MPO");
+  const allFpoStarters = roster.filter((r) => r.is_starter && r.players?.division === "FPO");
 
   const mpoSlotArray = buildSlotArray(allMpoStarters, mpoSlots);
   const fpoSlotArray = buildSlotArray(allFpoStarters, fpoSlots);
 
-  const starterIds = new Set([...mpoSlotArray, ...fpoSlotArray].filter(Boolean).map((r: any) => r.id));
+  const starterIds = new Set([...mpoSlotArray, ...fpoSlotArray].flatMap((r) => (r ? [r.id] : [])));
   // Bench order: MPO above FPO, then projected points (best first) within each
   // division; no-projection players sink to the bottom of their division.
-  const benchProj = (r: any) => weekPointsByPlayer.get(r.player_id)?.projected ?? -1;
+  const benchProj = (r: Spot) => weekPointsByPlayer.get(r.player_id)?.projected ?? -1;
   const bench = roster
     .filter((r) => !starterIds.has(r.id))
-    .sort((a: any, b: any) => {
-      const aFpo = (a.players as any)?.division === "FPO" ? 1 : 0;
-      const bFpo = (b.players as any)?.division === "FPO" ? 1 : 0;
+    .sort((a, b) => {
+      const aFpo = a.players?.division === "FPO" ? 1 : 0;
+      const bFpo = b.players?.division === "FPO" ? 1 : 0;
       if (aFpo !== bFpo) return aFpo - bFpo;
       return benchProj(b) - benchProj(a);
     });
 
-  const mpoBench = bench.filter((r) => (r.players as any)?.division === "MPO");
-  const fpoBench = bench.filter((r) => (r.players as any)?.division === "FPO");
+  const mpoBench = bench.filter((r) => r.players?.division === "MPO");
+  const fpoBench = bench.filter((r) => r.players?.division === "FPO");
 
-  function otherSlotsFor(slotArray: any[], skipIdx: number) {
+  function otherSlotsFor(slotArray: (Spot | null)[], skipIdx: number) {
     return slotArray
-      .map((spot: any, i: number) => ({ spot: spot as any | null, slotIndex: i + 1 }))
+      .map((spot, i) => ({ spot, slotIndex: i + 1 }))
       .filter(({ slotIndex: si }) => si !== skipIdx + 1);
   }
 
@@ -270,7 +267,7 @@ export default async function LineupsPage({
       const { data: pRows } = ids.length > 0
         ? await supabase.from("players").select("id, name, division, avatar_url").in("id", ids)
         : { data: [] };
-      const pById = new Map<number, any>((pRows ?? []).map((p) => [p.id, p]));
+      const pById = new Map((pRows ?? []).map((p) => [p.id, p] as const));
       const actuals = await weekActualFor(ids);
       const toRow = (pid: number): HistoryRow => ({
         playerId: pid,
@@ -288,14 +285,14 @@ export default async function LineupsPage({
       // No snapshot recorded (week finalized before this feature) — show the
       // current lineup with that week's actual points, like the matchup pages.
       const actuals = await weekActualFor(playerIds);
-      const toRow = (r: any): HistoryRow => ({
+      const toRow = (r: Spot): HistoryRow => ({
         playerId: r.player_id,
-        name: (r.players as any)?.name ?? "Unknown",
-        division: ((r.players as any)?.division as "MPO" | "FPO") ?? "MPO",
-        avatarUrl: (r.players as any)?.avatar_url ?? null,
+        name: r.players?.name ?? "Unknown",
+        division: (r.players?.division as "MPO" | "FPO") ?? "MPO",
+        avatarUrl: r.players?.avatar_url ?? null,
         actual: actuals.has(r.player_id) ? Math.round(actuals.get(r.player_id)! * 10) / 10 : null,
       });
-      historyStarters = [...mpoSlotArray, ...fpoSlotArray].filter(Boolean).map(toRow);
+      historyStarters = [...mpoSlotArray, ...fpoSlotArray].filter((s) => s !== null).map(toRow);
       historyBench = bench.map(toRow);
     }
   }
@@ -310,20 +307,20 @@ export default async function LineupsPage({
       planStarters = plan;
     } else {
       const derived: PlannedStarter[] = [];
-      mpoSlotArray.forEach((spot: any, i: number) => {
+      mpoSlotArray.forEach((spot, i) => {
         if (spot) derived.push({ player_id: spot.player_id, slot: "MPO", order: i + 1 });
       });
-      fpoSlotArray.forEach((spot: any, i: number) => {
+      fpoSlotArray.forEach((spot, i) => {
         if (spot) derived.push({ player_id: spot.player_id, slot: "FPO", order: i + 1 });
       });
       planStarters = derived;
     }
   }
-  const editorPlayers: EditorPlayer[] = roster.map((r: any) => ({
+  const editorPlayers: EditorPlayer[] = roster.map((r) => ({
     playerId: r.player_id,
-    name: (r.players as any)?.name ?? "Unknown",
-    division: ((r.players as any)?.division as "MPO" | "FPO") ?? "MPO",
-    avatarUrl: (r.players as any)?.avatar_url ?? null,
+    name: r.players?.name ?? "Unknown",
+    division: (r.players?.division as "MPO" | "FPO") ?? "MPO",
+    avatarUrl: r.players?.avatar_url ?? null,
     nickname: r.nickname ?? null,
     points: weekPointsByPlayer.get(r.player_id) ?? null,
   }));
@@ -367,11 +364,11 @@ export default async function LineupsPage({
     const receiver = t.receiver;
     const otherTeam = proposer?.id === myMember.id ? receiver?.team_name : proposer?.team_name;
     const received = (t.trade_players ?? [])
-      .filter((tp: any) => tp.to_team_id === myMember.id)
-      .map((tp: any) => tp.players?.name ?? "");
+      .filter((tp) => tp.to_team_id === myMember.id)
+      .map((tp) => tp.players?.name ?? "");
     const gave = (t.trade_players ?? [])
-      .filter((tp: any) => tp.from_team_id === myMember.id)
-      .map((tp: any) => tp.players?.name ?? "");
+      .filter((tp) => tp.from_team_id === myMember.id)
+      .map((tp) => tp.players?.name ?? "");
     return {
       id: t.id,
       status: t.status as "accepted" | "rejected",
@@ -397,7 +394,7 @@ export default async function LineupsPage({
   const { data: claimPlayers } = claimPlayerIds.length > 0
     ? await supabase.from("players").select("id, name, division").in("id", claimPlayerIds)
     : { data: [] };
-  const claimPmap = new Map<number, any>((claimPlayers ?? []).map((p) => [p.id, p]));
+  const claimPmap = new Map((claimPlayers ?? []).map((p) => [p.id, p] as const));
   const pendingWaiverClaims = (claimRows ?? []).map((c) => ({
     id: c.id as number,
     addName: claimPmap.get(c.player_id)?.name ?? "Unknown",
@@ -476,9 +473,9 @@ export default async function LineupsPage({
         const starterSpots = [...mpoSlotArray, ...fpoSlotArray];
         const emptyCount = starterSpots.filter((s) => !s).length;
         const outNames = starterSpots
-          .filter(Boolean)
-          .filter((s: any) => weekPointsByPlayer.get(s.player_id)?.isOut)
-          .map((s: any) => (s.players as any)?.name ?? "Unknown");
+          .filter((s) => s !== null)
+          .filter((s) => weekPointsByPlayer.get(s.player_id)?.isOut)
+          .map((s) => s.players?.name ?? "Unknown");
         if (emptyCount === 0 && outNames.length === 0) return null;
         const eventName = weekTabs.find((t) => t.week === selectedWeek)?.eventName ?? null;
         return (
@@ -580,7 +577,7 @@ export default async function LineupsPage({
                 if (wp?.projected != null) projTotal += wp.projected;
               }
             } else {
-              const starterSpots = [...mpoSlotArray, ...fpoSlotArray].filter(Boolean) as any[];
+              const starterSpots = [...mpoSlotArray, ...fpoSlotArray].filter((s) => s !== null);
               for (const s of starterSpots) {
                 const wp = weekPointsByPlayer.get(s.player_id);
                 if (!wp) continue;
@@ -634,7 +631,7 @@ export default async function LineupsPage({
         {mode === "current" && (
           <>
             <div className="space-y-2 mb-6">
-              {mpoSlotArray.map((occupant: any, i: number) => (
+              {mpoSlotArray.map((occupant, i) => (
                 <LineupSlot
                   key={`mpo-${i}`}
                   leagueId={Number(id)}
@@ -648,7 +645,7 @@ export default async function LineupsPage({
                   pointsByPlayerId={pointsByPlayerId}
                 />
               ))}
-              {fpoSlotArray.map((occupant: any, i: number) => (
+              {fpoSlotArray.map((occupant, i) => (
                 <LineupSlot
                   key={`fpo-${i}`}
                   leagueId={Number(id)}
@@ -669,12 +666,12 @@ export default async function LineupsPage({
                 <h3 className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-2">Bench</h3>
                 <div className="space-y-2">
                   {bench.map((spot) => {
-                    const div = (spot.players as any)?.division ?? "MPO";
+                    const div = spot.players?.division ?? "MPO";
                     return (
                       <BenchSlot
                         key={spot.id}
                         leagueId={Number(id)}
-                        benchSpot={spot as any}
+                        benchSpot={spot}
                         starterSlots={div === "MPO" ? mpoSlotArray : fpoSlotArray}
                         locked={lineupsDisabled}
                         weekPoints={weekPointsByPlayer.get(spot.player_id) ?? null}
