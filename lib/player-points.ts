@@ -101,16 +101,16 @@ export async function loadPlayerPoints(
       eagle_count: r.eagle_count,
       division: r.players?.division ?? "MPO",
     });
-    const pid = r.player_id as number;
+    const pid = r.player_id;
     const list = byPlayer.get(pid) ?? [];
     list.push({
-      tournamentId: r.tournament_id as number,
+      tournamentId: r.tournament_id,
       points,
-      finishingPosition: (r.finishing_position as number | null) ?? null,
+      finishingPosition: r.finishing_position ?? null,
     });
     byPlayer.set(pid, list);
     totals.set(pid, (totals.get(pid) ?? 0) + points);
-    tournamentIds.add(r.tournament_id as number);
+    tournamentIds.add(r.tournament_id);
   }
 
   const eventsOf = (playerId: number) => byPlayer.get(playerId) ?? [];

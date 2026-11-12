@@ -105,7 +105,7 @@ export async function getPlayoffOutcome(
       if (!m) return null;
       return {
         teamId: e.teamId,
-        teamName: m.team_name as string,
+        teamName: m.team_name,
         username: m.profiles?.username ?? null,
         wins: e.wins,
         losses: e.losses,

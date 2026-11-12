@@ -57,7 +57,7 @@ export default async function DraftResultPage({
   const members = (memberRows ?? []).map((m) => ({
     id: m.id,
     teamName: m.team_name,
-    draftPosition: m.draft_position as number,
+    draftPosition: m.draft_position,
   }));
 
   const picks = (pickRows ?? []).map((p) => ({

@@ -131,7 +131,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
       .eq("league_id", lid);
     const positioned = (posMembers ?? [])
       .filter((m) => m.draft_position != null)
-      .map((m) => ({ id: m.id as number, draftPosition: m.draft_position as number }));
+      .map((m) => ({ id: m.id, draftPosition: m.draft_position as number }));
     const cdNumTeams = positioned.length;
     const cdOrderAssigned = (posMembers ?? []).length > 0 && cdNumTeams === (posMembers ?? []).length;
 

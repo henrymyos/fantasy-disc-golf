@@ -54,7 +54,7 @@ export async function getTeamWeeklyTotals(
     .from("league_members")
     .select("id")
     .eq("league_id", leagueId);
-  const allTeamIds = (teamRows ?? []).map((m) => m.id as number);
+  const allTeamIds = (teamRows ?? []).map((m) => m.id);
 
   // Starters in this league with division + lineup_order so we can slot-cap.
   const { data: starters } = await supabase

@@ -64,8 +64,8 @@ export default async function MockDraftViewerPage({
     id: p.id,
     name: p.name,
     division: p.division as "MPO" | "FPO",
-    worldRanking: p.world_ranking as number | null,
-    overallRank: p.overall_rank as number | null,
+    worldRanking: p.world_ranking,
+    overallRank: p.overall_rank,
     totalPoints: Math.round((pointsByPlayer.get(p.id) ?? 0) * 10) / 10,
   }));
 

@@ -34,14 +34,14 @@ export default async function TeamSettingsPage({
     .select("player_id, nickname")
     .eq("team_id", member.id);
   const nicknameByPlayer = new Map<number, string>(
-    (nicknameRows ?? []).map((r) => [r.player_id as number, r.nickname as string]),
+    (nicknameRows ?? []).map((r) => [r.player_id, r.nickname]),
   );
 
   const players = (roster ?? [])
     .map((r) => ({
-      id: r.player_id as number,
-      name: (r.players?.name as string) ?? "Unknown",
-      division: (r.players?.division as string) ?? "MPO",
+      id: r.player_id,
+      name: r.players?.name ?? "Unknown",
+      division: r.players?.division ?? "MPO",
       nickname: nicknameByPlayer.get(r.player_id) ?? "",
     }))
     .sort((a, b) => a.name.localeCompare(b.name));

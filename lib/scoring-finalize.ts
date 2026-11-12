@@ -179,7 +179,7 @@ export async function finalizeWeekScoresCore(
     (teamMembers ?? []).map((m) => [m.id, m.user_id ?? null]),
   );
   const nameById = new Map<number, string>(
-    (teamMembers ?? []).map((m) => [m.id, m.team_name as string]),
+    (teamMembers ?? []).map((m) => [m.id, m.team_name]),
   );
 
   for (const m of matchups ?? []) {

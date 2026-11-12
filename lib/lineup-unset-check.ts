@@ -25,7 +25,7 @@ export async function runLineupUnsetCheck(
     .limit(1)
     .maybeSingle();
   if (!upcoming) return { leaguesChecked: 0, notificationsSent: 0 };
-  const tournamentName = upcoming.name as string;
+  const tournamentName = upcoming.name;
 
   const { data: leagues } = await admin
     .from("leagues")
@@ -33,7 +33,7 @@ export async function runLineupUnsetCheck(
   if (!leagues || leagues.length === 0) {
     return { leaguesChecked: 0, notificationsSent: 0 };
   }
-  const leagueIds = leagues.map((l) => l.id as number);
+  const leagueIds = leagues.map((l) => l.id);
 
   // Batch the per-member work into a handful of grouped queries instead of two
   // round-trips per member. At ~100 leagues × ~12 members the old shape issued
@@ -83,7 +83,7 @@ export async function runLineupUnsetCheck(
 
   const membersByLeague = new Map<number, NonNullable<typeof members>>();
   for (const m of members ?? []) {
-    const lid = m.league_id as number;
+    const lid = m.league_id;
     const list = membersByLeague.get(lid) ?? [];
     list.push(m);
     membersByLeague.set(lid, list);
@@ -92,15 +92,15 @@ export async function runLineupUnsetCheck(
   let notificationsSent = 0;
   let leaguesChecked = 0;
   for (const league of leagues) {
-    const leagueId = league.id as number;
+    const leagueId = league.id;
     leaguesChecked++;
-    const mpoSlots = (league.mpo_starters as number) ?? 4;
-    const fpoSlots = (league.fpo_starters as number) ?? 2;
+    const mpoSlots = league.mpo_starters ?? 4;
+    const fpoSlots = league.fpo_starters ?? 2;
 
     for (const m of membersByLeague.get(leagueId) ?? []) {
       const userId = m.user_id as string | null;
       if (!userId) continue;
-      const teamId = m.id as number;
+      const teamId = m.id;
 
       const counts = startersByTeam.get(`${leagueId}:${teamId}`) ?? { mpo: 0, fpo: 0 };
       const open = Math.max(0, mpoSlots - counts.mpo) + Math.max(0, fpoSlots - counts.fpo);

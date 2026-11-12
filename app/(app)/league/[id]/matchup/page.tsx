@@ -240,8 +240,8 @@ export default async function MyMatchupPage({
   // Live play-by-play for the players in this matchup.
   const teamNameByPlayer = new Map<number, string>();
   for (const [team, name] of [
-    [t1Team, t1?.team_name as string],
-    [t2Team, t2?.team_name as string],
+    [t1Team, t1?.team_name],
+    [t2Team, t2?.team_name],
   ] as const) {
     for (const r of [...team.starterRows, ...team.benchRows]) {
       if (r) teamNameByPlayer.set(r.playerId, name);

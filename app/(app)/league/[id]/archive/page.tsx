@@ -40,7 +40,7 @@ export default async function ArchivePage({
     .eq("league_id", Number(id))
     .order("season_year", { ascending: false });
 
-  const years = (archives ?? []).map((a) => a.season_year as number);
+  const years = (archives ?? []).map((a) => a.season_year);
   const selectedYear = sp.year ? Number(sp.year) : years[0];
   const current = (archives ?? []).find((a) => a.season_year === selectedYear);
 

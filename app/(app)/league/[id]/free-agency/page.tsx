@@ -85,7 +85,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
     .from("tournaments")
     .select("id, name, start_date");
   const tournamentById = new Map<number, { name: string; startDate: string }>(
-    (tournamentRows ?? []).map((t) => [t.id as number, { name: t.name as string, startDate: (t.start_date as string) ?? "" }]),
+    (tournamentRows ?? []).map((t) => [t.id, { name: t.name, startDate: t.start_date ?? "" }]),
   );
   const historyByPlayer = new Map<number, Array<{ startDate: string; name: string; pts: number; finish: number | null }>>();
   for (const p of allPlayers) {
@@ -118,7 +118,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
 
   // Total events in the league's selected season (fall back to whatever
   // tournaments exist in DB if no selection is stored).
-  const selectedCount = (league.selected_event_slugs?.length as number | undefined);
+  const selectedCount = league.selected_event_slugs?.length;
   const totalEventsInSeason = selectedCount ?? points.tournamentIds.size;
 
   function projectionFor(playerId: number): number | null {
@@ -141,7 +141,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
       .select("registered_player_ids")
       .eq("id", nextTournamentId)
       .maybeSingle();
-    const ids = regRow?.registered_player_ids as number[] | null;
+    const ids = regRow?.registered_player_ids;
     if (ids && ids.length > 0) nextRegisteredSet = new Set(ids);
   }
 
@@ -159,10 +159,10 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
       id: p.id,
       name: p.name,
       division: p.division ?? "",
-      worldRanking: p.world_ranking as number | null,
-      overallRank: p.overall_rank as number | null,
-      pdgaRating: p.pdga_rating as number | null,
-      avatarUrl: p.avatar_url as string | null,
+      worldRanking: p.world_ranking,
+      overallRank: p.overall_rank,
+      pdgaRating: p.pdga_rating,
+      avatarUrl: p.avatar_url,
       totalPoints: Math.round(points.totalFor(p.id) * 10) / 10,
       nextWeekPoints: nextProjectionFor(p.id),
       lastEvent: lastEventFor(p.id),
@@ -177,10 +177,10 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
         id: p.id,
         name: p.name,
         division: p.division ?? "",
-        worldRanking: p.world_ranking as number | null,
-        overallRank: p.overall_rank as number | null,
-        pdgaRating: p.pdga_rating as number | null,
-        avatarUrl: p.avatar_url as string | null,
+        worldRanking: p.world_ranking,
+        overallRank: p.overall_rank,
+        pdgaRating: p.pdga_rating,
+        avatarUrl: p.avatar_url,
         totalPoints: Math.round(points.totalFor(p.id) * 10) / 10,
         projectedPoints: projectionFor(p.id),
         nextWeekPoints: nextProjectionFor(p.id),
@@ -200,7 +200,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
       .from("player_watchlist")
       .select("player_id")
       .eq("team_id", myMember.id);
-    if (!watchErr) watchlistIds = (watchRows ?? []).map((w) => w.player_id as number);
+    if (!watchErr) watchlistIds = (watchRows ?? []).map((w) => w.player_id);
   } catch {
     // table missing — stars just start unsaved
   }
