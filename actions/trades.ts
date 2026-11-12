@@ -494,7 +494,7 @@ export async function cancelTrade(tradeId: number): Promise<void> {
       .select("team_id")
       .eq("trade_id", tradeId);
     const teamIds = Array.from(
-      new Set((parts ?? []).map((p: any) => p.team_id).filter((t: number | null) => t != null && t !== trade.proposer_id)),
+      new Set((parts ?? []).map((p) => p.team_id).filter((t): t is number => t != null && t !== trade.proposer_id)),
     );
     if (teamIds.length > 0) {
       const { data: people } = await admin

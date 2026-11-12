@@ -61,7 +61,7 @@ export default async function RankingsPage({ params }: { params: Promise<{ id: s
   });
 
   const ranked = (rankings ?? [])
-    .map((r: any) => playerById.get(r.player_id))
+    .map((r) => (r.player_id == null ? undefined : playerById.get(r.player_id)))
     .filter((p): p is NonNullable<typeof p> => !!p);
   const rankedIds = new Set(ranked.map((p) => p.id));
   const unranked = [...playerById.values()]

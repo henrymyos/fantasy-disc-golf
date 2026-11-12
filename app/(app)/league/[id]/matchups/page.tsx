@@ -78,7 +78,8 @@ export default async function MatchupsPage({
   // Future regular-season weeks without scheduled rows yet: derive the
   // pairings from the same round-robin the week-advance uses, so members can
   // scout upcoming opponents. These cards aren't clickable (no matchup row).
-  let displayMatchups: any[] = weekMatchups ?? [];
+  let displayMatchups: (Omit<NonNullable<typeof weekMatchups>[number], "id"> & { id: number | null; key?: string })[] =
+    weekMatchups ?? [];
   let isProjectedPairings = false;
   const isPlayoffWeek = scheduleWeek?.isPlayoff ?? false;
   if (
@@ -89,7 +90,7 @@ export default async function MatchupsPage({
   ) {
     const { data: members } = await supabase
       .from("league_members")
-      .select("id, team_name, division_name, profiles(avatar_url, avatar_color)")
+      .select("id, team_name, user_id, division_name, profiles(avatar_url, avatar_color)")
       .eq("league_id", Number(id))
       .order("joined_at");
     if (members && members.length >= 2) {
@@ -98,7 +99,7 @@ export default async function MatchupsPage({
         selectedWeek,
       );
       const wk = season.find((s) => s.week === selectedWeek);
-      const memberById = new Map<number, any>((members ?? []).map((m) => [m.id, m]));
+      const memberById = new Map(members.map((m) => [m.id, m]));
       displayMatchups = (wk?.pairs ?? []).map(([t1, t2], i) => ({
         id: null,
         key: `proj-${i}`,
@@ -108,8 +109,8 @@ export default async function MatchupsPage({
         team1_score: 0,
         team2_score: 0,
         is_final: false,
-        team1: memberById.get(t1),
-        team2: memberById.get(t2),
+        team1: memberById.get(t1)!,
+        team2: memberById.get(t2)!,
       }));
       isProjectedPairings = displayMatchups.length > 0;
     }

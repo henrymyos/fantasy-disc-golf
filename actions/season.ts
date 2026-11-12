@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { TablesInsert } from "@/lib/supabase/database.types";
 import { archiveSeason } from "@/actions/archives";
 import { getScheduleEvents } from "@/lib/schedule";
 import { isSeasonOver } from "@/lib/season-status";
@@ -134,7 +135,7 @@ export async function startNextSeason(leagueId: number): Promise<RolloverResult>
   }
 
   // 5. Re-seed kept players onto fresh rosters.
-  const rosterRows: any[] = [];
+  const rosterRows: TablesInsert<"rosters">[] = [];
   for (const [teamId, pids] of keptByTeam) {
     for (const pid of pids) {
       rosterRows.push({ league_id: leagueId, team_id: teamId, player_id: pid, is_starter: false, acquired_week: 1 });

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/supabase/database.types";
 
 /** One staged starter in a future-week lineup plan. */
 export type PlannedStarter = {
@@ -88,7 +89,7 @@ export async function getLineupSnapshot(
  * lineup_plans table) so week advancement never breaks on this.
  */
 export async function applyLineupPlansForWeek(
-  admin: SupabaseClient,
+  admin: SupabaseClient<Database>,
   leagueId: number,
   week: number,
   mpoSlots: number,
@@ -113,7 +114,7 @@ export async function applyLineupPlansForWeek(
         .eq("league_id", leagueId)
         .eq("team_id", teamId);
       const rowByPlayer = new Map<number, { id: number; division: string }>(
-        (roster ?? []).map((r: any) => [
+        (roster ?? []).map((r) => [
           r.player_id as number,
           { id: r.id as number, division: (r.players?.division as string) ?? "MPO" },
         ]),

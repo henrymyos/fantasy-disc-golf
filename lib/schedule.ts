@@ -1,11 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { DGPT_2026_SCHEDULE, type DgptEvent } from "@/lib/dgpt-2026-schedule";
+import type { Tables } from "@/lib/supabase/database.types";
 
 export type { DgptEvent } from "@/lib/dgpt-2026-schedule";
 
 export const DEFAULT_SEASON_YEAR = 2026;
 
-function rowToEvent(r: any): DgptEvent {
+function rowToEvent(
+  r: Pick<Tables<"schedule_events">, "slug" | "name" | "start_date" | "end_date" | "city" | "state" | "country" | "course" | "pdga_event_id">,
+): DgptEvent {
   return {
     slug: r.slug,
     name: r.name,

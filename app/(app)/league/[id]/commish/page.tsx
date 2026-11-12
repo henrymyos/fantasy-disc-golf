@@ -77,7 +77,7 @@ export default async function CommishDashboard({ params }: { params: Promise<{ i
   const weekTournamentIds = currentLeagueWeek?.tournamentIds ?? [];
   const { data: weekTournaments } = weekTournamentIds.length > 0
     ? await supabase.from("tournaments").select("name").in("id", weekTournamentIds)
-    : { data: [] as any[] };
+    : { data: [] };
   const weekEventName =
     (weekTournaments ?? []).map((t) => t.name).join(", ")
     || currentLeagueWeek?.event.name

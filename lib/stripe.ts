@@ -58,12 +58,18 @@ export async function createDuesCheckoutSession(opts: {
   return data.url;
 }
 
+/** The webhook fields we read. Parsed from untrusted JSON, so every value is unknown until checked. */
+export type StripeWebhookEvent = {
+  type?: unknown;
+  data?: { object?: { metadata?: unknown; payment_status?: unknown; amount_total?: unknown; payment_intent?: unknown } };
+};
+
 /**
  * Verifies a Stripe webhook signature (the `stripe-signature` header) against
  * the raw request body using STRIPE_WEBHOOK_SECRET. Returns the parsed event
  * when valid, otherwise null.
  */
-export function verifyAndParseEvent(rawBody: string, signatureHeader: string | null): any | null {
+export function verifyAndParseEvent(rawBody: string, signatureHeader: string | null): StripeWebhookEvent | null {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!secret || !signatureHeader) return null;
 

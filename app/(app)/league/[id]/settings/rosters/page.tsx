@@ -50,8 +50,8 @@ export default async function CommissionerRostersPage({
   );
   const rosteredIds = new Set(rostered.map((r) => r.playerId));
   const freeAgents = (allPlayers ?? [])
-    .filter((p: any) => !rosteredIds.has(p.id))
-    .map((p: any) => ({
+    .filter((p) => !rosteredIds.has(p.id))
+    .map((p) => ({
       playerId: p.id,
       playerName: p.name,
       division: (p.division ?? "MPO") as "MPO" | "FPO",

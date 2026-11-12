@@ -52,8 +52,9 @@ export async function sendPushToUser(
           },
           json,
         );
-      } catch (e: any) {
+      } catch (err) {
         // 404/410 => the subscription is dead, remove it.
+        const e = err as { statusCode?: number; message?: string } | undefined;
         const code = e?.statusCode;
         if (code === 404 || code === 410) {
           await admin.from("push_subscriptions").delete().eq("id", s.id);

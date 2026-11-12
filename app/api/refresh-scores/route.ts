@@ -22,7 +22,7 @@ export const maxDuration = 60;
 const COOLDOWN_MS = 60_000; // at most one PDGA sync per minute, globally
 
 let localLastAttempt = 0;
-let localCached: any = null;
+let localCached: Record<string, unknown> | null = null;
 
 export async function POST() {
   const supabase = await createClient();
@@ -69,7 +69,7 @@ export async function POST() {
       .select("last_result")
       .eq("id", 1)
       .maybeSingle();
-    const cached = (state?.last_result ?? null) as any;
+    const cached = (state?.last_result ?? null) as Record<string, unknown> | null;
     localLastAttempt = now;
     localCached = cached;
     return NextResponse.json({ ok: true, cached: true, ...(cached ?? {}) });

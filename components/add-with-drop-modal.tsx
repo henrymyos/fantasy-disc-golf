@@ -8,7 +8,7 @@ type RosterPlayer = {
   player_id: number;
   /** Projected points for the upcoming event (0 = not registered/playing). */
   projection?: number | null;
-  players: { id: number; name: string; division: string } | null;
+  players: { id: number; name: string; division: string | null } | null;
 };
 
 export function AddWithDropModal({

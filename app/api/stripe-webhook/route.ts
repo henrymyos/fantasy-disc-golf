@@ -12,9 +12,10 @@ export const dynamic = "force-dynamic";
 
 // Stripe metadata values arrive as strings. Pull leagueId/memberId out of a
 // metadata bag, returning null unless both are present and numeric.
-function resolveMember(meta: any): { leagueId: number; memberId: number } | null {
-  const leagueId = Number(meta?.leagueId);
-  const memberId = Number(meta?.memberId);
+function resolveMember(meta: unknown): { leagueId: number; memberId: number } | null {
+  const m = meta as { leagueId?: unknown; memberId?: unknown } | null | undefined;
+  const leagueId = Number(m?.leagueId);
+  const memberId = Number(m?.memberId);
   if (Number.isFinite(leagueId) && Number.isFinite(memberId)) {
     return { leagueId, memberId };
   }
@@ -33,15 +34,15 @@ async function resolveMemberFromPaymentIntent(
   const pi =
     typeof paymentIntent === "string"
       ? paymentIntent
-      : (paymentIntent as any)?.id;
+      : (paymentIntent as { id?: unknown } | null | undefined)?.id;
   if (!secret || !pi) return null;
 
   const res = await fetch(
-    `https://api.stripe.com/v1/checkout/sessions?payment_intent=${encodeURIComponent(pi)}&limit=1`,
+    `https://api.stripe.com/v1/checkout/sessions?payment_intent=${encodeURIComponent(String(pi))}&limit=1`,
     { headers: { Authorization: `Bearer ${secret}` } },
   );
   if (!res.ok) return null;
-  const data = (await res.json()) as { data?: Array<{ metadata?: any }> };
+  const data = (await res.json()) as { data?: Array<{ metadata?: unknown }> };
   const session = data.data?.[0];
   return session ? resolveMember(session.metadata) : null;
 }
