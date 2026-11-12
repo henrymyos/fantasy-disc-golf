@@ -85,7 +85,7 @@ export async function buildLeagueSystemFeed(
     .select("id, team_name, joined_at")
     .eq("league_id", leagueId);
   const teamName = new Map<number, string>(
-    (memberRows ?? []).map((m) => [m.id as number, (m.team_name as string) ?? "A team"]),
+    (memberRows ?? []).map((m) => [m.id, m.team_name ?? "A team"]),
   );
 
   // Keys of players won on waivers, so a waiver pickup reads differently from a
@@ -105,7 +105,7 @@ export async function buildLeagueSystemFeed(
     .select("team_id, player_id, nickname")
     .eq("league_id", leagueId);
   const nickMap = new Map<string, string>(
-    (nickRows ?? []).map((n) => [`${n.team_id}:${n.player_id}`, n.nickname as string]),
+    (nickRows ?? []).map((n) => [`${n.team_id}:${n.player_id}`, n.nickname]),
   );
   const nickOf = (teamId: number | null | undefined, playerId: number | null | undefined): string | null =>
     teamId != null && playerId != null ? nickMap.get(`${teamId}:${playerId}`) ?? null : null;
@@ -233,8 +233,8 @@ export async function buildLeagueSystemFeed(
     .not("finalized_at", "is", null);
   const weekFinalizedAt = new Map<number, string>();
   for (const m of finals ?? []) {
-    const wk = m.week as number;
-    const ts = m.finalized_at as string;
+    const wk = m.week;
+    const ts = m.finalized_at;
     const cur = weekFinalizedAt.get(wk);
     if (!cur || ts > cur) weekFinalizedAt.set(wk, ts);
   }

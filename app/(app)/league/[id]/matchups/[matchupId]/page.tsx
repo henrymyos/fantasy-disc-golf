@@ -73,7 +73,7 @@ export default async function MatchupDetailPage({
     .select("team_id, player_id, nickname")
     .in("team_id", [matchup.team1_id, matchup.team2_id]);
   const nickByTeamPlayer = new Map<string, string>(
-    (nickRows ?? []).map((n) => [`${n.team_id}:${n.player_id}`, n.nickname as string]),
+    (nickRows ?? []).map((n) => [`${n.team_id}:${n.player_id}`, n.nickname]),
   );
 
   // Decorate the shared rows with this page's nickname + score-breakdown lines.
@@ -123,15 +123,15 @@ export default async function MatchupDetailPage({
     .order("created_at", { ascending: true })
     .limit(500);
   const probPoints = (snapshots ?? []).map((s) => ({
-    pct: s.t1_win_pct as number,
+    pct: s.t1_win_pct,
     ts: s.created_at as string,
   }));
 
   // Live play-by-play for the players in this matchup.
   const teamNameByPlayer = new Map<number, string>();
   for (const [team, name] of [
-    [t1Team, team1?.team_name as string],
-    [t2Team, team2?.team_name as string],
+    [t1Team, team1?.team_name],
+    [t2Team, team2?.team_name],
   ] as const) {
     for (const r of [...team.starterRows, ...team.benchRows]) {
       if (r) teamNameByPlayer.set(r.playerId, name);

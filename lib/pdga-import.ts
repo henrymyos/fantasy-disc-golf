@@ -257,7 +257,7 @@ async function computeBonusesForEvent(pdgaId: number): Promise<{
         if (s.RoundScore === minRound) entry.hot += 1;
 
         const pars = String(s.Pars ?? "").split(",").map((n) => Number(n));
-        const holes = (s.HoleScores as string[]).map((n) => Number(n));
+        const holes = s.HoleScores.map((n) => Number(n));
         let bogeyFree = holes.length > 0;
         for (let i = 0; i < holes.length; i++) {
           const par = pars[i];
@@ -419,11 +419,11 @@ export async function runPdgaImport(
   const { data: tournaments } = await query.order("start_date", { ascending: true });
 
   const events = (tournaments ?? []).map((t) => ({
-    dbId: t.id as number,
-    pdgaId: t.pdga_event_id as number,
-    name: t.name as string,
-    startDate: t.start_date as string | null,
-    endDate: t.end_date as string | null,
+    dbId: t.id,
+    pdgaId: t.pdga_event_id,
+    name: t.name,
+    startDate: t.start_date,
+    endDate: t.end_date,
   }));
 
   const { data: players } = await supabase
@@ -560,7 +560,7 @@ export async function runPdgaImport(
   //   - a throttled/partial scrape can never degrade good birdie/bogey data;
   //   - a fuller scrape (more rounds fetched) always wins.
   // New events with no stored bonus data always import (existing total = 0).
-  const scrapedEventIds = new Set<number>(rowsToInsert.map((r) => r.tournament_id as number));
+  const scrapedEventIds = new Set<number>(rowsToInsert.map((r) => r.tournament_id));
   const liveDeltas: LiveDelta[] = [];
   const today = new Date().toISOString().slice(0, 10);
   // Rostered players (any league) — the live feed only records players someone
@@ -568,7 +568,7 @@ export async function runPdgaImport(
   let rosteredIds: Set<number> | null = null;
 
   for (const tid of scrapedEventIds) {
-    const evRows = rowsToInsert.filter((r) => (r.tournament_id as number) === tid);
+    const evRows = rowsToInsert.filter((r) => r.tournament_id === tid);
     const newBirdie = evRows.reduce((s, r) => s + Number(r.under_par_strokes ?? 0), 0);
 
     const { data: existing } = await supabase
@@ -581,10 +581,10 @@ export async function runPdgaImport(
     const zeroedIds = new Set(
       evRows
         .filter((r) => r.finishing_position == null && Number(r.fantasy_points) === 0)
-        .map((r) => r.player_id as number),
+        .map((r) => r.player_id),
     );
     const existingBirdie = (existing ?? [])
-      .filter((r) => !zeroedIds.has(r.player_id as number))
+      .filter((r) => !zeroedIds.has(r.player_id))
       .reduce((s, r) => s + Number(r.under_par_strokes ?? 0), 0);
     if (existingBirdie > 0 && newBirdie < existingBirdie) continue; // keep the fuller data
 
@@ -613,7 +613,7 @@ export async function runPdgaImport(
 
       if (rosteredIds == null) {
         const { data: rosterRows } = await supabase.from("rosters").select("player_id");
-        rosteredIds = new Set((rosterRows ?? []).map((r) => r.player_id as number));
+        rosteredIds = new Set((rosterRows ?? []).map((r) => r.player_id));
       }
 
       const prevByPlayer = new Map(

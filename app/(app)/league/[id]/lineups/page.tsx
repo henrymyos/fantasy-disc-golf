@@ -92,7 +92,7 @@ export default async function LineupsPage({
     .select("player_id, nickname")
     .eq("team_id", myMember.id);
   const nickByPlayer = new Map<number, string>(
-    (nickRows ?? []).map((n) => [n.player_id as number, n.nickname as string]),
+    (nickRows ?? []).map((n) => [n.player_id, n.nickname]),
   );
   const roster = (myRoster ?? []).map((r) => ({ ...r, nickname: nickByPlayer.get(r.player_id) ?? null }));
   type Spot = (typeof roster)[number];
@@ -396,7 +396,7 @@ export default async function LineupsPage({
     : { data: [] };
   const claimPmap = new Map((claimPlayers ?? []).map((p) => [p.id, p] as const));
   const pendingWaiverClaims = (claimRows ?? []).map((c) => ({
-    id: c.id as number,
+    id: c.id,
     addName: claimPmap.get(c.player_id)?.name ?? "Unknown",
     addDivision: claimPmap.get(c.player_id)?.division ?? "MPO",
     dropName: c.drop_player_id ? (claimPmap.get(c.drop_player_id)?.name ?? null) : null,

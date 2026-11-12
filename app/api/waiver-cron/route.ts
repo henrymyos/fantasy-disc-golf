@@ -47,10 +47,10 @@ export async function GET(request: Request) {
 
   const locked: number[] = [];
   if (startingToday && startingToday.length > 0) {
-    const startingIds = new Set(startingToday.map((t) => t.id as number));
+    const startingIds = new Set(startingToday.map((t) => t.id));
     const { data: leagues } = await admin.from("leagues").select("id");
     for (const league of leagues ?? []) {
-      const leagueId = league.id as number;
+      const leagueId = league.id;
       const schedule = await getLeagueSchedule(admin, leagueId);
       const onSchedule = (schedule?.weeks ?? []).some((w) =>
         w.tournamentIds.some((tid) => startingIds.has(tid)),
@@ -99,7 +99,7 @@ export async function GET(request: Request) {
     .eq("waivers_locked", true);
 
   for (const league of lockedLeagues ?? []) {
-    const leagueId = league.id as number;
+    const leagueId = league.id;
     const schedule = await getLeagueSchedule(admin, leagueId);
     if (!schedule) continue;
     const tids = schedule.weeks.flatMap((w) => w.tournamentIds);

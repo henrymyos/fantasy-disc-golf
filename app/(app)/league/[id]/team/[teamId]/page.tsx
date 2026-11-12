@@ -57,7 +57,7 @@ export default async function TeamPage({
     .select("player_id, nickname")
     .eq("team_id", Number(teamId));
   const nickByPlayer = new Map<number, string>(
-    (nickRows ?? []).map((n) => [n.player_id as number, n.nickname as string]),
+    (nickRows ?? []).map((n) => [n.player_id, n.nickname]),
   );
   const roster = (rosterRows ?? []).map((r) => ({
     ...r,

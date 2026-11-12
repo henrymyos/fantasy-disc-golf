@@ -79,7 +79,7 @@ export default async function PlayerPage({
 
   // Upcoming-event projection per roster player (per-event scoring pace, 0 if
   // not registered for the next event), shown in the add-with-drop popup.
-  const rosterPlayerIds = (myRosterRows ?? []).map((r) => r.player_id as number);
+  const rosterPlayerIds = (myRosterRows ?? []).map((r) => r.player_id);
   const nextTournamentId: number | null =
     activeTournament?.id ?? (await getLeagueNextTournamentId(supabase, Number(id)));
   let nextRegisteredSet: Set<number> | null = null;
@@ -391,7 +391,7 @@ export default async function PlayerPage({
               // Registration status: a result row means they competed; otherwise
               // check the registered list. An empty/missing list means the field
               // hasn't been synced yet — unknown, not "not registered".
-              const regIds = event.registered_player_ids as number[] | null;
+              const regIds = event.registered_player_ids;
               const registered: boolean | null = r
                 ? true
                 : regIds && regIds.length > 0

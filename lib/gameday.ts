@@ -92,7 +92,7 @@ async function runLeaguePass(
     .select("id, user_id, team_name")
     .eq("league_id", league.id);
   const memberById = new Map<number, { user_id: string; team_name: string }>(
-    (members ?? []).map((m) => [m.id as number, m]),
+    (members ?? []).map((m) => [m.id, m]),
   );
   const weekIdSet = new Set(weekIds);
   const notified = new Set<string>();

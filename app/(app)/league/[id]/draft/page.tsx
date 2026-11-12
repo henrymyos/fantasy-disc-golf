@@ -92,8 +92,8 @@ export default async function DraftPage({
     .select("overall_pick, owner_team_id")
     .eq("draft_id", draft?.id ?? 0);
   const pickOwnerOverrides = (pickOwnerRows ?? []).map((r) => ({
-    overallPick: r.overall_pick as number,
-    ownerTeamId: r.owner_team_id as number,
+    overallPick: r.overall_pick,
+    ownerTeamId: r.owner_team_id,
   }));
 
   const { data: rosteredSpots } = await supabase
@@ -120,7 +120,7 @@ export default async function DraftPage({
     .order("rank", { ascending: true });
   const myRankings = (myRankingRows ?? []).map((r) => ({
     playerId: r.player_id as number,
-    rank: r.rank as number,
+    rank: r.rank,
   }));
 
   // The user's draft queue for this league — a shortlist kept separate from
@@ -131,7 +131,7 @@ export default async function DraftPage({
     .eq("user_id", user.id)
     .eq("league_id", Number(id))
     .order("position", { ascending: true });
-  const queue = (queueRows ?? []).map((r) => r.player_id as number);
+  const queue = (queueRows ?? []).map((r) => r.player_id);
 
   // Sum each player's fantasy points this season so the available list can
   // be ordered like the points leaders view (highest first).

@@ -132,7 +132,7 @@ export async function archiveSeason(leagueId: number): Promise<boolean> {
   }
 
   const payload = {
-    leagueName: league.name as string,
+    leagueName: league.name,
     scoringMode,
     standings,
     rosters,

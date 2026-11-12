@@ -443,7 +443,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
             const rec = winsMap[myMembership.id];
             const rank = standings.findIndex((t) => t.id === myMembership.id) + 1;
             const pa = pointsAgainst.get(myMembership.id) ?? 0;
-            const waiver = myMembership.waiver_priority as number | null;
+            const waiver = myMembership.waiver_priority;
             const chip = (label: string, value: string) => (
               <div className="min-w-0">
                 <p className="text-gray-400 text-[10px] uppercase tracking-wider font-semibold">{label}</p>

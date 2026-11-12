@@ -52,7 +52,7 @@ export default async function CommishDashboard({ params }: { params: Promise<{ i
 
   const memberList = members ?? [];
   const memberCount = memberList.length;
-  const duesAmount = league.dues_amount as number | null;
+  const duesAmount = league.dues_amount;
   const paidCount = memberList.filter((m) => m.dues_paid).length;
   const hasDivisions = memberList.some((m) => !!m.division_name);
 

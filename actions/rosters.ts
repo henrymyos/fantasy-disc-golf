@@ -548,7 +548,7 @@ export async function reorderWaiverClaims(leagueId: number, orderedClaimIds: num
     .eq("league_id", leagueId)
     .eq("team_id", member.id)
     .eq("status", "pending");
-  const mineIds = new Set((mine ?? []).map((c) => c.id as number));
+  const mineIds = new Set((mine ?? []).map((c) => c.id));
 
   let order = 1;
   for (const id of orderedClaimIds) {
@@ -727,8 +727,8 @@ export async function optimizeLineup(leagueId: number): Promise<void> {
       .filter((r) => (r.players?.division ?? "MPO") === div)
       .sort((a, b) => projFor(b.player_id) - projFor(a.player_id));
   const picked = [
-    ...byDivision("MPO").slice(0, mpoSlots).map((r, i) => ({ id: r.id as number, order: i + 1 })),
-    ...byDivision("FPO").slice(0, fpoSlots).map((r, i) => ({ id: r.id as number, order: i + 1 })),
+    ...byDivision("MPO").slice(0, mpoSlots).map((r, i) => ({ id: r.id, order: i + 1 })),
+    ...byDivision("FPO").slice(0, fpoSlots).map((r, i) => ({ id: r.id, order: i + 1 })),
   ];
   if (picked.length === 0) return;
 

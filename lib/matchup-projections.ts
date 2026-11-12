@@ -172,7 +172,7 @@ export async function buildWeekProjections(
         .in("id", tournamentIds)
         .order("start_date", { ascending: true })
     : { data: [] };
-  const weekTournamentIds = new Set((tournamentRows ?? []).map((t) => t.id as number));
+  const weekTournamentIds = new Set((tournamentRows ?? []).map((t) => t.id));
   const primary = (tournamentRows ?? [])[0] as (NonNullable<typeof tournamentRows>[number] | undefined);
 
   // Event window. `lock_at` is round-1 tee time; `end_date` is the last
@@ -203,7 +203,7 @@ export async function buildWeekProjections(
   const paceDivisor = Math.max(progressFrac, 0.1);
 
   // Players not registered for this week's event are OUT (projected 0).
-  const regIds = primary?.registered_player_ids as number[] | null | undefined;
+  const regIds = primary?.registered_player_ids;
   const registeredSet = regIds && regIds.length > 0 ? new Set(regIds) : null;
 
   let rosterQuery = supabase
@@ -216,7 +216,7 @@ export async function buildWeekProjections(
     .order("id", { ascending: true });
   const allRoster = roster ?? [];
 
-  const playerIds = [...new Set(allRoster.map((r) => r.player_id as number))];
+  const playerIds = [...new Set(allRoster.map((r) => r.player_id))];
   // Paged: a whole league's rostered players cross the 1000-row select cap
   // partway through a season, and the truncated page comes back without an
   // error — every projection built from it would quietly drift low.
