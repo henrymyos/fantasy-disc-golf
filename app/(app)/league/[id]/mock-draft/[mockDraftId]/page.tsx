@@ -44,7 +44,7 @@ export default async function MockDraftViewerPage({
 
   if (!mock || mock.user_id !== user.id || String(mock.league_id) !== id) notFound();
 
-  const players = await selectAllRows<any>(() =>
+  const players = await selectAllRows(() =>
     supabase
       .from("players")
       .select("id, name, division, world_ranking, overall_rank")

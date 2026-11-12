@@ -26,7 +26,7 @@ export default async function RankingsPage({ params }: { params: Promise<{ id: s
     .single();
   if (!member) redirect(`/league/${id}`);
 
-  const players = await selectAllRows<any>(() =>
+  const players = await selectAllRows(() =>
     supabase
       .from("players")
       .select("id, name, division, world_ranking, overall_rank"),
@@ -54,7 +54,7 @@ export default async function RankingsPage({ params }: { params: Promise<{ id: s
     playerById.set(p.id, {
       id: p.id,
       name: p.name,
-      division: p.division,
+      division: p.division ?? "",
       overallRank: p.overall_rank,
       worldRanking: p.world_ranking,
     });

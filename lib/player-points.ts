@@ -12,6 +12,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { selectAllRows } from "@/lib/supabase/select-all";
+import type { Database } from "@/lib/supabase/database.types";
 import { applyProjectionVariance } from "@/lib/projections";
 import {
   fantasyPointsFromResult,
@@ -47,7 +48,7 @@ export type PlayerPointsIndex = {
 };
 
 export async function loadPlayerPoints(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   opts: {
     /** Resolve scoring rules from this league (skipped when `rules` is given). */
     leagueId?: number;
@@ -79,7 +80,7 @@ export async function loadPlayerPoints(
 
   const rows = emptyFilter
     ? []
-    : await selectAllRows<any>(() => {
+    : await selectAllRows(() => {
         let q = supabase.from("tournament_results").select(RESULT_COLUMNS);
         if (opts.playerIds) q = q.in("player_id", opts.playerIds);
         if (opts.tournamentIds) q = q.in("tournament_id", opts.tournamentIds);

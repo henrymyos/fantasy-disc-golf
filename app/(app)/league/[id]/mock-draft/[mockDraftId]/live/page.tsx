@@ -41,7 +41,7 @@ export default async function LiveMockDraftPage({
     .single();
   if (!league) notFound();
 
-  const players = await selectAllRows<any>(() =>
+  const players = await selectAllRows(() =>
     admin
       .from("players")
       .select("id, name, division, world_ranking, overall_rank")
