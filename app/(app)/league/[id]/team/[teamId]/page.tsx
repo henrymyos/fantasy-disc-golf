@@ -50,7 +50,6 @@ export default async function TeamPage({
     .order("lineup_order", { ascending: true, nullsFirst: false })
     .order("id", { ascending: true });
 
-  const roster = rosterRows ?? [];
 
   // Team-specific player nicknames, shown under each name.
   const { data: nickRows } = await supabase
@@ -60,13 +59,14 @@ export default async function TeamPage({
   const nickByPlayer = new Map<number, string>(
     (nickRows ?? []).map((n) => [n.player_id as number, n.nickname as string]),
   );
-  for (const r of roster) {
-    (r as any).nickname = nickByPlayer.get(r.player_id) ?? null;
-  }
+  const roster = (rosterRows ?? []).map((r) => ({
+    ...r,
+    nickname: nickByPlayer.get(r.player_id) ?? null,
+  }));
 
-  function buildSlotArray(starters: any[], numSlots: number): (any | null)[] {
-    const result: (any | null)[] = new Array(numSlots).fill(null);
-    const unordered: any[] = [];
+  function buildSlotArray(starters: Spot[], numSlots: number): (Spot | null)[] {
+    const result: (Spot | null)[] = new Array(numSlots).fill(null);
+    const unordered: Spot[] = [];
     for (const s of starters) {
       const o = s.lineup_order;
       if (o != null && o >= 1 && o <= numSlots && result[o - 1] === null) {
@@ -92,7 +92,7 @@ export default async function TeamPage({
   const fpoSlotArray = buildSlotArray(allFpoStarters, fpoSlots);
 
   const starterIds = new Set(
-    [...mpoSlotArray, ...fpoSlotArray].filter(Boolean).map((r) => r.id),
+    [...mpoSlotArray, ...fpoSlotArray].flatMap((r) => (r ? [r.id] : [])),
   );
   const bench = roster.filter((r) => !starterIds.has(r.id));
 
@@ -125,7 +125,7 @@ export default async function TeamPage({
         </div>
 
         <div className="space-y-2 mb-6">
-          {mpoSlotArray.map((occupant: any, i) => (
+          {mpoSlotArray.map((occupant, i) => (
             <LineupRow
               key={`mpo-${i}`}
               leagueId={Number(id)}
@@ -134,7 +134,7 @@ export default async function TeamPage({
               occupant={occupant}
             />
           ))}
-          {fpoSlotArray.map((occupant: any, i) => (
+          {fpoSlotArray.map((occupant, i) => (
             <LineupRow
               key={`fpo-${i}`}
               leagueId={Number(id)}
@@ -168,6 +168,14 @@ export default async function TeamPage({
   );
 }
 
+type Spot = {
+  id: number;
+  player_id: number;
+  lineup_order: number | null;
+  nickname: string | null;
+  players: { name: string; division: string | null } | null;
+};
+
 function LineupRow({
   leagueId,
   division,
@@ -176,7 +184,7 @@ function LineupRow({
   leagueId: number;
   division: "MPO" | "FPO";
   slotIndex: number;
-  occupant: any;
+  occupant: Spot | null;
 }) {
   const isMpo = division === "MPO";
   const color = isMpo ? "#4B3DFF" : "#36D7B7";
@@ -221,9 +229,9 @@ function LineupRow({
   );
 }
 
-function BenchRow({ leagueId, spot }: { leagueId: number; spot: any }) {
+function BenchRow({ leagueId, spot }: { leagueId: number; spot: Spot }) {
   const player = spot.players;
-  const div: "MPO" | "FPO" = (player?.division) ?? "MPO";
+  const div = player?.division ?? "MPO";
   const color = div === "MPO" ? "#4B3DFF" : "#36D7B7";
   return (
     <div className="flex items-center gap-3 p-3 rounded-xl bg-[#0f1117] border border-white/5">
