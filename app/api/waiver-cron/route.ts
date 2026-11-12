@@ -109,7 +109,7 @@ export async function GET(request: Request) {
     // Genuinely in progress: started on/before today, ending strictly AFTER
     // today (a same-day end has played its final round and no longer blocks).
     const eventInProgress = (trows ?? []).some(
-      (t: any) => t.start_date <= today && t.end_date > today,
+      (t) => t.start_date != null && t.end_date != null && t.start_date <= today && t.end_date > today,
     );
     if (eventInProgress) continue;
     const concludedEnds = (trows ?? [])

@@ -147,13 +147,13 @@ export default async function MatchupDetailPage({
       .in("player_id", playerIds)
       .order("created_at", { ascending: false })
       .limit(30);
-    feedRows = (feed ?? []).map((f: any) => ({
+    feedRows = (feed ?? []).map((f) => ({
       id: f.id,
       playerName: f.players?.name ?? "Unknown",
       teamName: teamNameByPlayer.get(f.player_id) ?? null,
       kind: f.kind,
       detail: (f.detail ?? {}) as Record<string, unknown>,
-      createdAt: f.created_at,
+      createdAt: f.created_at as string,
     }));
   }
 

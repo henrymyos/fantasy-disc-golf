@@ -56,7 +56,7 @@ export default async function NotificationsPage() {
         </div>
       ) : (
         <ul className="bg-[#1a1d23] rounded-2xl border border-white/5 divide-y divide-white/5 overflow-hidden">
-          {notifications!.map((n: any) => (
+          {notifications!.map((n) => (
             <li
               key={n.id}
               className={`px-5 py-4 flex items-start gap-3 ${n.read_at == null ? "bg-[#4B3DFF]/5" : ""}`}
@@ -76,7 +76,7 @@ export default async function NotificationsPage() {
                   <p className="text-white text-sm leading-snug">{n.body}</p>
                 )}
                 <p className="text-gray-400 text-[10px] mt-1">
-                  {new Date(n.created_at).toLocaleString("en-US", {
+                  {new Date(n.created_at ?? 0).toLocaleString("en-US", {
                     month: "short",
                     day: "numeric",
                     hour: "numeric",

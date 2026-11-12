@@ -133,7 +133,7 @@ export default async function PlayerPage({
   const divPlayerRows = await selectAllRows(() =>
     supabase.from("players").select("id").eq("division", player.division!),
   );
-  const divPlayerIds = divPlayerRows.map((p: any) => p.id as number);
+  const divPlayerIds = divPlayerRows.map((p) => p.id as number);
   // League-rule points (not the default-rule fantasy_points column) and paged,
   // so peer tiers and this player's totals match every other surface.
   const divPoints = await loadPlayerPoints(supabase, {

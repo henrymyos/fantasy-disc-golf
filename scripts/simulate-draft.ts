@@ -297,7 +297,7 @@ async function main() {
           .eq("league_id", leagueId)
           .limit(1)
           .single();
-        const dupRes = await manualPick(admin, leagueId, draftId, onClockMember, (alreadyTaken as any).player_id);
+        const dupRes = await manualPick(admin, leagueId, draftId, onClockMember, alreadyTaken!.player_id);
         if (dupRes === "rejected_duplicate") {
           duplicateRejections++;
           ok(`pick #${pick}: duplicate-player attempt rejected`);
@@ -314,8 +314,8 @@ async function main() {
         .select("players!inner(division)")
         .eq("league_id", leagueId)
         .eq("team_id", onClockMember);
-      const mpoOwned = (teamRoster ?? []).filter((r: any) => r.players.division === "MPO").length;
-      const fpoOwned = (teamRoster ?? []).filter((r: any) => r.players.division === "FPO").length;
+      const mpoOwned = ((teamRoster ?? []) as unknown as { players: { division: string } }[]).filter((r) => r.players.division === "MPO").length;
+      const fpoOwned = ((teamRoster ?? []) as unknown as { players: { division: string } }[]).filter((r) => r.players.division === "FPO").length;
 
       let chooseMpo: boolean;
       if (mpoOwned < MPO_STARTERS) chooseMpo = true;
@@ -389,8 +389,8 @@ async function main() {
       .from("rosters")
       .select("team_id, player_id, is_starter, lineup_order, players(division)")
       .eq("league_id", leagueId);
-    const byTeam = new Map<number, any[]>();
-    for (const r of allRosters ?? []) {
+    const byTeam = new Map<number, SimRosterRow[]>();
+    for (const r of (allRosters ?? []) as unknown as SimRosterRow[]) {
       const arr = byTeam.get(r.team_id) ?? [];
       arr.push(r);
       byTeam.set(r.team_id, arr);
@@ -460,3 +460,12 @@ async function main() {
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
+
+// Untyped client infers players(...) embeds as arrays; at runtime a many-to-one embed is one object.
+type SimRosterRow = {
+  team_id: number;
+  player_id: number;
+  is_starter: boolean;
+  lineup_order: number | null;
+  players: { division: string };
+};

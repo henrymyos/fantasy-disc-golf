@@ -232,7 +232,7 @@ export default async function MyMatchupPage({
         .order("created_at", { ascending: true })
         .limit(500)
     : { data: [] as any[] };
-  const probPoints = (snapshots ?? []).map((s: any) => ({
+  const probPoints = (snapshots ?? []).map((s) => ({
     pct: s.t1_win_pct as number,
     ts: s.created_at as string,
   }));
@@ -257,13 +257,13 @@ export default async function MyMatchupPage({
       .in("player_id", playerIds)
       .order("created_at", { ascending: false })
       .limit(30);
-    feedRows = (feed ?? []).map((f: any) => ({
+    feedRows = (feed ?? []).map((f) => ({
       id: f.id,
       playerName: f.players?.name ?? "Unknown",
       teamName: teamNameByPlayer.get(f.player_id) ?? null,
       kind: f.kind,
       detail: (f.detail ?? {}) as Record<string, unknown>,
-      createdAt: f.created_at,
+      createdAt: f.created_at as string,
     }));
   }
 
