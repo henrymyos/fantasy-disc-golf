@@ -16,11 +16,28 @@ type Step = "teams" | "players" | "review";
 
 const NEXT_SEASON = new Date().getFullYear() + 1;
 
+function fetchPendingTrades(supabase: ReturnType<typeof createClient>, lid: number) {
+  return supabase
+    .from("trades")
+    .select(`
+      id, status, message, proposed_at,
+      proposer:league_members!trades_proposer_id_fkey(id, team_name),
+      trade_players(player_id, from_team_id, to_team_id, players(name, division)),
+      trade_picks(season_year, round, original_team_id, from_team_id, to_team_id),
+      trade_current_picks(overall_pick, from_team_id, to_team_id),
+      trade_participants(team_id, status, league_members!inner(team_name))
+    `)
+    .eq("league_id", lid)
+    .eq("status", "pending")
+    .order("proposed_at", { ascending: false });
+}
+type PendingTrade = NonNullable<Awaited<ReturnType<typeof fetchPendingTrades>>["data"]>[number];
+
 export default function TradesPage({ params }: { params: Promise<{ id: string }> }) {
   const [leagueId, setLeagueId] = useState<number | null>(null);
   const [myTeam, setMyTeam] = useState<Team | null>(null);
   const [otherTeams, setOtherTeams] = useState<Team[]>([]);
-  const [pendingTrades, setPendingTrades] = useState<any[]>([]);
+  const [pendingTrades, setPendingTrades] = useState<PendingTrade[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [step, setStep] = useState<Step>("teams");
@@ -167,10 +184,10 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
     function buildTeam(m: { id: number; team_name: string }): Team {
       const spots = (allRosters ?? []).filter((r) => r.team_id === m.id);
       const roster: Player[] = spots
-        .map((s: any) => ({
+        .map((s) => ({
           id: s.players.id,
           name: s.players.name,
-          division: s.players.division,
+          division: s.players.division ?? "",
           worldRanking: s.players.world_ranking,
           pickLabel: pickLabelByPlayer.get(s.players.id) ?? null,
         }))
@@ -227,19 +244,7 @@ export default function TradesPage({ params }: { params: Promise<{ id: string }>
       }
     }
 
-    const { data: tradeData } = await supabase
-      .from("trades")
-      .select(`
-        id, status, message, proposed_at,
-        proposer:league_members!trades_proposer_id_fkey(id, team_name),
-        trade_players(player_id, from_team_id, to_team_id, players(name, division)),
-        trade_picks(season_year, round, original_team_id, from_team_id, to_team_id),
-        trade_current_picks(overall_pick, from_team_id, to_team_id),
-        trade_participants(team_id, status, league_members!inner(team_name))
-      `)
-      .eq("league_id", lid)
-      .eq("status", "pending")
-      .order("proposed_at", { ascending: false });
+    const { data: tradeData } = await fetchPendingTrades(supabase, lid);
     setPendingTrades(tradeData ?? []);
     setLoading(false);
   }
@@ -1244,7 +1249,7 @@ function PendingTradeCard({
   onCancel,
 }: {
   leagueId: number;
-  trade: any;
+  trade: PendingTrade;
   myTeamId: number;
   numTeams: number;
   onRespond: (id: number, accept: boolean) => void;
@@ -1255,18 +1260,18 @@ function PendingTradeCard({
     return `${Math.ceil(overall / n)}.${String(((overall - 1) % n) + 1).padStart(2, "0")}`;
   };
   const isProposer = trade.proposer?.id === myTeamId;
-  const participants: any[] = trade.trade_participants ?? [];
+  const participants = trade.trade_participants ?? [];
   const myParticipant = participants.find((p) => p.team_id === myTeamId);
   const iAmReceiver = !!myParticipant;
   const myStatus: string | undefined = myParticipant?.status;
 
   // Movements I'm involved in (where I receive or give up).
-  const toMe = (trade.trade_players ?? []).filter((tp: any) => tp.to_team_id === myTeamId);
-  const fromMe = (trade.trade_players ?? []).filter((tp: any) => tp.from_team_id === myTeamId);
-  const picksToMe = (trade.trade_picks ?? []).filter((tp: any) => tp.to_team_id === myTeamId);
-  const picksFromMe = (trade.trade_picks ?? []).filter((tp: any) => tp.from_team_id === myTeamId);
-  const currentToMe = (trade.trade_current_picks ?? []).filter((tp: any) => tp.to_team_id === myTeamId);
-  const currentFromMe = (trade.trade_current_picks ?? []).filter((tp: any) => tp.from_team_id === myTeamId);
+  const toMe = (trade.trade_players ?? []).filter((tp) => tp.to_team_id === myTeamId);
+  const fromMe = (trade.trade_players ?? []).filter((tp) => tp.from_team_id === myTeamId);
+  const picksToMe = (trade.trade_picks ?? []).filter((tp) => tp.to_team_id === myTeamId);
+  const picksFromMe = (trade.trade_picks ?? []).filter((tp) => tp.from_team_id === myTeamId);
+  const currentToMe = (trade.trade_current_picks ?? []).filter((tp) => tp.to_team_id === myTeamId);
+  const currentFromMe = (trade.trade_current_picks ?? []).filter((tp) => tp.from_team_id === myTeamId);
 
   return (
     <div className="bg-[#1a1d23] rounded-2xl p-5 border border-[#4B3DFF]/25">
@@ -1284,7 +1289,7 @@ function PendingTradeCard({
         <div className="grid grid-cols-2 gap-4 text-xs mb-4">
           <div>
             <p className="text-gray-400 font-semibold mb-1">You receive</p>
-            {toMe.map((tp: any) => (
+            {toMe.map((tp) => (
               <Link
                 key={tp.player_id}
                 href={`/league/${leagueId}/player/${tp.player_id}`}
@@ -1293,12 +1298,12 @@ function PendingTradeCard({
                 {tp.players?.name}
               </Link>
             ))}
-            {currentToMe.map((tp: any) => (
+            {currentToMe.map((tp) => (
               <p key={`c-${tp.overall_pick}`} className="text-[#9b91ff] font-mono">
                 Pick {pickLabel(tp.overall_pick)}
               </p>
             ))}
-            {picksToMe.map((tp: any) => (
+            {picksToMe.map((tp) => (
               <p key={`p-${tp.round}-${tp.original_team_id}`} className="text-[#F5A524]">
                 {tp.season_year} Round {tp.round} pick
               </p>
@@ -1307,7 +1312,7 @@ function PendingTradeCard({
           </div>
           <div>
             <p className="text-gray-400 font-semibold mb-1">You give up</p>
-            {fromMe.map((tp: any) => (
+            {fromMe.map((tp) => (
               <Link
                 key={tp.player_id}
                 href={`/league/${leagueId}/player/${tp.player_id}`}
@@ -1316,12 +1321,12 @@ function PendingTradeCard({
                 {tp.players?.name}
               </Link>
             ))}
-            {currentFromMe.map((tp: any) => (
+            {currentFromMe.map((tp) => (
               <p key={`c-${tp.overall_pick}`} className="text-[#9b91ff] font-mono">
                 Pick {pickLabel(tp.overall_pick)}
               </p>
             ))}
-            {picksFromMe.map((tp: any) => (
+            {picksFromMe.map((tp) => (
               <p key={`p-${tp.round}-${tp.original_team_id}`} className="text-[#F5A524]">
                 {tp.season_year} Round {tp.round} pick
               </p>
@@ -1335,7 +1340,7 @@ function PendingTradeCard({
         <div className="mb-4">
           <p className="text-gray-400 text-[10px] uppercase tracking-wide font-semibold mb-1.5">Participants</p>
           <div className="flex flex-wrap gap-1.5">
-            {participants.map((p: any) => {
+            {participants.map((p) => {
               const colors =
                 p.status === "accepted"
                   ? "text-[#36D7B7] bg-[#36D7B7]/10 border-[#36D7B7]/25"
@@ -1347,7 +1352,7 @@ function PendingTradeCard({
                   key={p.team_id}
                   className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${colors}`}
                 >
-                  {(p.league_members as any)?.team_name ?? "Team"} · {p.status}
+                  {p.league_members?.team_name ?? "Team"} · {p.status}
                 </span>
               );
             })}
