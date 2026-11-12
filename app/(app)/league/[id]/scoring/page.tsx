@@ -26,7 +26,7 @@ export default async function ScoringPage({ params }: { params: Promise<{ id: st
     .select("id, name, week")
     .order("week", { ascending: false });
 
-  const allPlayers = await selectAllRows<any>(() =>
+  const allPlayers = await selectAllRows(() =>
     supabase
       .from("players")
       .select("id, name, division, pdga_number, avatar_url")

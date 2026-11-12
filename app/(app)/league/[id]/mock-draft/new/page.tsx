@@ -42,7 +42,7 @@ export default async function MockDraftPage({
   const auctionBudget = (draft?.auction_budget ?? 200) as number;
   const thirdRoundReversal = !!draft?.third_round_reversal;
 
-  const players = await selectAllRows<any>(() =>
+  const players = await selectAllRows(() =>
     supabase
       .from("players")
       .select("id, name, division, world_ranking, overall_rank")

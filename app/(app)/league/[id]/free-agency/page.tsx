@@ -67,7 +67,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
   });
   const rosteredIds = new Set(rosteredOwner.keys());
 
-  const allPlayers = await selectAllRows<any>(() =>
+  const allPlayers = await selectAllRows(() =>
     supabase
       .from("players")
       .select("id, name, division, world_ranking, overall_rank, pdga_rating, avatar_url"),
@@ -158,7 +158,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
     .map((p) => ({
       id: p.id,
       name: p.name,
-      division: p.division,
+      division: p.division ?? "",
       worldRanking: p.world_ranking as number | null,
       overallRank: p.overall_rank as number | null,
       pdgaRating: p.pdga_rating as number | null,
@@ -176,7 +176,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
       return {
         id: p.id,
         name: p.name,
-        division: p.division,
+        division: p.division ?? "",
         worldRanking: p.world_ranking as number | null,
         overallRank: p.overall_rank as number | null,
         pdgaRating: p.pdga_rating as number | null,

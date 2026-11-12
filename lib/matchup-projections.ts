@@ -221,7 +221,7 @@ export async function buildWeekProjections(
   // partway through a season, and the truncated page comes back without an
   // error — every projection built from it would quietly drift low.
   const results = playerIds.length > 0
-    ? await selectAllRows<any>(() =>
+    ? await selectAllRows(() =>
         supabase
           .from("tournament_results")
           .select("player_id, tournament_id, finishing_position, hot_round_count, bogey_free_count, ace_count, under_par_strokes, over_par_strokes, eagle_count, players(division)")

@@ -42,7 +42,7 @@ export default async function CommissionerRostersPage({
   }));
 
   // Free agents = players not rostered in this league.
-  const allPlayers = await selectAllRows<any>(() =>
+  const allPlayers = await selectAllRows(() =>
     supabase
       .from("players")
       .select("id, name, division")

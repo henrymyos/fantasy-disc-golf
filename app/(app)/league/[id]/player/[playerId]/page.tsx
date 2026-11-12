@@ -130,7 +130,7 @@ export default async function PlayerPage({
   // All result rows for players in this player's division — used both to
   // compute event-level field sizes and to tier this player's season totals
   // and average finish against same-division peers.
-  const divPlayerRows = await selectAllRows<any>(() =>
+  const divPlayerRows = await selectAllRows(() =>
     supabase.from("players").select("id").eq("division", player.division!),
   );
   const divPlayerIds = divPlayerRows.map((p: any) => p.id as number);

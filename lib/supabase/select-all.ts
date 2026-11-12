@@ -16,8 +16,9 @@ const PAGE_SIZE = 1000;
  * returning every row. `makeQuery` must build a FRESH query each call —
  * Supabase query builders are single-use.
  */
-export async function selectAllRows<T = any>(
-  makeQuery: () => { range: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }> },
+export async function selectAllRows<T>(
+  // T is inferred from the typed query builder's rows.
+  makeQuery: () => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }> },
   pageSize: number = PAGE_SIZE,
 ): Promise<T[]> {
   const out: T[] = [];
@@ -29,7 +30,7 @@ export async function selectAllRows<T = any>(
       console.warn("selectAllRows page failed", error);
       break;
     }
-    const rows = (data ?? []) as T[];
+    const rows = data ?? [];
     out.push(...rows);
     if (rows.length < pageSize) break;
   }

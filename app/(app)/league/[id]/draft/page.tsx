@@ -103,7 +103,7 @@ export default async function DraftPage({
 
   const draftedIds = new Set((rosteredSpots ?? []).map((r) => r.player_id));
 
-  const allPlayers = await selectAllRows<any>(() =>
+  const allPlayers = await selectAllRows(() =>
     supabase
       .from("players")
       .select("id, name, division, world_ranking, overall_rank, pdga_rating"),
@@ -163,7 +163,7 @@ export default async function DraftPage({
     .map((p) => ({
       id: p.id,
       name: p.name,
-      division: p.division,
+      division: p.division ?? "",
       worldRanking: p.world_ranking,
       overallRank: p.overall_rank,
       pdgaRating: p.pdga_rating ?? null,
