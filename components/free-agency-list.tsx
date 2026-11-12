@@ -35,7 +35,7 @@ type LeaderboardPlayer = Player & {
 type RosterPlayer = {
   player_id: number;
   projection?: number | null;
-  players: { id: number; name: string; division: string } | null;
+  players: { id: number; name: string; division: string | null } | null;
 };
 
 type DivisionTab = "all" | "mpo" | "fpo" | "watch";

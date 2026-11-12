@@ -76,7 +76,7 @@ export default async function MyMatchupPage({
 
   // Find my matchup for the selected week; without an explicit week, fall
   // back to my next scheduled matchup if the featured week has none yet.
-  let { data: matchup } = await supabase
+  const { data: found } = await supabase
     .from("matchups")
     .select(
       "id, week, team1_id, team2_id, team1_score, team2_score, is_final, team1:league_members!matchups_team1_id_fkey(id, team_name, profiles(avatar_url, avatar_color)), team2:league_members!matchups_team2_id_fkey(id, team_name, profiles(avatar_url, avatar_color))",
@@ -85,6 +85,8 @@ export default async function MyMatchupPage({
     .eq("week", selectedWeek)
     .or(`team1_id.eq.${myMember.id},team2_id.eq.${myMember.id}`)
     .maybeSingle();
+  // id is null for a projected (not yet scheduled) pairing below.
+  let matchup: (Omit<NonNullable<typeof found>, "id"> & { id: number | null }) | null = found;
   if (!matchup && !hasExplicitWeek) {
     const { data: upcoming } = await supabase
       .from("matchups")
@@ -124,7 +126,7 @@ export default async function MyMatchupPage({
         .find((s) => s.week === selectedWeek)
         ?.pairs.find(([a, b]) => a === myMember.id || b === myMember.id);
       if (pair) {
-        const memberById = new Map<number, any>((members ?? []).map((m) => [m.id, m]));
+        const memberById = new Map(members.map((m) => [m.id, m]));
         matchup = {
           id: null,
           week: selectedWeek,
@@ -133,9 +135,9 @@ export default async function MyMatchupPage({
           team1_score: 0,
           team2_score: 0,
           is_final: false,
-          team1: memberById.get(pair[0]),
-          team2: memberById.get(pair[1]),
-        } as any;
+          team1: memberById.get(pair[0])!,
+          team2: memberById.get(pair[1])!,
+        };
       }
     }
   }
@@ -231,7 +233,7 @@ export default async function MyMatchupPage({
         .eq("matchup_id", matchup.id)
         .order("created_at", { ascending: true })
         .limit(500)
-    : { data: [] as any[] };
+    : { data: [] };
   const probPoints = (snapshots ?? []).map((s) => ({
     pct: s.t1_win_pct as number,
     ts: s.created_at as string,

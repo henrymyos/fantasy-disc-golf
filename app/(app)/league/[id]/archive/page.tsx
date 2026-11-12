@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { archiveSeason } from "@/actions/archives";
+import type { Json } from "@/lib/supabase/database.types";
 
 export const dynamic = "force-dynamic";
 
@@ -103,7 +104,7 @@ export default async function ArchivePage({
             </div>
           )}
 
-          {current && <ArchiveDetails archive={current as any} />}
+          {current && <ArchiveDetails archive={current} />}
         </>
       )}
     </div>
@@ -113,7 +114,7 @@ export default async function ArchivePage({
 function ArchiveDetails({
   archive,
 }: {
-  archive: { season_year: number; payload: any; created_at: string };
+  archive: { season_year: number; payload: Json };
 }) {
   const p = archive.payload as {
     standings: Array<{ teamId: number; teamName: string; wins: number; losses: number; points: number }>;

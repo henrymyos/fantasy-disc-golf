@@ -203,7 +203,7 @@ export default async function PlayerPage({
     return RED;
   }
 
-  const playedEvents = (events ?? []).filter((e) => ((e.tournament_results as any[]) ?? []).length > 0);
+  const playedEvents = (events ?? []).filter((e) => (e.tournament_results ?? []).length > 0);
 
   const totalPts = playedEvents.reduce(
     (sum, e) => sum + (divPoints.pointsAt(player.id, e.id) ?? 0),
@@ -221,7 +221,7 @@ export default async function PlayerPage({
 
   // Player projection: extrapolate current per-event pace across every event
   // in the league's selected season.
-  const totalEventsInSeason = ((league as any).selected_event_slugs?.length as number | undefined)
+  const totalEventsInSeason = league?.selected_event_slugs?.length
     ?? (events ?? []).length;
   const projectedTotal = playedEvents.length > 0
     ? applyProjectionVariance(
@@ -267,7 +267,7 @@ export default async function PlayerPage({
                 <AddWithDropModal
                   leagueId={Number(id)}
                   addPlayer={{ id: player.id, name: player.name, division: player.division! }}
-                  myRoster={myRoster as any}
+                  myRoster={myRoster}
                   openSpots={openSpots}
                 />
               )

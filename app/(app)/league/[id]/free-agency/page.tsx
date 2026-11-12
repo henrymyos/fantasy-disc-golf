@@ -364,7 +364,7 @@ export default async function FreeAgencyPage({ params }: { params: Promise<{ id:
         leagueId={Number(id)}
         freeAgents={freeAgents}
         leaderboard={leaderboard}
-        myRoster={(myRoster ?? []) as any}
+        myRoster={myRoster}
         openSpots={openSpots}
         overLimit={overLimit}
         addsDisabled={!draftComplete}

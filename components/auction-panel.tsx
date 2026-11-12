@@ -29,7 +29,7 @@ type DraftState = {
 type Player = {
   id: number;
   name: string;
-  division: string;
+  division: string | null;
   overall_rank: number | null;
 };
 
@@ -90,7 +90,7 @@ export function AuctionPanel({
       .select("id, name, division, overall_rank")
       .order("overall_rank", { ascending: true, nullsFirst: false })
       .limit(500)
-      .then(({ data }) => setPlayers((data ?? []) as any));
+      .then(({ data }) => setPlayers(data ?? []));
     const id = setInterval(refresh, 2000);
     return () => clearInterval(id);
     // refresh is re-created every render but only reads leagueId; listing it would restart the poll each render.

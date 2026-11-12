@@ -228,10 +228,10 @@ export async function getChatReactions(leagueId: number): Promise<ChatReaction[]
       )
       .limit(2000);
     if (error) return [];
-    return ((data ?? []) as any[]).map((r) => ({
-      message_id: r.message_id as number,
-      member_id: r.member_id as number,
-      emoji: r.emoji as string,
+    return (data ?? []).map((r) => ({
+      message_id: r.message_id,
+      member_id: r.member_id,
+      emoji: r.emoji,
     }));
   } catch {
     return [];

@@ -84,8 +84,8 @@ export function PushSubscribeButton() {
         });
         setSubscribed(sub);
       });
-    } catch (e: any) {
-      setError(e?.message ?? "Subscribe failed");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Subscribe failed");
     }
   }
 

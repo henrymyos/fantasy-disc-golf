@@ -222,7 +222,7 @@ export default async function LeagueDashboard({ params }: { params: Promise<{ id
 
   // My featured-week matchup, for the hero card.
   const myHeroMatchup = myMembership
-    ? ((matchups ?? []) as any[]).find(
+    ? (matchups ?? []).find(
         (m) => m.team1_id === myMembership.id || m.team2_id === myMembership.id,
       ) ?? null
     : null;

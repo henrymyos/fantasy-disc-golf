@@ -35,7 +35,7 @@ export default async function DashboardPage({
     .order("joined_at", { ascending: false });
 
   const leagues = (memberships ?? []).map((m) => ({
-    ...m.leagues as unknown as League,
+    ...(m.leagues as unknown as League & { logo_url: string | null }),
     myTeamName: m.team_name,
     isCommissioner: m.is_commissioner,
     membershipId: m.league_id,
@@ -101,10 +101,10 @@ export default async function DashboardPage({
               href={`/league/${league.id}`}
               className="flex items-center gap-4 bg-[#1a1d23] hover:bg-[#1e2028] border border-white/5 hover:border-[#4B3DFF]/40 rounded-2xl p-4 transition group"
             >
-              {(league as any).logo_url ? (
+              {league.logo_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={(league as any).logo_url}
+                  src={league.logo_url}
                   alt=""
                   className="w-11 h-11 rounded-xl object-cover shrink-0 bg-white/10"
                 />

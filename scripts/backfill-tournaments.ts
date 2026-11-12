@@ -9,6 +9,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { DGPT_2026_SCHEDULE } from "../lib/dgpt-2026-schedule";
+import type { TablesInsert } from "../lib/supabase/database.types";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
@@ -32,7 +33,7 @@ async function main() {
     (existing ?? []).map((t) => t.pdga_event_id).filter((v) => v != null),
   );
 
-  const toInsert: any[] = [];
+  const toInsert: TablesInsert<"tournaments">[] = [];
   DGPT_2026_SCHEDULE.forEach((event, index) => {
     if (!event.pdgaEventId) return;
     if (haveByPdgaId.has(event.pdgaEventId)) return;
