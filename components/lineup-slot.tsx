@@ -253,7 +253,7 @@ function StarterPickerModal({
               <WeekPointsBadge wp={pointsByPlayerId?.[occupant.player_id] ?? null} />
             )}
           </div>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none transition ml-3">×</button>
+          <button type="button" onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-white text-xl leading-none transition ml-3">×</button>
         </div>
 
         <div className="px-3 pt-3 pb-4 space-y-4 max-h-[70vh] overflow-y-auto">
@@ -507,7 +507,7 @@ function BenchPickerModal({
               <WeekPointsBadge wp={pointsByPlayerId?.[benchSpot.player_id] ?? null} />
             </div>
           </div>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none transition ml-3">×</button>
+          <button type="button" onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-white text-xl leading-none transition ml-3">×</button>
         </div>
 
         <div className="px-3 pt-3 pb-4 space-y-1.5 max-h-72 overflow-y-auto">
