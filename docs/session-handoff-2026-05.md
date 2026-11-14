@@ -4,11 +4,10 @@ Quick context for resuming after a Claude restart.
 
 ## Project basics
 
-- **Repo**: `/Users/henrymyos/Desktop/fantasy-disc-golf`
+- **Repo**: this repository (the old Desktop path is gone)
 - **Stack**: Next.js 16.2.1 App Router + Supabase (Postgres + Auth + RLS) + Tailwind v4. PWA-ready. Vercel hosting.
 - **Read `AGENTS.md` before writing code**: this version of Next has breaking changes; consult `node_modules/next/dist/docs/` for the relevant guide.
 - **Working tree is dirty** with `.next 2/`, `app/api/sync-pdga/route 2.ts`, `scripts/_ranks-backup.json` — all Finder/cache cruft, ignore.
-- **Auto memory dir**: `/Users/henrymyos/.claude/projects/-Users-henrymyos-Desktop-fantasy-disc-golf/memory/` — write to it directly if anything cross-session worth remembering surfaces.
 
 ## Branch + recent commits
 
@@ -41,7 +40,7 @@ b0edd14 Polish/UX: archive, compare, news feed, PWA + push
 ## Live DB notes
 
 - Supabase project id: `cagyuhuzvannojeqkmun`
-- Auth users (admin-listed earlier): `henrymyos@gmail.com` (no league memberships), `henrymyos1@gmail.com` (owns league 4 "Disc Devils"), `henrymyos2@gmail.com`, `paigemyos@gmail.com`.
+- Auth users: (account emails removed from this public doc; see the Supabase Auth dashboard)
 - League 6 ("New League") has matchups + rosters; league 4 has rosters but no matchups. Use league 6 for live testing once authed.
 - Tournament results have been imported through OTB Open (ended 5/24). Northwest Championship (6/4) and later events are loaded with `registered_player_ids` but have no `tournament_results` rows yet.
 - Run `npx tsx --env-file=.env.local scripts/run-pdga-import.ts` to refresh results from PDGA.
