@@ -31,7 +31,8 @@ export default async function MockDraftHubPage({
     .single();
   if (!member) redirect(`/league/${id}`);
 
-  // List this user's saved mock drafts for this league (admin client since RLS is off)
+  // List this user's saved mock drafts for this league. Admin client, like
+  // actions/mock-drafts.ts; the user_id filter below is what scopes the rows.
   const admin = createAdminClient();
   const { data: drafts } = await admin
     .from("mock_drafts")
