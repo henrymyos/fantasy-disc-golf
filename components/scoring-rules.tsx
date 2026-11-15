@@ -1,5 +1,3 @@
-"use client";
-
 import { BONUS_POINTS } from "@/lib/scoring-constants";
 import {
   defaultMpoTable,
