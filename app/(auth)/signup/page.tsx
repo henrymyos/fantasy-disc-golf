@@ -77,7 +77,7 @@ function SignupForm() {
 
       <p className="text-center text-gray-400 text-sm mt-6">
         Already have an account?{" "}
-        <Link href={loginHref} className="text-[#36D7B7] hover:text-[#4B3DFF] transition">
+        <Link href={loginHref} className="text-[#36D7B7] underline underline-offset-2 hover:text-[#4B3DFF] transition">
           Sign in
         </Link>
       </p>

@@ -44,7 +44,7 @@ export default function ResetPasswordPage() {
       </form>
 
       <p className="text-center text-gray-400 text-sm mt-6">
-        <Link href="/login" className="text-[#36D7B7] hover:text-[#4B3DFF] transition">
+        <Link href="/login" className="text-[#36D7B7] underline underline-offset-2 hover:text-[#4B3DFF] transition">
           Back to sign in
         </Link>
       </p>

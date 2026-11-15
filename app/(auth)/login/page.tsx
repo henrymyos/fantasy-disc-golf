@@ -67,7 +67,7 @@ function LoginForm() {
 
       <p className="text-center text-gray-400 text-sm mt-6">
         No account?{" "}
-        <Link href={signupHref} className="text-[#36D7B7] hover:text-[#4B3DFF] transition">
+        <Link href={signupHref} className="text-[#36D7B7] underline underline-offset-2 hover:text-[#4B3DFF] transition">
           Create one
         </Link>
       </p>
