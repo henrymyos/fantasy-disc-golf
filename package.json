@@ -16,7 +16,7 @@
     "next": "16.4.6",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "web-push": "^3.6.7",
+    "web-push": "^4.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
