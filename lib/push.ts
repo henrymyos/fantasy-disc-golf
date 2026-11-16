@@ -2,7 +2,7 @@
 // doesn't depend on the library directly. Silently no-ops if VAPID keys
 // aren't configured (push is opt-in infra).
 
-import webpush from "web-push";
+import * as webpush from "web-push";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 let configured = false;
