@@ -12,8 +12,6 @@ export type MockSeat = {
  *  Any team index not present is drafted by a bot. */
 export type MockSeats = Record<string, MockSeat>;
 
-export type MockDraftStatus = "lobby" | "in_progress" | "complete";
-
 /** Whether a 1-based round runs in reverse snake order. Rounds 1–2 are always
  *  normal; with third-round reversal on, rounds 3+ invert. Mirrors the board's
  *  isRoundReversed in components/mock-draft.tsx and lib/snake-order.ts. */
