@@ -11,26 +11,6 @@ import { regularSeasonWeekCount } from "@/lib/season-weeks";
 import { getLeagueSchedule } from "@/lib/league-schedule";
 import { applyLineupPlansForWeek, getLineupSnapshot, type PlannedStarter } from "@/lib/lineup-plans";
 
-/** Round-robin pairing for a given week (used when next week's matchups don't
- *  already exist). */
-export function generateMatchups(teamIds: number[], week: number): [number, number][] {
-  const pairs: [number, number][] = [];
-  const teams = [...teamIds];
-  if (teams.length % 2 !== 0) teams.push(-1);
-  const half = teams.length / 2;
-  const fixed = teams[0];
-  const rotating = teams.slice(1);
-  const shift = (week - 1) % rotating.length;
-  const newRotating = [...rotating.slice(shift), ...rotating.slice(0, shift)];
-  const schedule = [fixed, ...newRotating];
-  for (let i = 0; i < half; i++) {
-    const t1 = schedule[i];
-    const t2 = schedule[schedule.length - 1 - i];
-    if (t1 !== -1 && t2 !== -1) pairs.push([t1, t2]);
-  }
-  return pairs;
-}
-
 /**
  * Computes each team's score for `week` under the league's rules, writes the
  * matchup results (is_final), generates the recap, and notifies owners. No

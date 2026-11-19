@@ -38,8 +38,6 @@ export const DGPT_2026_SCHEDULE: DgptEvent[] = [
   { slug: "usdgc",                      name: "USDGC / Throw Pink Women's Championship", startDate: "2026-10-08", endDate: "2026-10-11", city: "Rock Hill",              state: "SC",   country: "USA",            course: "Winthrop Grounds",                         pdgaEventId: 97346 },
 ];
 
-export const DGPT_2026_SLUGS = DGPT_2026_SCHEDULE.map((e) => e.slug);
-
 /** Resolves the effective season list given a possibly-null stored selection.
  *  Null/undefined => all events for the provided schedule (defaults to the
  *  static 2026 list when no data-driven schedule is supplied). */
