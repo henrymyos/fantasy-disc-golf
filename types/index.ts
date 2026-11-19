@@ -60,15 +60,6 @@ export type Tournament = {
   end_date: string | null;
 };
 
-export type TournamentResult = {
-  id: number;
-  tournament_id: number;
-  player_id: number;
-  finishing_position: number | null;
-  fantasy_points: number;
-  players?: Player;
-};
-
 export type Matchup = {
   id: number;
   league_id: number;
@@ -93,18 +84,6 @@ export type Draft = {
   started_at: string | null;
 };
 
-export type DraftPick = {
-  id: number;
-  draft_id: number;
-  pick_number: number;
-  round: number;
-  team_id: number;
-  player_id: number;
-  picked_at: string;
-  players?: Player;
-  league_members?: LeagueMember;
-};
-
 export type Trade = {
   id: number;
   league_id: number;
@@ -126,21 +105,4 @@ export type TradePlayers = {
   from_team_id: number;
   to_team_id: number;
   players?: Player;
-};
-
-export type WaiverClaim = {
-  id: number;
-  league_id: number;
-  team_id: number;
-  player_id: number;
-  drop_player_id: number | null;
-  priority: number;
-  status: "pending" | "processed" | "failed";
-  submitted_at: string;
-  players?: Player;
-  drop_player?: Player;
-};
-
-export type LeagueWithMember = League & {
-  league_members: LeagueMember[];
 };
