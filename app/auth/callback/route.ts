@@ -1,12 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { safeNextPath } from "@/lib/safe-next";
 
 // Exchanges the one-time code from a Supabase auth email (password recovery,
 // and future email confirmation) for a session, then forwards to `next`.
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/dashboard";
+  const next = safeNextPath(searchParams.get("next")) ?? "/dashboard";
 
   if (code) {
     const supabase = await createClient();
