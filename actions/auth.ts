@@ -7,6 +7,7 @@ import { createHash } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { landingPathForUser } from "@/lib/landing";
+import { safeNextPath } from "@/lib/safe-next";
 import { z } from "zod";
 
 /**
@@ -32,15 +33,6 @@ async function isPasswordCompromised(password: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-/** Returns a safe in-app redirect target from a `next` form field, or
- *  /dashboard. Only same-site absolute paths are allowed (no protocol-relative
- *  "//evil.com" or external URLs), so the param can't be used for open redirects. */
-function safeNext(raw: FormDataEntryValue | null): string {
-  const v = typeof raw === "string" ? raw : "";
-  if (v.startsWith("/") && !v.startsWith("//") && !v.startsWith("/\\")) return v;
-  return "/dashboard";
 }
 
 /** Absolute origin of the current request, for building auth redirect URLs. */
@@ -145,7 +137,7 @@ export async function signup(_state: AuthState, formData: FormData): Promise<Aut
   }
 
   const supabase = await createClient();
-  const nextPath = safeNext(formData.get("next"));
+  const nextPath = safeNextPath(formData.get("next")) ?? "/dashboard";
   const origin = await siteOrigin();
 
   const { data, error } = await supabase.auth.signUp({
@@ -244,13 +236,8 @@ export async function login(_state: AuthState, formData: FormData): Promise<Auth
   revalidatePath("/", "layout");
   // Honor an explicit destination (e.g. following an invite link); otherwise
   // land on the league the user was most recently in.
-  const nextRaw = formData.get("next");
-  const hasExplicitNext =
-    typeof nextRaw === "string" &&
-    nextRaw.startsWith("/") &&
-    !nextRaw.startsWith("//") &&
-    !nextRaw.startsWith("/\\");
-  if (hasExplicitNext) redirect(nextRaw);
+  const explicitNext = safeNextPath(formData.get("next"));
+  if (explicitNext) redirect(explicitNext);
   redirect(user ? await landingPathForUser(user.id) : "/dashboard");
 }
 
